@@ -4,7 +4,8 @@ import {
 } from "react";
 
 import {
-    useParams
+    useParams,
+    Link
 } from "react-router-dom";
 
 import Sidebar
@@ -53,12 +54,14 @@ function LeaderProfile() {
     const fetchLeader =
         async () => {
 
-        const { data, error } =
-            await supabase
-                .from("tblMonitoring")
-                .select("*")
-                .eq("id", id)
-                .single();
+        const {
+            data,
+            error
+        } = await supabase
+            .from("tblMonitoring")
+            .select("*")
+            .eq("id", id)
+            .single();
 
         if (!error) {
 
@@ -93,9 +96,12 @@ function LeaderProfile() {
                 .from("tblAttendance")
                 .select("*")
                 .eq("leader_id", id)
-                .order("date", {
-                    ascending: false
-                });
+                .order(
+                    "service_date",
+                    {
+                        ascending: false
+                    }
+                );
 
         setAttendance(
             data || []
@@ -146,6 +152,10 @@ function LeaderProfile() {
         );
     }
 
+    const isMember =
+        leader.type ===
+        "MEMBER";
+
     return (
 
         <div className="layout">
@@ -168,110 +178,184 @@ function LeaderProfile() {
                         style={{
                             display:
                                 "flex",
+                            justifyContent:
+                                "space-between",
                             alignItems:
                                 "center",
+                            flexWrap:
+                                "wrap",
                             gap:
                                 "20px"
                         }}
                     >
 
-                        <img
-                            src={
-                                leader.image_url
-                            }
-                            alt="Leader"
+                        <div
                             style={{
-                                width:
-                                    "120px",
-                                height:
-                                    "120px",
-                                borderRadius:
-                                    "50%",
-                                objectFit:
-                                    "cover",
-                                border:
-                                    "4px solid var(--primary)"
+                                display:
+                                    "flex",
+                                alignItems:
+                                    "center",
+                                gap:
+                                    "20px"
                             }}
-                        />
+                        >
 
-                        <div>
-
-                            <h1>
-
-                                {
-                                    leader.firstname
+                            <img
+                                src={
+                                    leader.image_url ||
+                                    "https://via.placeholder.com/150"
                                 }
-                                {" "}
-                                {
-                                    leader.lastname
-                                }
+                                alt="Leader"
+                                style={{
+                                    width:
+                                        "120px",
+                                    height:
+                                        "120px",
+                                    borderRadius:
+                                        "50%",
+                                    objectFit:
+                                        "cover",
+                                    border:
+                                        "4px solid var(--primary)"
+                                }}
+                            />
 
-                            </h1>
+                            <div>
 
-                            <p>
+                                <h1>
 
-                                {
-                                    leader.tribe
-                                }
-                                {" • "}
-                                {
-                                    leader.type
-                                }
+                                    {
+                                        leader.firstname
+                                    }
+                                    {" "}
+                                    {
+                                        leader.lastname
+                                    }
 
-                            </p>
+                                </h1>
+
+                                <p>
+
+                                    {
+                                        leader.tribe
+                                    }
+
+                                    {" • "}
+
+                                    {
+                                        leader.type
+                                    }
+
+                                </p>
+
+                            </div>
 
                         </div>
+
+                        <Link
+                            to={`/edit-leader/${leader.id}`}
+                        >
+
+                            <button>
+
+                                Edit Profile
+
+                            </button>
+
+                        </Link>
 
                     </div>
 
                 </div>
 
-                {/* TITHES */}
+                {/* MEMBER NOTICE */}
 
-                <div
-                    className="record-card"
-                >
+                {isMember && (
 
-                    <h2>
-                        Tithes
-                    </h2>
+                    <div
+                        className="record-card"
+                        style={{
+                            marginBottom:
+                                "20px"
+                        }}
+                    >
 
-                    <br />
-
-                    {tithes.length === 0 ? (
+                        <h2>
+                            Church Member
+                        </h2>
 
                         <p>
-                            No records.
+
+                            This person is
+                            registered as a
+                            member only.
+
                         </p>
 
-                    ) : (
+                    </div>
 
-                        tithes.map(
-                            (tithe) => (
+                )}
 
-                            <div
-                                key={tithe.id}
-                                className="record-card"
-                            >
+                {/* TITHES */}
 
-                                ₱
-                                {
-                                    tithe.amount
-                                }
-                                {" — "}
-                                {
-                                    tithe.date
-                                }
+                {!isMember && (
 
-                            </div>
+                    <>
 
-                        ))
+                        <div
+                            className="record-card"
+                        >
 
-                    )}
+                            <h2>
+                                Tithes
+                            </h2>
 
-                </div>
+                            <br />
 
-                <br />
+                            {tithes.length === 0 ? (
+
+                                <p>
+                                    No records.
+                                </p>
+
+                            ) : (
+
+                                tithes.map(
+                                    (
+                                        tithe
+                                    ) => (
+
+                                    <div
+                                        key={
+                                            tithe.id
+                                        }
+                                        className="record-card"
+                                    >
+
+                                        ₱
+                                        {
+                                            tithe.amount
+                                        }
+
+                                        {" — "}
+
+                                        {
+                                            tithe.date
+                                        }
+
+                                    </div>
+
+                                ))
+
+                            )}
+
+                        </div>
+
+                        <br />
+
+                    </>
+
+                )}
 
                 {/* ATTENDANCE */}
 
@@ -294,19 +378,25 @@ function LeaderProfile() {
                     ) : (
 
                         attendance.map(
-                            (record) => (
+                            (
+                                record
+                            ) => (
 
                             <div
-                                key={record.id}
+                                key={
+                                    record.id
+                                }
                                 className="record-card"
                             >
 
                                 {
                                     record.status
                                 }
+
                                 {" — "}
+
                                 {
-                                    record.date
+                                    record.service_date
                                 }
 
                             </div>
@@ -321,113 +411,139 @@ function LeaderProfile() {
 
                 {/* DEVOTION */}
 
-                <div
-                    className="record-card"
-                >
+                {!isMember && (
 
-                    <h2>
-                        Devotion
-                    </h2>
+                    <>
 
-                    <br />
+                        <div
+                            className="record-card"
+                        >
 
-                    {devotion.length === 0 ? (
+                            <h2>
+                                Devotion
+                            </h2>
 
-                        <p>
-                            No records.
-                        </p>
+                            <br />
 
-                    ) : (
+                            {devotion.length === 0 ? (
 
-                        devotion.map(
-                            (dev) => (
+                                <p>
+                                    No records.
+                                </p>
 
-                            <div
-                                key={dev.id}
-                                className="record-card"
-                            >
+                            ) : (
 
-                                {
-                                    dev.month
-                                }
-                                {" — "}
-                                {
-                                    dev.completed_days
-                                }
-                                /
-                                {
-                                    dev.total_days
-                                }
+                                devotion.map(
+                                    (
+                                        dev
+                                    ) => (
 
-                            </div>
+                                    <div
+                                        key={
+                                            dev.id
+                                        }
+                                        className="record-card"
+                                    >
 
-                        ))
+                                        {
+                                            dev.month
+                                        }
 
-                    )}
+                                        {" — "}
 
-                </div>
+                                        {
+                                            dev.completed_days
+                                        }
 
-                <br />
+                                        /
+
+                                        {
+                                            dev.total_days
+                                        }
+
+                                    </div>
+
+                                ))
+
+                            )}
+
+                        </div>
+
+                        <br />
+
+                    </>
+
+                )}
 
                 {/* LIFEGROUP */}
 
-                <div
-                    className="record-card"
-                >
+                {!isMember && (
 
-                    <h2>
-                        Life Group
-                    </h2>
+                    <div
+                        className="record-card"
+                    >
 
-                    <br />
+                        <h2>
+                            Life Group
+                        </h2>
 
-                    {lifeGroups.length === 0 ? (
+                        <br />
 
-                        <p>
-                            No records.
-                        </p>
+                        {lifeGroups.length === 0 ? (
 
-                    ) : (
+                            <p>
+                                No records.
+                            </p>
 
-                        lifeGroups.map(
-                            (group) => (
+                        ) : (
 
-                            <div
-                                key={group.id}
-                                className="record-card"
-                            >
+                            lifeGroups.map(
+                                (
+                                    group
+                                ) => (
 
-                                <strong>
-                                    {
-                                        group.topic
+                                <div
+                                    key={
+                                        group.id
                                     }
-                                </strong>
+                                    className="record-card"
+                                >
 
-                                <br />
+                                    <strong>
 
-                                {
-                                    group.place
-                                }
+                                        {
+                                            group.topic
+                                        }
 
-                                {" • "}
+                                    </strong>
 
-                                {
-                                    group.type
-                                }
+                                    <br />
 
-                                <br />
+                                    {
+                                        group.place
+                                    }
 
-                                {
-                                    group.date
-                                }
+                                    {" • "}
 
-                            </div>
+                                    {
+                                        group.type
+                                    }
 
-                        ))
+                                    <br />
 
-                    )}
+                                    {
+                                        group.date
+                                    }
 
-                </div>
+                                </div>
+
+                            ))
+
+                        )}
+
+                    </div>
+
+                )}
 
             </div>
 

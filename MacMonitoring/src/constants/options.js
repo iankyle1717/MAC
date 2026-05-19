@@ -1,16 +1,17 @@
 export const tribes = [
-  "DAN",
-  "REUBEN",
-  "ASHER",
-  "EPHRAIM",
-  "MANASSEH",
-  "JOSEPH",
-  "GAD",
-  "EZRA"
+    "DAN",
+    "REUBEN",
+    "ASHER",
+    "EPHRAIM",
+    "MANASSEH",
+    "JOSEPH",
+    "GAD",
+    "EZRA"
 ];
 
 export const leaderTypes = [
-  "TRIBE LEADER",
-  "ANDREW",
-  "PETER"
+    "TRIBE LEADER",
+    "ANDREW",
+    "PETER",
+    "MEMBER"
 ];

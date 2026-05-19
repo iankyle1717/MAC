@@ -10,6 +10,9 @@ import {
     supabase
 } from "../lib/supabase";
 
+import Select
+from "react-select";
+
 function Tithes() {
 
     const [leaders, setLeaders] =
@@ -94,6 +97,16 @@ function Tithes() {
         setLoading(false);
     };
 
+    const leaderOptions =
+    leaders.map(
+        (leader) => ({
+
+        value: leader.id,
+
+        label:
+            `${leader.firstname} ${leader.lastname} (${leader.type})`
+
+    }));
     return (
 
         <div className="layout">
@@ -111,40 +124,21 @@ function Tithes() {
                     onSubmit={handleSubmit}
                 >
 
-                    <select
-                        value={leaderId}
-                        onChange={(e) =>
-                            setLeaderId(
-                                e.target.value
-                            )
-                        }
-                    >
+               <Select
+                    options={leaderOptions}
 
-                        <option value="">
-                            Select Leader
-                        </option>
+                    placeholder="Search leader..."
 
-                        {leaders.map(
-                            (leader) => (
+                    onChange={(selected) =>
+                        setLeaderId(
+                            selected.value
+                        )
+                    }
 
-                            <option
-                                key={leader.id}
-                                value={leader.id}
-                            >
+                    className="react-select-container"
 
-                                {
-                                    leader.firstname
-                                }
-                                {" "}
-                                {
-                                    leader.lastname
-                                }
-
-                            </option>
-
-                        ))}
-
-                    </select>
+                    classNamePrefix="react-select"
+                />
 
                     <input
                         type="number"

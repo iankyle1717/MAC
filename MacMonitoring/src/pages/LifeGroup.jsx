@@ -10,6 +10,9 @@ import {
     supabase
 } from "../lib/supabase";
 
+import Select
+from "react-select";
+
 function LifeGroup() {
 
     const [leaders, setLeaders] =
@@ -49,7 +52,14 @@ function LifeGroup() {
         const { data } =
             await supabase
                 .from("tblMonitoring")
-                .select("*");
+                .select("*")
+                .neq("type", "MEMBER")
+                .order(
+                    "firstname",
+                    {
+                        ascending: true
+                    }
+                );
 
         setLeaders(data || []);
     };
@@ -68,9 +78,13 @@ function LifeGroup() {
                     {
                         leader_id:
                             leaderId,
+
                         topic,
+
                         place,
+
                         type,
+
                         date
                     }
                 ]);
@@ -86,7 +100,7 @@ function LifeGroup() {
         } else {
 
             alert(
-                "Life group recorded."
+                "Life Group recorded."
             );
 
             setLeaderId("");
@@ -97,6 +111,17 @@ function LifeGroup() {
 
         setLoading(false);
     };
+
+    const leaderOptions =
+        leaders.map(
+            (leader) => ({
+
+            value: leader.id,
+
+            label:
+                `${leader.firstname} ${leader.lastname} (${leader.type})`
+
+        }));
 
     return (
 
@@ -115,40 +140,23 @@ function LifeGroup() {
                     onSubmit={handleSubmit}
                 >
 
-                    <select
-                        value={leaderId}
-                        onChange={(e) =>
+                    <Select
+                        options={
+                            leaderOptions
+                        }
+
+                        placeholder="Search leader..."
+
+                        onChange={(selected) =>
                             setLeaderId(
-                                e.target.value
+                                selected.value
                             )
                         }
-                    >
 
-                        <option value="">
-                            Select Leader
-                        </option>
+                        className="react-select-container"
 
-                        {leaders.map(
-                            (leader) => (
-
-                            <option
-                                key={leader.id}
-                                value={leader.id}
-                            >
-
-                                {
-                                    leader.firstname
-                                }
-                                {" "}
-                                {
-                                    leader.lastname
-                                }
-
-                            </option>
-
-                        ))}
-
-                    </select>
+                        classNamePrefix="react-select"
+                    />
 
                     <input
                         type="text"

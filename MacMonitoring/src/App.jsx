@@ -27,6 +27,8 @@ from "./pages/LifeGroup";
 
 import "./styles/global.css";
 
+import EditLeader
+from "./pages/EditLeader";
 function App() {
 
     return (
@@ -68,6 +70,10 @@ function App() {
                 <Route
                     path="/lifegroup"
                     element={<LifeGroup />}
+                />
+                <Route
+                    path="/edit-leader/:id"
+                    element={<EditLeader />}
                 />
 
             </Routes>

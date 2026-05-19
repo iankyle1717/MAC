@@ -10,6 +10,9 @@ import {
     supabase
 } from "../lib/supabase";
 
+import Select
+from "react-select";
+
 function Devotion() {
 
     const [leaders, setLeaders] =
@@ -21,15 +24,11 @@ function Devotion() {
     const [month, setMonth] =
         useState("");
 
-    const [
-        completedDays,
-        setCompletedDays
-    ] = useState("");
+    const [completedDays, setCompletedDays] =
+        useState("");
 
-    const [
-        totalDays,
-        setTotalDays
-    ] = useState("");
+    const [totalDays, setTotalDays] =
+        useState("");
 
     const [loading, setLoading] =
         useState(false);
@@ -46,7 +45,14 @@ function Devotion() {
         const { data } =
             await supabase
                 .from("tblMonitoring")
-                .select("*");
+                .select("*")
+                .neq("type", "MEMBER")
+                .order(
+                    "firstname",
+                    {
+                        ascending: true
+                    }
+                );
 
         setLeaders(data || []);
     };
@@ -65,9 +71,12 @@ function Devotion() {
                     {
                         leader_id:
                             leaderId,
+
                         month,
+
                         completed_days:
                             completedDays,
+
                         total_days:
                             totalDays
                     }
@@ -96,6 +105,17 @@ function Devotion() {
         setLoading(false);
     };
 
+    const leaderOptions =
+        leaders.map(
+            (leader) => ({
+
+            value: leader.id,
+
+            label:
+                `${leader.firstname} ${leader.lastname} (${leader.type})`
+
+        }));
+
     return (
 
         <div className="layout">
@@ -113,44 +133,27 @@ function Devotion() {
                     onSubmit={handleSubmit}
                 >
 
-                    <select
-                        value={leaderId}
-                        onChange={(e) =>
+                    <Select
+                        options={
+                            leaderOptions
+                        }
+
+                        placeholder="Search leader..."
+
+                        onChange={(selected) =>
                             setLeaderId(
-                                e.target.value
+                                selected.value
                             )
                         }
-                    >
 
-                        <option value="">
-                            Select Leader
-                        </option>
+                        className="react-select-container"
 
-                        {leaders.map(
-                            (leader) => (
-
-                            <option
-                                key={leader.id}
-                                value={leader.id}
-                            >
-
-                                {
-                                    leader.firstname
-                                }
-                                {" "}
-                                {
-                                    leader.lastname
-                                }
-
-                            </option>
-
-                        ))}
-
-                    </select>
+                        classNamePrefix="react-select"
+                    />
 
                     <input
                         type="text"
-                        placeholder="Month Example: May 2026"
+                        placeholder="Month"
                         value={month}
                         onChange={(e) =>
                             setMonth(
@@ -162,7 +165,9 @@ function Devotion() {
                     <input
                         type="number"
                         placeholder="Completed Days"
-                        value={completedDays}
+                        value={
+                            completedDays
+                        }
                         onChange={(e) =>
                             setCompletedDays(
                                 e.target.value

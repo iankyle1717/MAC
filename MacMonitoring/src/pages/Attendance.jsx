@@ -10,6 +10,9 @@ import {
     supabase
 } from "../lib/supabase";
 
+import Select
+from "react-select";
+
 function Attendance() {
 
     const [leaders, setLeaders] =
@@ -17,9 +20,6 @@ function Attendance() {
 
     const [leaderId, setLeaderId] =
         useState("");
-
-    const [status, setStatus] =
-        useState("Present");
 
     const [date, setDate] =
         useState(
@@ -37,12 +37,10 @@ function Attendance() {
 
     }, []);
 
-    /* FETCH LEADERS */
-
     const fetchLeaders =
         async () => {
 
-        const { data, error } =
+        const { data } =
             await supabase
                 .from("tblMonitoring")
                 .select("*")
@@ -53,31 +51,13 @@ function Attendance() {
                     }
                 );
 
-        if (error) {
-
-            console.log(error);
-
-        } else {
-
-            setLeaders(data);
-        }
+        setLeaders(data || []);
     };
-
-    /* RECORD ATTENDANCE */
 
     const handleSubmit =
         async (e) => {
 
         e.preventDefault();
-
-        if (!leaderId) {
-
-            alert(
-                "Please select a leader."
-            );
-
-            return;
-        }
 
         setLoading(true);
 
@@ -88,8 +68,12 @@ function Attendance() {
                     {
                         leader_id:
                             leaderId,
-                        status,
-                        date
+
+                        service_date:
+                            date,
+
+                        status:
+                            "Present"
                     }
                 ]);
 
@@ -104,18 +88,25 @@ function Attendance() {
         } else {
 
             alert(
-                "Attendance recorded successfully."
+                "Attendance recorded."
             );
 
             setLeaderId("");
-
-            setStatus(
-                "Present"
-            );
         }
 
         setLoading(false);
     };
+
+    const leaderOptions =
+        leaders.map(
+            (leader) => ({
+
+            value: leader.id,
+
+            label:
+                `${leader.firstname} ${leader.lastname} (${leader.type})`
+
+        }));
 
     return (
 
@@ -125,102 +116,32 @@ function Attendance() {
 
             <div className="content">
 
-                <div
-                    style={{
-                        marginBottom:
-                            "25px"
-                    }}
-                >
-
-                    <h1>
-                        Attendance Recording
-                    </h1>
-
-                    <p
-                        style={{
-                            color:
-                                "var(--secondary)"
-                        }}
-                    >
-                        Record church
-                        attendance for
-                        leaders.
-                    </p>
-
-                </div>
+                <h1>
+                    Attendance Recording
+                </h1>
 
                 <form
                     className="leader-form"
                     onSubmit={handleSubmit}
                 >
 
-                    {/* LEADER */}
+                    <Select
+                        options={
+                            leaderOptions
+                        }
 
-                    <select
-                        value={leaderId}
-                        onChange={(e) =>
+                        placeholder="Search member..."
+
+                        onChange={(selected) =>
                             setLeaderId(
-                                e.target.value
+                                selected.value
                             )
                         }
-                    >
 
-                        <option value="">
-                            Select Leader
-                        </option>
+                        className="react-select-container"
 
-                        {leaders.map(
-                            (leader) => (
-
-                            <option
-                                key={leader.id}
-                                value={leader.id}
-                            >
-
-                                {
-                                    leader.firstname
-                                }
-                                {" "}
-                                {
-                                    leader.lastname
-                                }
-
-                            </option>
-
-                        ))}
-
-                    </select>
-
-                    {/* STATUS */}
-
-                    <select
-                        value={status}
-                        onChange={(e) =>
-                            setStatus(
-                                e.target.value
-                            )
-                        }
-                    >
-
-                        <option value="Present">
-                            Present
-                        </option>
-
-                        <option value="Late">
-                            Late
-                        </option>
-
-                        <option value="Absent">
-                            Absent
-                        </option>
-
-                        <option value="Excused">
-                            Excused
-                        </option>
-
-                    </select>
-
-                    {/* DATE */}
+                        classNamePrefix="react-select"
+                    />
 
                     <input
                         type="date"
@@ -231,8 +152,6 @@ function Attendance() {
                             )
                         }
                     />
-
-                    {/* BUTTON */}
 
                     <button
                         type="submit"
