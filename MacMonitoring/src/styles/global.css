@@ -1892,3 +1892,54 @@ body {
             40px;
     }
 }
+
+/* ========================================
+   EDIT PROFILE IMAGE
+======================================== */
+
+.edit-image-section {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 16px;
+
+    margin-bottom: 25px;
+}
+
+.edit-profile-image {
+
+    width: 140px;
+
+    height: 140px;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+
+    border: 4px solid var(--border);
+
+    box-shadow: var(--shadow);
+
+    background: var(--card);
+}
+
+.edit-image-section input[type="file"] {
+
+    width: 100%;
+
+    padding: 12px;
+
+    border-radius: 14px;
+
+    border: 1px solid var(--border);
+
+    background: var(--card);
+
+    color: var(--text);
+
+    cursor: pointer;
+}

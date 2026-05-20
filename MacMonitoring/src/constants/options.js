@@ -15,3 +15,28 @@ export const leaderTypes = [
     "PETER",
     "MEMBER"
 ];
+
+export const ministries = [
+
+    "ADMIN",
+
+    "FINANCE",
+
+    "WORSHIP TEAM",
+
+    "MEDIA",
+
+    "MARSHALL",
+
+    "USHERING",
+
+    "HOSPITALITY",
+
+    "DANCE",
+
+    "DISCIPLESHIP JOURNEY",
+
+    "EVENT ORGANIZER",
+
+    "NONE"
+];

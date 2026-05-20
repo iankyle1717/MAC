@@ -4,7 +4,8 @@ import {
 
 import {
     tribes,
-    leaderTypes
+    leaderTypes,
+    ministries
 } from "../constants/options";
 
 import {
@@ -26,6 +27,9 @@ function LeaderForm({
 
     const [type, setType] =
         useState("");
+
+    const [ministry, setMinistry] =
+         useState("NONE");
 
     const [image, setImage] =
         useState(null);
@@ -128,6 +132,7 @@ function LeaderForm({
                         lastname,
                         tribe,
                         type,
+                        ministry,
                         image_url:
                             imageUrl
                     }
@@ -152,6 +157,7 @@ function LeaderForm({
             setTribe("");
             setType("");
             setImage(null);
+            setMinistry("NONE");
 
             refreshLeaders();
         }
@@ -237,6 +243,29 @@ function LeaderForm({
                     >
 
                         {type}
+
+                    </option>
+
+                ))}
+
+            </select>
+            <select
+                value={ministry}
+                onChange={(e) =>
+                    setMinistry(
+                        e.target.value
+                    )
+                }
+            >
+
+                {ministries.map((ministry) => (
+
+                    <option
+                        key={ministry}
+                        value={ministry}
+                    >
+
+                        {ministry}
 
                     </option>
 
