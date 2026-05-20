@@ -754,3 +754,80 @@ body { background: var(--bg-base); color: var(--text-primary); min-height: 100vh
 .fade-up-2 { animation-delay: 0.10s; }
 .fade-up-3 { animation-delay: 0.15s; }
 .fade-up-4 { animation-delay: 0.20s; }
+
+.attendance-controls {
+    display: flex;
+    gap: 12px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.attendance-controls input,
+.attendance-controls select,
+.attendance-controls button {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+}
+
+.attendance-controls button {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.attendance-table-wrapper {
+    margin-top: 20px;
+    overflow-x: auto;
+}
+
+.attendance-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+.attendance-table th,
+.attendance-table td {
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+.attendance-table th {
+    font-size: 13px;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+.status-present {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+.status-absent {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.btn-present {
+    background: #16a34a;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-absent {
+    background: #dc2626;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+}

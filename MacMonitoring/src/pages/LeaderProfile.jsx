@@ -23,6 +23,10 @@ function LeaderProfile() {
     const [leader, setLeader] =
         useState(null);
 
+    const [activeTab,
+        setActiveTab] =
+        useState("attendance");
+
     const [tithes, setTithes] =
         useState([]);
 
@@ -49,27 +53,27 @@ function LeaderProfile() {
 
     }, []);
 
-    /* FETCH LEADER */
+    /* =======================
+       FETCH LEADER
+    ======================= */
 
     const fetchLeader =
         async () => {
 
         const {
-            data,
-            error
+            data
         } = await supabase
             .from("tblMonitoring")
             .select("*")
             .eq("id", id)
             .single();
 
-        if (!error) {
-
-            setLeader(data);
-        }
+        setLeader(data);
     };
 
-    /* FETCH TITHES */
+    /* =======================
+       FETCH TITHES
+    ======================= */
 
     const fetchTithes =
         async () => {
@@ -86,7 +90,9 @@ function LeaderProfile() {
         setTithes(data || []);
     };
 
-    /* FETCH ATTENDANCE */
+    /* =======================
+       FETCH ATTENDANCE
+    ======================= */
 
     const fetchAttendance =
         async () => {
@@ -103,12 +109,12 @@ function LeaderProfile() {
                     }
                 );
 
-        setAttendance(
-            data || []
-        );
+        setAttendance(data || []);
     };
 
-    /* FETCH DEVOTION */
+    /* =======================
+       FETCH DEVOTION
+    ======================= */
 
     const fetchDevotion =
         async () => {
@@ -117,14 +123,17 @@ function LeaderProfile() {
             await supabase
                 .from("tblDevotion")
                 .select("*")
-                .eq("leader_id", id);
+                .eq("leader_id", id)
+                .order("month", {
+                    ascending: false
+                });
 
-        setDevotion(
-            data || []
-        );
+        setDevotion(data || []);
     };
 
-    /* FETCH LIFEGROUP */
+    /* =======================
+       FETCH LIFEGROUP
+    ======================= */
 
     const fetchLifeGroups =
         async () => {
@@ -138,18 +147,12 @@ function LeaderProfile() {
                     ascending: false
                 });
 
-        setLifeGroups(
-            data || []
-        );
+        setLifeGroups(data || []);
     };
 
     if (!leader) {
 
-        return (
-            <h1>
-                Loading...
-            </h1>
-        );
+        return <h1>Loading...</h1>;
     }
 
     const isMember =
@@ -164,382 +167,547 @@ function LeaderProfile() {
 
             <div className="content">
 
-                {/* HEADER */}
+                {/* PROFILE HEADER */}
 
-                <div
-                    className="leader-card"
-                    style={{
-                        marginBottom:
-                            "30px"
-                    }}
-                >
+                <div className="profile-header">
 
-                    <div
-                        style={{
-                            display:
-                                "flex",
-                            justifyContent:
-                                "space-between",
-                            alignItems:
-                                "center",
-                            flexWrap:
-                                "wrap",
-                            gap:
-                                "20px"
-                        }}
-                    >
+                    <div className="profile-left">
 
-                        <div
-                            style={{
-                                display:
-                                    "flex",
-                                alignItems:
-                                    "center",
-                                gap:
-                                    "20px"
-                            }}
-                        >
+                        <img
+                            src={
+                                leader.image_url ||
+                                "https://via.placeholder.com/150"
+                            }
+                            alt="Leader"
+                            className="profile-avatar"
+                        />
 
-                            <img
-                                src={
-                                    leader.image_url ||
-                                    "https://via.placeholder.com/150"
-                                }
-                                alt="Leader"
-                                style={{
-                                    width:
-                                        "120px",
-                                    height:
-                                        "120px",
-                                    borderRadius:
-                                        "50%",
-                                    objectFit:
-                                        "cover",
-                                    border:
-                                        "4px solid var(--primary)"
-                                }}
-                            />
+                        <div>
 
-                            <div>
+                            <h1 className="profile-name">
 
-                                <h1>
+                                {leader.firstname}
+                                {" "}
+                                {leader.lastname}
 
-                                    {
-                                        leader.firstname
-                                    }
-                                    {" "}
-                                    {
-                                        leader.lastname
-                                    }
+                            </h1>
 
-                                </h1>
+                            <div className="profile-tags">
 
-                                <p>
+                                <span className="profile-badge">
 
-                                    {
-                                        leader.tribe
-                                    }
+                                    {leader.tribe}
 
-                                    {" • "}
+                                </span>
 
-                                    {
-                                        leader.type
-                                    }
+                                <span className="profile-badge gold">
 
-                                </p>
+                                    {leader.type}
+
+                                </span>
 
                             </div>
 
                         </div>
 
-                        <Link
-                            to={`/edit-leader/${leader.id}`}
-                        >
-
-                            <button>
-
-                                Edit Profile
-
-                            </button>
-
-                        </Link>
-
                     </div>
+
+                    <Link
+                        to={`/edit-leader/${leader.id}`}
+                    >
+
+                        <button className="edit-profile-btn">
+
+                            Edit Profile
+
+                        </button>
+
+                    </Link>
 
                 </div>
 
-                {/* MEMBER NOTICE */}
+                {/* TAB NAVIGATION */}
 
-                {isMember && (
+                <div className="profile-tabs">
 
-                    <div
-                        className="record-card"
-                        style={{
-                            marginBottom:
-                                "20px"
-                        }}
+                    <button
+                        className={
+                            activeTab === "attendance"
+                                ? "tab-btn active-tab"
+                                : "tab-btn"
+                        }
+                        onClick={() =>
+                            setActiveTab(
+                                "attendance"
+                            )
+                        }
                     >
 
-                        <h2>
-                            Church Member
-                        </h2>
+                        Attendance
 
-                        <p>
+                    </button>
 
-                            This person is
-                            registered as a
-                            member only.
+                    {!isMember && (
 
-                        </p>
-
-                    </div>
-
-                )}
-
-                {/* TITHES */}
-
-                {!isMember && (
-
-                    <>
-
-                        <div
-                            className="record-card"
+                        <button
+                            className={
+                                activeTab === "tithes"
+                                    ? "tab-btn active-tab"
+                                    : "tab-btn"
+                            }
+                            onClick={() =>
+                                setActiveTab(
+                                    "tithes"
+                                )
+                            }
                         >
 
-                            <h2>
-                                Tithes
-                            </h2>
+                            Tithes
 
-                            <br />
+                        </button>
 
-                            {tithes.length === 0 ? (
+                    )}
 
-                                <p>
-                                    No records.
-                                </p>
+                    {!isMember && (
 
-                            ) : (
+                        <button
+                            className={
+                                activeTab === "devotion"
+                                    ? "tab-btn active-tab"
+                                    : "tab-btn"
+                            }
+                            onClick={() =>
+                                setActiveTab(
+                                    "devotion"
+                                )
+                            }
+                        >
 
-                                tithes.map(
-                                    (
-                                        tithe
-                                    ) => (
+                            Devotion
 
-                                    <div
-                                        key={
-                                            tithe.id
-                                        }
-                                        className="record-card"
-                                    >
+                        </button>
 
-                                        ₱
-                                        {
-                                            tithe.amount
-                                        }
+                    )}
 
-                                        {" — "}
+                    {!isMember && (
 
-                                        {
-                                            tithe.date
-                                        }
+                        <button
+                            className={
+                                activeTab === "lifegroup"
+                                    ? "tab-btn active-tab"
+                                    : "tab-btn"
+                            }
+                            onClick={() =>
+                                setActiveTab(
+                                    "lifegroup"
+                                )
+                            }
+                        >
 
-                                    </div>
+                            Life Group
 
-                                ))
-
-                            )}
-
-                        </div>
-
-                        <br />
-
-                    </>
-
-                )}
-
-                {/* ATTENDANCE */}
-
-                <div
-                    className="record-card"
-                >
-
-                    <h2>
-                        Attendance
-                    </h2>
-
-                    <br />
-
-                    {attendance.length === 0 ? (
-
-                        <p>
-                            No records.
-                        </p>
-
-                    ) : (
-
-                        attendance.map(
-                            (
-                                record
-                            ) => (
-
-                            <div
-                                key={
-                                    record.id
-                                }
-                                className="record-card"
-                            >
-
-                                {
-                                    record.status
-                                }
-
-                                {" — "}
-
-                                {
-                                    record.service_date
-                                }
-
-                            </div>
-
-                        ))
+                        </button>
 
                     )}
 
                 </div>
 
-                <br />
+                {/* =========================
+                    ATTENDANCE
+                ========================= */}
 
-                {/* DEVOTION */}
+                {activeTab ===
+                    "attendance" && (
 
-                {!isMember && (
+                    <div className="excel-card">
 
-                    <>
-
-                        <div
-                            className="record-card"
-                        >
+                        <div className="excel-header">
 
                             <h2>
-                                Devotion
+                                Attendance Records
                             </h2>
-
-                            <br />
-
-                            {devotion.length === 0 ? (
-
-                                <p>
-                                    No records.
-                                </p>
-
-                            ) : (
-
-                                devotion.map(
-                                    (
-                                        dev
-                                    ) => (
-
-                                    <div
-                                        key={
-                                            dev.id
-                                        }
-                                        className="record-card"
-                                    >
-
-                                        {
-                                            dev.month
-                                        }
-
-                                        {" — "}
-
-                                        {
-                                            dev.completed_days
-                                        }
-
-                                        /
-
-                                        {
-                                            dev.total_days
-                                        }
-
-                                    </div>
-
-                                ))
-
-                            )}
 
                         </div>
 
-                        <br />
+                        <div className="excel-wrapper">
 
-                    </>
+                            <table className="excel-table">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Date
+                                        </th>
+
+                                        <th>
+                                            Remarks
+                                        </th>
+
+                                        <th>
+                                            Status
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    {attendance.map(
+                                        (
+                                            record
+                                        ) => (
+
+                                        <tr
+                                            key={
+                                                record.id
+                                            }
+                                        >
+
+                                            <td>
+
+                                                {
+                                                    record.service_date
+                                                }
+
+                                            </td>
+
+                                            <td>
+
+                                                {
+                                                    record.remarks
+                                                }
+
+                                            </td>
+
+                                            <td>
+
+                                                <span
+                                                    className={`status-badge ${
+                                                        record.status ===
+                                                        "Present"
+                                                            ? "status-present"
+                                                            : "status-absent"
+                                                    }`}
+                                                >
+
+                                                    {
+                                                        record.status
+                                                    }
+
+                                                </span>
+
+                                            </td>
+
+                                        </tr>
+
+                                    ))}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
 
                 )}
 
-                {/* LIFEGROUP */}
+                {/* =========================
+                    TITHES
+                ========================= */}
 
-                {!isMember && (
+                {activeTab ===
+                    "tithes" && (
 
-                    <div
-                        className="record-card"
-                    >
+                    <div className="excel-card">
 
-                        <h2>
-                            Life Group
-                        </h2>
+                        <div className="excel-header">
 
-                        <br />
+                            <h2>
+                                Tithes Records
+                            </h2>
 
-                        {lifeGroups.length === 0 ? (
+                        </div>
 
-                            <p>
-                                No records.
-                            </p>
+                        <div className="excel-wrapper">
 
-                        ) : (
+                            <table className="excel-table">
 
-                            lifeGroups.map(
-                                (
-                                    group
-                                ) => (
+                                <thead>
 
-                                <div
-                                    key={
-                                        group.id
-                                    }
-                                    className="record-card"
-                                >
+                                    <tr>
 
-                                    <strong>
+                                        <th>
+                                            Date
+                                        </th>
 
-                                        {
-                                            group.topic
-                                        }
+                                        <th>
+                                            Amount
+                                        </th>
 
-                                    </strong>
+                                    </tr>
 
-                                    <br />
+                                </thead>
 
-                                    {
-                                        group.place
-                                    }
+                                <tbody>
 
-                                    {" • "}
+                                    {tithes.map(
+                                        (
+                                            tithe
+                                        ) => (
 
-                                    {
-                                        group.type
-                                    }
+                                        <tr
+                                            key={
+                                                tithe.id
+                                            }
+                                        >
 
-                                    <br />
+                                            <td>
 
-                                    {
-                                        group.date
-                                    }
+                                                {
+                                                    tithe.date
+                                                }
 
-                                </div>
+                                            </td>
 
-                            ))
+                                            <td>
 
-                        )}
+                                                ₱
+                                                {
+                                                    tithe.amount
+                                                }
+
+                                            </td>
+
+                                        </tr>
+
+                                    ))}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                )}
+
+                {/* =========================
+                    DEVOTION
+                ========================= */}
+
+                {activeTab ===
+                    "devotion" && (
+
+                    <div className="excel-card">
+
+                        <div className="excel-header">
+
+                            <h2>
+                                Devotion Consistency
+                            </h2>
+
+                        </div>
+
+                        <div className="excel-wrapper">
+
+                            <table className="excel-table">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Month
+                                        </th>
+
+                                        <th>
+                                            Completed
+                                        </th>
+
+                                        <th>
+                                            Total
+                                        </th>
+
+                                        <th>
+                                            Progress
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    {devotion.map(
+                                        (
+                                            dev
+                                        ) => {
+
+                                        const progress =
+                                            Math.round(
+                                                (
+                                                    dev.completed_days /
+                                                    dev.total_days
+                                                ) * 100
+                                            );
+
+                                        return (
+
+                                            <tr
+                                                key={
+                                                    dev.id
+                                                }
+                                            >
+
+                                                <td>
+
+                                                    {
+                                                        dev.month
+                                                    }
+
+                                                </td>
+
+                                                <td>
+
+                                                    {
+                                                        dev.completed_days
+                                                    }
+
+                                                </td>
+
+                                                <td>
+
+                                                    {
+                                                        dev.total_days
+                                                    }
+
+                                                </td>
+
+                                                <td>
+
+                                                    {progress}%
+
+                                                </td>
+
+                                            </tr>
+
+                                        );
+                                    })}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                )}
+
+                {/* =========================
+                    LIFEGROUP
+                ========================= */}
+
+                {activeTab ===
+                    "lifegroup" && (
+
+                    <div className="excel-card">
+
+                        <div className="excel-header">
+
+                            <h2>
+                                Life Group Participation
+                            </h2>
+
+                        </div>
+
+                        <div className="excel-wrapper">
+
+                            <table className="excel-table">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Topic
+                                        </th>
+
+                                        <th>
+                                            Place
+                                        </th>
+
+                                        <th>
+                                            Type
+                                        </th>
+
+                                        <th>
+                                            Date
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    {lifeGroups.map(
+                                        (
+                                            group
+                                        ) => (
+
+                                        <tr
+                                            key={
+                                                group.id
+                                            }
+                                        >
+
+                                            <td>
+
+                                                {
+                                                    group.topic
+                                                }
+
+                                            </td>
+
+                                            <td>
+
+                                                {
+                                                    group.place
+                                                }
+
+                                            </td>
+
+                                            <td>
+
+                                                {
+                                                    group.type
+                                                }
+
+                                            </td>
+
+                                            <td>
+
+                                                {
+                                                    group.date
+                                                }
+
+                                            </td>
+
+                                        </tr>
+
+                                    ))}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
 
                     </div>
 
