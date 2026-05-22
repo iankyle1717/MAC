@@ -22,6 +22,9 @@ function LeaderForm({
     const [lastname, setLastname] =
         useState("");
 
+    const [pin, setPin] =
+        useState("");
+
     const [tribe, setTribe] =
         useState("");
 
@@ -29,13 +32,17 @@ function LeaderForm({
         useState("");
 
     const [ministry, setMinistry] =
-         useState("NONE");
+        useState("NONE");
 
     const [image, setImage] =
         useState(null);
 
     const [loading, setLoading] =
         useState(false);
+
+    /* =========================
+       SUBMIT
+    ========================= */
 
     const handleSubmit =
         async (e) => {
@@ -46,7 +53,8 @@ function LeaderForm({
             !firstname ||
             !lastname ||
             !tribe ||
-            !type
+            !type ||
+            !pin
         ) {
 
             alert(
@@ -60,68 +68,76 @@ function LeaderForm({
 
         let imageUrl = "";
 
-        /* UPLOAD IMAGE */
+        /* =========================
+           UPLOAD IMAGE
+        ========================= */
 
-       if (image) {
+        if (image) {
 
-    console.log(
-        "Uploading image..."
-    );
+            const fileExt =
+                image.name
+                    .split(".")
+                    .pop();
 
-    const fileName =
-        `${Date.now()}-${image.name}`;
+            const fileName =
+                `${Date.now()}.${fileExt}`;
 
-    const {
-        data: uploadData,
-        error: uploadError
-    } = await supabase
-        .storage
-        .from("leader-images")
-        .upload(
-            fileName,
-            image
-        );
+            /* IMPORTANT:
+               REMOVE leaders/
+               because your bucket is already
+               leader-images
+            */
 
-    console.log(
-        "UPLOAD DATA:",
-        uploadData
-    );
+            const {
+                data: uploadData,
+                error: uploadError
+            } =
+                await supabase
+                    .storage
+                    .from("leader-images")
+                    .upload(
+                        fileName,
+                        image
+                    );
 
-    console.log(
-        "UPLOAD ERROR:",
-        uploadError
-    );
+            console.log(
+                "UPLOAD:",
+                uploadData
+            );
 
-    if (uploadError) {
+            console.log(
+                "UPLOAD ERROR:",
+                uploadError
+            );
 
-        alert(
-            uploadError.message
-        );
+            if (uploadError) {
 
-        setLoading(false);
+                alert(
+                    uploadError.message
+                );
 
-        return;
-    }
+                setLoading(false);
 
-    const {
-        data
-    } = supabase
-        .storage
-        .from("leader-images")
-        .getPublicUrl(
-            fileName
-        );
+                return;
+            }
 
-    imageUrl =
-        data.publicUrl;
+            const {
+                data
+            } =
+                supabase
+                    .storage
+                    .from("leader-images")
+                    .getPublicUrl(
+                        fileName
+                    );
 
-    console.log(
-        "IMAGE URL:",
-        imageUrl
-    );
-}
+            imageUrl =
+                data.publicUrl;
+        }
 
-        /* INSERT LEADER */
+        /* =========================
+           INSERT USER
+        ========================= */
 
         const { error } =
             await supabase
@@ -133,6 +149,7 @@ function LeaderForm({
                         tribe,
                         type,
                         ministry,
+                        pin,
                         image_url:
                             imageUrl
                     }
@@ -149,15 +166,18 @@ function LeaderForm({
         } else {
 
             alert(
-                "Leader added."
+                "Leader added successfully."
             );
+
+            /* RESET */
 
             setFirstname("");
             setLastname("");
+            setPin("");
             setTribe("");
             setType("");
-            setImage(null);
             setMinistry("NONE");
+            setImage(null);
 
             refreshLeaders();
         }
@@ -172,6 +192,8 @@ function LeaderForm({
             onSubmit={handleSubmit}
         >
 
+            {/* FIRSTNAME */}
+
             <input
                 type="text"
                 placeholder="First Name"
@@ -183,6 +205,8 @@ function LeaderForm({
                 }
             />
 
+            {/* LASTNAME */}
+
             <input
                 type="text"
                 placeholder="Last Name"
@@ -193,6 +217,21 @@ function LeaderForm({
                     )
                 }
             />
+
+            {/* PIN */}
+
+            <input
+                type="password"
+                placeholder="Set PIN"
+                value={pin}
+                onChange={(e) =>
+                    setPin(
+                        e.target.value
+                    )
+                }
+            />
+
+            {/* TRIBE */}
 
             <select
                 value={tribe}
@@ -207,7 +246,8 @@ function LeaderForm({
                     Select Tribe
                 </option>
 
-                {tribes.map((tribe) => (
+                {tribes.map(
+                    (tribe) => (
 
                     <option
                         key={tribe}
@@ -222,6 +262,8 @@ function LeaderForm({
 
             </select>
 
+            {/* TYPE */}
+
             <select
                 value={type}
                 onChange={(e) =>
@@ -235,7 +277,8 @@ function LeaderForm({
                     Select Leader Type
                 </option>
 
-                {leaderTypes.map((type) => (
+                {leaderTypes.map(
+                    (type) => (
 
                     <option
                         key={type}
@@ -249,6 +292,9 @@ function LeaderForm({
                 ))}
 
             </select>
+
+            {/* MINISTRY */}
+
             <select
                 value={ministry}
                 onChange={(e) =>
@@ -258,7 +304,8 @@ function LeaderForm({
                 }
             >
 
-                {ministries.map((ministry) => (
+                {ministries.map(
+                    (ministry) => (
 
                     <option
                         key={ministry}
@@ -273,6 +320,8 @@ function LeaderForm({
 
             </select>
 
+            {/* IMAGE */}
+
             <input
                 type="file"
                 accept="image/*"
@@ -282,6 +331,8 @@ function LeaderForm({
                     )
                 }
             />
+
+            {/* BUTTON */}
 
             <button type="submit">
 

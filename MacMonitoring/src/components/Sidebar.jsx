@@ -126,6 +126,19 @@ function Sidebar() {
                     Life Group
                 </Link>
 
+                <Link
+                    to="/assimilation"
+                    className={
+                        isActive(
+                            "/assimilation"
+                        )
+                            ? "active-link"
+                            : ""
+                    }
+                >
+                    Assimilation
+                </Link>
+
             </div>
 
         </div>

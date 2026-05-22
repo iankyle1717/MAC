@@ -27,8 +27,14 @@ from "./pages/LifeGroup";
 
 import "./styles/global.css";
 
+import Login from "./pages/Login";
+
 import EditLeader
 from "./pages/EditLeader";
+
+import Assimilation
+from "./pages/Assimilation";
+
 function App() {
 
     return (
@@ -74,6 +80,15 @@ function App() {
                 <Route
                     path="/edit-leader/:id"
                     element={<EditLeader />}
+                />
+                <Route
+                    path="/login"
+                    element={<Login />}
+                />
+                
+                <Route
+                    path="/assimilation"
+                    element={<Assimilation />}
                 />
 
             </Routes>

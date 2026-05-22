@@ -34,6 +34,8 @@ function EditLeader() {
 
         lastname: "",
 
+        pin: "",
+
         tribe: "",
 
         type: "",
@@ -202,6 +204,9 @@ function EditLeader() {
                     lastname:
                         formData.lastname,
 
+                    pin:
+                        formData.pin,
+
                     tribe:
                         formData.tribe,
 
@@ -217,6 +222,8 @@ function EditLeader() {
                 .eq("id", id);
 
         if (error) {
+
+            console.log(error);
 
             alert(
                 "Failed to update profile."
@@ -399,6 +406,24 @@ function EditLeader() {
                         }
                     />
 
+                    {/* PIN */}
+
+                    <input
+                        type="password"
+
+                        name="pin"
+
+                        placeholder="Change PIN"
+
+                        value={
+                            formData.pin
+                        }
+
+                        onChange={
+                            handleChange
+                        }
+                    />
+
                     {/* TRIBE */}
 
                     <select
@@ -470,10 +495,6 @@ function EditLeader() {
                             handleChange
                         }
                     >
-
-                        <option value="">
-                            Select Ministry
-                        </option>
 
                         {ministries.map(
                             (ministry) => (

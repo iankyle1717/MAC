@@ -15,6 +15,10 @@ import {
     supabase
 } from "../lib/supabase";
 
+import {
+    getCurrentUser
+} from "../utils/auth";
+
 function LeaderProfile() {
 
     const { id } =
@@ -39,41 +43,93 @@ function LeaderProfile() {
     const [lifeGroups, setLifeGroups] =
         useState([]);
 
+    const [invites, setInvites] =
+        useState([]);
+
+    const currentUser =
+        getCurrentUser();
+
     useEffect(() => {
 
-        fetchLeader();
+        if (!currentUser) {
 
-        fetchTithes();
+            window.location.href =
+                "/login";
 
-        fetchAttendance();
+            return;
+        }
 
-        fetchDevotion();
-
-        fetchLifeGroups();
+        loadData();
 
     }, []);
 
-    /* =======================
+    /* =========================
+        LOAD ALL DATA
+        ========================= */
+
+        const loadData =
+            async () => {
+
+            const { data } =
+                await supabase
+                    .from("tblMonitoring")
+                    .select("*")
+                    .eq("id", id)
+                    .single();
+
+            setLeader(data);
+
+            if (data) {
+
+                const fullName =
+                    `${data.firstname} ${data.lastname}`;
+
+                const { data: inviteData } =
+                    await supabase
+                        .from("tblNewMembers")
+                        .select("*")
+                        .eq(
+                            "invited_by",
+                            fullName
+                        )
+                        .order("id", {
+                            ascending: false
+                        });
+
+                setInvites(
+                    inviteData || []
+                );
+            }
+
+            fetchTithes();
+
+            fetchAttendance();
+
+            fetchDevotion();
+
+            fetchLifeGroups();
+        };
+
+    /* =========================
        FETCH LEADER
-    ======================= */
+    ========================= */
 
     const fetchLeader =
         async () => {
 
-        const {
-            data
-        } = await supabase
-            .from("tblMonitoring")
-            .select("*")
-            .eq("id", id)
-            .single();
+        const { data } =
+            await supabase
+                .from("tblMonitoring")
+                .select("*")
+                .eq("id", id)
+                .single();
 
         setLeader(data);
     };
 
-    /* =======================
+    /* =========================
        FETCH TITHES
-    ======================= */
+    ========================= */
 
     const fetchTithes =
         async () => {
@@ -90,9 +146,9 @@ function LeaderProfile() {
         setTithes(data || []);
     };
 
-    /* =======================
+    /* =========================
        FETCH ATTENDANCE
-    ======================= */
+    ========================= */
 
     const fetchAttendance =
         async () => {
@@ -112,9 +168,9 @@ function LeaderProfile() {
         setAttendance(data || []);
     };
 
-    /* =======================
+    /* =========================
        FETCH DEVOTION
-    ======================= */
+    ========================= */
 
     const fetchDevotion =
         async () => {
@@ -131,9 +187,9 @@ function LeaderProfile() {
         setDevotion(data || []);
     };
 
-    /* =======================
+    /* =========================
        FETCH LIFEGROUP
-    ======================= */
+    ========================= */
 
     const fetchLifeGroups =
         async () => {
@@ -150,14 +206,129 @@ function LeaderProfile() {
         setLifeGroups(data || []);
     };
 
+    /* =========================
+    FETCH INVITES
+    ========================= */
+
+    const fetchInvites =
+        async () => {
+
+        const fullName =
+            `${leader?.firstname} ${leader?.lastname}`;
+
+        const { data } =
+            await supabase
+                .from("tblNewMembers")
+                .select("*")
+                .eq(
+                    "invited_by",
+                    fullName
+                )
+                .order("id", {
+                    ascending: false
+                });
+
+        setInvites(data || []);
+    };
+
+    /* =========================
+       LOADING
+    ========================= */
+
     if (!leader) {
 
         return <h1>Loading...</h1>;
     }
 
-    const isMember =
-        leader.type ===
-        "MEMBER";
+    /* =========================
+       ROLE CHECKS
+    ========================= */
+
+    const isOwnProfile =
+        currentUser?.id === leader.id;
+
+    const isAdmin =
+        currentUser?.ministry === "Admin";
+
+    const isFinance =
+        currentUser?.ministry === "Finance";
+
+    const isUshering =
+        currentUser?.ministry === "Ushering";
+
+    const isDiscipleship =
+        currentUser?.ministry ===
+        "Discipleship Journey";
+
+    /* =========================
+       PAGE ACCESS
+    ========================= */
+
+    const canAccessProfile =
+
+        isOwnProfile ||
+
+        isAdmin ||
+
+        isFinance ||
+
+        isUshering ||
+
+        isDiscipleship;
+
+    if (!canAccessProfile) {
+
+        return (
+
+            <div className="layout">
+
+                <Sidebar />
+
+                <div className="content">
+
+                    <h1>
+                        Access Denied
+                    </h1>
+
+                    <p>
+                        You are not allowed to open this profile.
+                    </p>
+
+                </div>
+
+            </div>
+        );
+    }
+
+    /* =========================
+       TAB PERMISSIONS
+    ========================= */
+
+    const canViewAttendance =
+
+        isOwnProfile ||
+
+        isAdmin ||
+
+        isUshering;
+
+    const canViewTithes =
+
+        isOwnProfile ||
+
+        isAdmin ||
+
+        isFinance;
+
+    const canViewDevotion =
+
+        isOwnProfile ||
+
+        isAdmin ||
+
+        isDiscipleship;
+
+    const canViewLifeGroup = true;
 
     return (
 
@@ -176,9 +347,12 @@ function LeaderProfile() {
                         <img
                             src={
                                 leader.image_url ||
+
                                 "https://via.placeholder.com/150"
                             }
+
                             alt="Leader"
+
                             className="profile-avatar"
                         />
 
@@ -206,48 +380,63 @@ function LeaderProfile() {
 
                                 </span>
 
+                                <span className="profile-badge">
+
+                                    {leader.ministry}
+
+                                </span>
+
                             </div>
 
                         </div>
 
                     </div>
 
-                    <Link
-                        to={`/edit-leader/${leader.id}`}
-                    >
+                    {(isOwnProfile || isAdmin) && (
 
-                        <button className="edit-profile-btn">
+                        <Link
+                            to={`/edit-leader/${leader.id}`}
+                        >
 
-                            Edit Profile
+                            <button className="edit-profile-btn">
 
-                        </button>
+                                Edit Profile
 
-                    </Link>
+                            </button>
+
+                        </Link>
+
+                    )}
 
                 </div>
 
-                {/* TAB NAVIGATION */}
+                {/* TABS */}
 
                 <div className="profile-tabs">
 
-                    <button
-                        className={
-                            activeTab === "attendance"
-                                ? "tab-btn active-tab"
-                                : "tab-btn"
-                        }
-                        onClick={() =>
-                            setActiveTab(
-                                "attendance"
-                            )
-                        }
-                    >
+                    {canViewAttendance && (
 
-                        Attendance
+                        <button
+                            className={
+                                activeTab === "attendance"
+                                    ? "tab-btn active-tab"
+                                    : "tab-btn"
+                            }
 
-                    </button>
+                            onClick={() =>
+                                setActiveTab(
+                                    "attendance"
+                                )
+                            }
+                        >
 
-                    {!isMember && (
+                            Attendance
+
+                        </button>
+
+                    )}
+
+                    {canViewTithes && (
 
                         <button
                             className={
@@ -255,6 +444,7 @@ function LeaderProfile() {
                                     ? "tab-btn active-tab"
                                     : "tab-btn"
                             }
+
                             onClick={() =>
                                 setActiveTab(
                                     "tithes"
@@ -268,7 +458,7 @@ function LeaderProfile() {
 
                     )}
 
-                    {!isMember && (
+                    {canViewDevotion && (
 
                         <button
                             className={
@@ -276,6 +466,7 @@ function LeaderProfile() {
                                     ? "tab-btn active-tab"
                                     : "tab-btn"
                             }
+
                             onClick={() =>
                                 setActiveTab(
                                     "devotion"
@@ -289,7 +480,25 @@ function LeaderProfile() {
 
                     )}
 
-                    {!isMember && (
+                    <button
+                        className={
+                            activeTab === "invites"
+                                ? "tab-btn active-tab"
+                                : "tab-btn"
+                        }
+
+                        onClick={() =>
+                            setActiveTab(
+                                "invites"
+                            )
+                        }
+                    >
+
+                        Invites & Newcomers
+
+                    </button>
+
+                    {canViewLifeGroup && (
 
                         <button
                             className={
@@ -297,6 +506,7 @@ function LeaderProfile() {
                                     ? "tab-btn active-tab"
                                     : "tab-btn"
                             }
+
                             onClick={() =>
                                 setActiveTab(
                                     "lifegroup"
@@ -312,12 +522,11 @@ function LeaderProfile() {
 
                 </div>
 
-                {/* =========================
-                    ATTENDANCE
-                ========================= */}
+                {/* ATTENDANCE */}
 
                 {activeTab ===
-                    "attendance" && (
+                    "attendance" &&
+                    canViewAttendance && (
 
                     <div className="excel-card">
 
@@ -367,19 +576,15 @@ function LeaderProfile() {
                                         >
 
                                             <td>
-
                                                 {
                                                     record.service_date
                                                 }
-
                                             </td>
 
                                             <td>
-
                                                 {
                                                     record.remarks
                                                 }
-
                                             </td>
 
                                             <td>
@@ -415,12 +620,11 @@ function LeaderProfile() {
 
                 )}
 
-                {/* =========================
-                    TITHES
-                ========================= */}
+                {/* TITHES */}
 
                 {activeTab ===
-                    "tithes" && (
+                    "tithes" &&
+                    canViewTithes && (
 
                     <div className="excel-card">
 
@@ -466,20 +670,16 @@ function LeaderProfile() {
                                         >
 
                                             <td>
-
                                                 {
                                                     tithe.date
                                                 }
-
                                             </td>
 
                                             <td>
-
                                                 ₱
                                                 {
                                                     tithe.amount
                                                 }
-
                                             </td>
 
                                         </tr>
@@ -496,12 +696,11 @@ function LeaderProfile() {
 
                 )}
 
-                {/* =========================
-                    DEVOTION
-                ========================= */}
+                {/* DEVOTION */}
 
                 {activeTab ===
-                    "devotion" && (
+                    "devotion" &&
+                    canViewDevotion && (
 
                     <div className="excel-card">
 
@@ -565,33 +764,25 @@ function LeaderProfile() {
                                             >
 
                                                 <td>
-
                                                     {
                                                         dev.month
                                                     }
-
                                                 </td>
 
                                                 <td>
-
                                                     {
                                                         dev.completed_days
                                                     }
-
                                                 </td>
 
                                                 <td>
-
                                                     {
                                                         dev.total_days
                                                     }
-
                                                 </td>
 
                                                 <td>
-
                                                     {progress}%
-
                                                 </td>
 
                                             </tr>
@@ -609,9 +800,7 @@ function LeaderProfile() {
 
                 )}
 
-                {/* =========================
-                    LIFEGROUP
-                ========================= */}
+                {/* LIFEGROUP */}
 
                 {activeTab ===
                     "lifegroup" && (
@@ -668,40 +857,217 @@ function LeaderProfile() {
                                         >
 
                                             <td>
-
                                                 {
                                                     group.topic
                                                 }
-
                                             </td>
 
                                             <td>
-
                                                 {
                                                     group.place
                                                 }
-
                                             </td>
 
                                             <td>
-
                                                 {
                                                     group.type
                                                 }
-
                                             </td>
 
                                             <td>
-
                                                 {
                                                     group.date
                                                 }
-
                                             </td>
 
                                         </tr>
 
                                     ))}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </div>
+
+                )}
+
+                {/* INVITES */}
+
+                {activeTab ===
+                    "invites" && (
+
+                    <div className="excel-card">
+
+                        <div className="excel-header">
+
+                            <h2>
+
+                                Invites & Newcomers
+
+                            </h2>
+
+                        </div>
+
+                        {/* STATS */}
+
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns:
+                                    "repeat(auto-fit,minmax(180px,1fr))",
+                                gap: "15px",
+                                marginBottom: "20px"
+                            }}
+                        >
+
+                            <div className="record-card">
+
+                                <h3>
+                                    Total Invites
+                                </h3>
+
+                                <h1>
+                                    {invites.length}
+                                </h1>
+
+                            </div>
+
+                            <div className="record-card">
+
+                                <h3>
+                                    Schooling
+                                </h3>
+
+                                <h1>
+
+                                    {
+                                        invites.filter(
+                                            (i) =>
+                                                i.remarks ===
+                                                "Schooling"
+                                        ).length
+                                    }
+
+                                </h1>
+
+                            </div>
+
+                            <div className="record-card">
+
+                                <h3>
+                                    Winning
+                                </h3>
+
+                                <h1>
+
+                                    {
+                                        invites.filter(
+                                            (i) =>
+                                                i.remarks ===
+                                                "Winning"
+                                        ).length
+                                    }
+
+                                </h1>
+
+                            </div>
+
+                        </div>
+
+                        {/* TABLE */}
+
+                        <div className="excel-wrapper">
+
+                            <table className="excel-table">
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Name
+                                        </th>
+
+                                        <th>
+                                            Tribe
+                                        </th>
+
+                                        <th>
+                                            Status
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody>
+
+                                    {invites.length === 0 ? (
+
+                                        <tr>
+
+                                            <td
+                                                colSpan="3"
+                                            >
+
+                                                No invites yet.
+
+                                            </td>
+
+                                        </tr>
+
+                                    ) : (
+
+                                        invites.map(
+                                            (invite) => (
+
+                                            <tr
+                                                key={
+                                                    invite.id
+                                                }
+                                            >
+
+                                                <td>
+
+                                                    {
+                                                        invite.firstname
+                                                    }
+                                                    {" "}
+                                                    {
+                                                        invite.lastname
+                                                    }
+
+                                                </td>
+
+                                                <td>
+
+                                                    {
+                                                        invite.tribe
+                                                    }
+
+                                                </td>
+
+                                                <td>
+
+                                                    <span
+                                                        className="profile-badge"
+                                                    >
+
+                                                        {
+                                                            invite.remarks
+                                                        }
+
+                                                    </span>
+
+                                                </td>
+
+                                            </tr>
+
+                                        ))
+                                    )}
 
                                 </tbody>
 
