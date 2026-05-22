@@ -85,12 +85,9 @@ function Login() {
             >
 
                 <h1>
-                  MAC Login
+                  MAC Login na!
                 </h1>
 
-                <p>
-                    Engineering Management System
-                </p>
 
                 <input
                     type="text"
