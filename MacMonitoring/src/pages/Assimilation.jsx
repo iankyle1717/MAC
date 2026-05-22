@@ -35,6 +35,10 @@ function Assimilation() {
         setLoading] =
         useState(true);
 
+    const [showForm,
+        setShowForm] =
+        useState(false);
+
     const [firstname,
         setFirstname] =
         useState("");
@@ -170,6 +174,8 @@ function Assimilation() {
             setInvitedBy("");
 
             fetchMembers();
+
+            setShowForm(false);
         }
     };
 
@@ -387,8 +393,52 @@ function Assimilation() {
                 </div>
 
                 {/* =========================
+                    TOGGLE BUTTON
+                ========================= */}
+
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent:
+                            "space-between",
+                        alignItems:
+                            "center",
+                        marginBottom:
+                            "20px"
+                    }}
+                >
+
+                    <h2>
+                        Newcomer Registration
+                    </h2>
+
+                    <button
+                        onClick={() =>
+                            setShowForm(
+                                !showForm
+                            )
+                        }
+                        style={{
+                            background:
+                                showForm
+                                    ? "#dc2626"
+                                    : "#16a34a"
+                        }}
+                    >
+
+                        {showForm
+                            ? "Close Form"
+                            : "Add Newcomer"}
+
+                    </button>
+
+                </div>
+
+                {/* =========================
                     FORM
                 ========================= */}
+
+                {showForm && (
 
                 <form
                     className="leader-form"
@@ -537,6 +587,8 @@ function Assimilation() {
 
                 </form>
 
+                )}
+
                 {/* =========================
                     SEARCH & FILTER
                 ========================= */}
@@ -550,8 +602,6 @@ function Assimilation() {
                         flexWrap: "wrap"
                     }}
                 >
-
-                    {/* SEARCH */}
 
                     <input
                         type="text"
@@ -567,8 +617,6 @@ function Assimilation() {
                             minWidth: "250px"
                         }}
                     />
-
-                    {/* FILTER */}
 
                     <select
                         value={filterTribe}
@@ -728,9 +776,26 @@ function Assimilation() {
 
                                             <td>
 
-                                                {
-                                                    member.remarks
-                                                }
+                                                <span
+                                                    style={{
+                                                        padding:
+                                                            "6px 12px",
+                                                        borderRadius:
+                                                            "20px",
+                                                        background:
+                                                            "#f3f4f6",
+                                                        fontSize:
+                                                            "13px",
+                                                        fontWeight:
+                                                            "600"
+                                                    }}
+                                                >
+
+                                                    {
+                                                        member.remarks
+                                                    }
+
+                                                </span>
 
                                             </td>
 
@@ -769,13 +834,13 @@ function Assimilation() {
                                                         <button
                                                             onClick={() =>
                                                                 navigate(
-                                                                "/add-leader",
-                                                                {
-                                                                    state: {
-                                                                        newcomer: member
+                                                                    "/add-leader",
+                                                                    {
+                                                                        state: {
+                                                                            newcomer: member
+                                                                        }
                                                                     }
-                                                                }
-                                                            )
+                                                                )
                                                             }
                                                             style={{
                                                                 background:

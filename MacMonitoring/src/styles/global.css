@@ -1201,3 +1201,389 @@ body {
     font-weight: 600;
     cursor: pointer;
 }
+
+/* =========================================
+   LEADER FORM TOGGLE
+========================================= */
+
+.leader-action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    padding: 24px;
+    margin-bottom: 28px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 26px;
+    box-shadow: var(--shadow);
+}
+
+.leader-action-title {
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 6px;
+}
+
+.leader-action-subtitle {
+    color: var(--secondary);
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.leader-toggle-btn {
+    height: 52px;
+    padding: 0 24px;
+    border: none;
+    border-radius: 16px;
+    background: linear-gradient(
+        135deg,
+        #c9a45c,
+        #e0bc78
+    );
+    color: #111;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: 0.25s ease;
+    box-shadow:
+        0 12px 28px
+        rgba(201,164,92,0.24);
+}
+
+.leader-toggle-btn:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 18px 40px
+        rgba(201,164,92,0.34);
+}
+
+.leader-form-wrapper {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 28px;
+    margin-bottom: 30px;
+    box-shadow: var(--shadow);
+    animation: fadeSlide 0.25s ease;
+}
+
+@keyframes fadeSlide {
+
+    from {
+        opacity: 0;
+        transform:
+            translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform:
+            translateY(0);
+    }
+}
+
+/* MOBILE */
+
+@media (max-width: 768px) {
+
+    .leader-action-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .leader-toggle-btn {
+        width: 100%;
+    }
+
+    .leader-form-wrapper {
+        padding: 22px;
+    }
+}
+/* ========================================
+   ASSIMILATION PAGE
+======================================== */
+
+.content h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 6px;
+}
+
+.content p {
+    color: #6b7280;
+}
+
+/* ========================================
+   STATS CARD
+======================================== */
+
+.stats-grid {
+    margin-top: 25px;
+}
+
+.record-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 22px;
+    padding: 24px;
+    transition: 0.25s ease;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+}
+
+.record-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.08);
+}
+
+.record-card h3 {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.record-card h1 {
+    font-size: 38px;
+    color: #111827;
+    margin: 0;
+    font-weight: 700;
+}
+
+/* ========================================
+   BUTTONS
+======================================== */
+
+button {
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 12px 18px;
+    border-radius: 14px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: 0.25s ease;
+}
+
+button:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+}
+
+/* ========================================
+   FORM
+======================================== */
+
+.leader-form {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 24px;
+    padding: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+    gap: 18px;
+    margin-bottom: 30px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+}
+
+.leader-form input,
+.leader-form select {
+    width: 100%;
+    background: #f9fafb;
+    border: 1px solid #d1d5db;
+    border-radius: 14px;
+    padding: 14px 16px;
+    font-size: 14px;
+    transition: 0.25s ease;
+}
+
+.leader-form input:focus,
+.leader-form select:focus {
+    border-color: #2563eb;
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+}
+
+.leader-form button {
+    background: #2563eb;
+    color: white;
+}
+
+.leader-form button:hover {
+    background: #1d4ed8;
+}
+
+/* ========================================
+   SEARCH FILTER
+======================================== */
+
+.assimilation-filters {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+    margin-bottom: 25px;
+    flex-wrap: wrap;
+}
+
+.assimilation-filters input,
+.assimilation-filters select {
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 14px;
+    padding: 13px 16px;
+    font-size: 14px;
+    transition: 0.25s ease;
+}
+
+.assimilation-filters input:focus,
+.assimilation-filters select:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37,99,235,0.12);
+}
+
+/* ========================================
+   TABLE CARD
+======================================== */
+
+.excel-card {
+    background: #ffffff;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+}
+
+.excel-header {
+    padding: 22px 24px;
+    border-bottom: 1px solid #f1f5f9;
+    background: #fafafa;
+}
+
+.excel-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #111827;
+}
+
+.excel-wrapper {
+    overflow-x: auto;
+}
+
+/* ========================================
+   TABLE
+======================================== */
+
+.excel-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 900px;
+}
+
+.excel-table thead {
+    background: #f9fafb;
+}
+
+.excel-table th {
+    text-align: left;
+    padding: 18px 20px;
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 700;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.excel-table td {
+    padding: 18px 20px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #111827;
+    font-size: 14px;
+}
+
+.excel-table tbody tr {
+    transition: 0.2s ease;
+}
+
+.excel-table tbody tr:hover {
+    background: #f9fbff;
+}
+
+/* ========================================
+   REMARKS BADGE
+======================================== */
+
+.remark-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #eef2ff;
+    color: #4338ca;
+}
+
+/* ========================================
+   ACTION BUTTONS
+======================================== */
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.next-btn {
+    background: #111827;
+    color: white;
+}
+
+.next-btn:hover {
+    background: #000000;
+}
+
+.convert-btn {
+    background: #16a34a;
+    color: white;
+}
+
+.convert-btn:hover {
+    background: #15803d;
+}
+
+/* ========================================
+   EMPTY STATE
+======================================== */
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+/* ========================================
+   RESPONSIVE
+======================================== */
+
+@media (max-width: 768px) {
+
+    .record-card h1 {
+        font-size: 30px;
+    }
+
+    .leader-form {
+        grid-template-columns: 1fr;
+    }
+
+    .excel-table {
+        min-width: 700px;
+    }
+
+    .content h1 {
+        font-size: 26px;
+    }
+}
+

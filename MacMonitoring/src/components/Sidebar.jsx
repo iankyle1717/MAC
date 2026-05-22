@@ -73,6 +73,18 @@ function Sidebar() {
                 >
                     Leaders
                 </Link>
+                 <Link
+                    to="/assimilation"
+                    className={
+                        isActive(
+                            "/assimilation"
+                        )
+                            ? "active-link"
+                            : ""
+                    }
+                >
+                    New Invites(Members)
+                </Link>
 
                 <Link
                     to="/attendance"
@@ -126,18 +138,7 @@ function Sidebar() {
                     Life Group
                 </Link>
 
-                <Link
-                    to="/assimilation"
-                    className={
-                        isActive(
-                            "/assimilation"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Assimilation
-                </Link>
+               
 
             </div>
 

@@ -21,9 +21,21 @@ function Attendance() {
     const [leaders, setLeaders] =
         useState([]);
 
+    const [newcomers,
+        setNewcomers] =
+        useState([]);
+
     const [attendanceMap,
         setAttendanceMap] =
         useState({});
+
+    const [newcomerAttendanceMap,
+        setNewcomerAttendanceMap] =
+        useState({});
+
+    const [activeTab,
+        setActiveTab] =
+        useState("members");
 
     const [date, setDate] =
         useState(
@@ -52,6 +64,8 @@ function Attendance() {
 
         fetchLeaders();
 
+        fetchNewcomers();
+
     }, []);
 
     useEffect(() => {
@@ -62,6 +76,10 @@ function Attendance() {
         }
 
     }, [date]);
+
+    /* =========================
+       FETCH LEADERS
+    ========================= */
 
     const fetchLeaders =
         async () => {
@@ -79,6 +97,31 @@ function Attendance() {
 
         setLeaders(data || []);
     };
+
+    /* =========================
+       FETCH NEWCOMERS
+    ========================= */
+
+    const fetchNewcomers =
+        async () => {
+
+        const { data } =
+            await supabase
+                .from("tblNewMembers")
+                .select("*")
+                .order(
+                    "firstname",
+                    {
+                        ascending: true
+                    }
+                );
+
+        setNewcomers(data || []);
+    };
+
+    /* =========================
+       FETCH ATTENDANCE
+    ========================= */
 
     const fetchAttendance =
         async (
@@ -110,6 +153,10 @@ function Attendance() {
         );
     };
 
+    /* =========================
+       TOGGLE MEMBER
+    ========================= */
+
     const toggleAttendance =
         (leaderId) => {
 
@@ -133,6 +180,38 @@ function Attendance() {
                 newStatus
         }));
     };
+
+    /* =========================
+       TOGGLE NEWCOMER
+    ========================= */
+
+    const toggleNewcomerAttendance =
+        (memberId) => {
+
+        const current =
+            newcomerAttendanceMap[
+                memberId
+            ];
+
+        const newStatus =
+            current ===
+            "Present"
+                ? "Absent"
+                : "Present";
+
+        setNewcomerAttendanceMap(
+            (prev) => ({
+
+            ...prev,
+
+            [memberId]:
+                newStatus
+        }));
+    };
+
+    /* =========================
+       SERVICE LABEL
+    ========================= */
 
     const getServiceLabel =
         () => {
@@ -180,6 +259,10 @@ function Attendance() {
 
         return null;
     };
+
+    /* =========================
+       SAVE ATTENDANCE
+    ========================= */
 
     const handleSave =
         async () => {
@@ -282,6 +365,10 @@ function Attendance() {
             });
         }
     };
+
+    /* =========================
+       EXPORT EXCEL
+    ========================= */
 
     const exportExcel =
         async () => {
@@ -596,11 +683,7 @@ function Attendance() {
 
                     </button>
 
-                </div>
-
-                <div className="export-controls">
-
-                    <input
+                      <input
                         type="month"
                         value={exportMonth}
                         onChange={(e) =>
@@ -608,18 +691,60 @@ function Attendance() {
                                 e.target.value
                             )
                         }
-                    />
+                        />
+
+                        <button
+                            className="export-btn"
+                            onClick={exportExcel}
+                        >
+
+                            <span className="export-btn-icon">
+                                ⬇
+                            </span>
+
+                            Export Excel
+
+                        </button>
+
+                </div>
+
+                {/* TABS */}
+
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "10px",
+                        marginBottom: "20px"
+                    }}
+                >
 
                     <button
-                        className="export-btn"
-                        onClick={exportExcel}
+                        className={
+                            activeTab === "members"
+                                ? "tab-btn active-tab"
+                                : "tab-btn"
+                        }
+                        onClick={() =>
+                            setActiveTab("members")
+                        }
                     >
 
-                        <span className="export-btn-icon">
-                            ⬇
-                        </span>
+                        Members
 
-                        Export Excel
+                    </button>
+
+                    <button
+                        className={
+                            activeTab === "newcomers"
+                                ? "tab-btn active-tab"
+                                : "tab-btn"
+                        }
+                        onClick={() =>
+                            setActiveTab("newcomers")
+                        }
+                    >
+
+                        Newcomers
 
                     </button>
 
@@ -659,116 +784,228 @@ function Attendance() {
 
                         <tbody>
 
-                            {sorted.map(
-                                (leader) => {
+                            {activeTab === "members" &&
 
-                                const status =
-                                    attendanceMap[
-                                        leader.id
-                                    ] ||
-                                    "Absent";
+                                sorted.map(
+                                    (leader) => {
 
-                                return (
-
-                                    <tr
-                                        key={
+                                    const status =
+                                        attendanceMap[
                                             leader.id
-                                        }
-                                    >
+                                        ] ||
+                                        "Absent";
 
-                                        <td>
+                                    return (
 
-                                            <div
-                                                className="attendance-name"
-                                            >
+                                        <tr
+                                            key={
+                                                leader.id
+                                            }
+                                        >
 
-                                                <img
-                                                    src={
-                                                        leader.image_url
-                                                    }
-                                                    alt="Leader"
-                                                    className="attendance-avatar"
-                                                />
+                                            <td>
 
-                                                <div>
+                                                <div
+                                                    className="attendance-name"
+                                                >
 
-                                                    {
-                                                        leader.firstname
-                                                    }
-                                                    {" "}
-                                                    {
-                                                        leader.lastname
-                                                    }
+                                                    <img
+                                                        src={
+                                                            leader.image_url
+                                                        }
+                                                        alt="Leader"
+                                                        className="attendance-avatar"
+                                                    />
+
+                                                    <div>
+
+                                                        {
+                                                            leader.firstname
+                                                        }
+                                                        {" "}
+                                                        {
+                                                            leader.lastname
+                                                        }
+
+                                                    </div>
 
                                                 </div>
 
-                                            </div>
+                                            </td>
 
-                                        </td>
-
-                                        <td className="tribe-cell">
-
-                                            {
-                                                leader.tribe
-                                            }
-
-                                        </td>
-
-                                        <td>
-
-                                            <span
-                                                className="type-badge"
-                                            >
+                                            <td className="tribe-cell">
 
                                                 {
-                                                    leader.type
+                                                    leader.tribe
                                                 }
 
-                                            </span>
+                                            </td>
 
-                                        </td>
+                                            <td>
 
-                                        <td>
+                                                <span
+                                                    className="type-badge"
+                                                >
 
-                                            <span
-                                                className={`status-badge ${
-                                                    status === "Present"
-                                                        ? "status-present"
-                                                        : "status-absent"
-                                                }`}
-                                            >
+                                                    {
+                                                        leader.type
+                                                    }
 
-                                                {status}
+                                                </span>
 
-                                            </span>
+                                            </td>
 
-                                        </td>
+                                            <td>
 
-                                        <td>
+                                                <span
+                                                    className={`status-badge ${
+                                                        status === "Present"
+                                                            ? "status-present"
+                                                            : "status-absent"
+                                                    }`}
+                                                >
 
-                                            <button
-                                                className={`toggle-btn ${
-                                                    status === "Present"
-                                                        ? "present"
-                                                        : "absent"
-                                                }`}
+                                                    {status}
 
-                                                onClick={() =>
-                                                    toggleAttendance(
-                                                        leader.id
-                                                    )
+                                                </span>
+
+                                            </td>
+
+                                            <td>
+
+                                                <button
+                                                    className={`toggle-btn ${
+                                                        status === "Present"
+                                                            ? "present"
+                                                            : "absent"
+                                                    }`}
+
+                                                    onClick={() =>
+                                                        toggleAttendance(
+                                                            leader.id
+                                                        )
+                                                    }
+                                                >
+
+                                                    Change
+
+                                                </button>
+
+                                            </td>
+
+                                        </tr>
+                                    );
+                                })}
+
+                            {activeTab === "newcomers" &&
+
+                                newcomers.map(
+                                    (member) => {
+
+                                    const status =
+                                        newcomerAttendanceMap[
+                                            member.id
+                                        ] ||
+                                        "Absent";
+
+                                    return (
+
+                                        <tr
+                                            key={
+                                                member.id
+                                            }
+                                        >
+
+                                            <td>
+
+                                                <div
+                                                    className="attendance-name"
+                                                >
+
+                                                    <img
+                                                        src="https://via.placeholder.com/40"
+                                                        alt="Newcomer"
+                                                        className="attendance-avatar"
+                                                    />
+
+                                                    <div>
+
+                                                        {
+                                                            member.firstname
+                                                        }
+                                                        {" "}
+                                                        {
+                                                            member.lastname
+                                                        }
+
+                                                    </div>
+
+                                                </div>
+
+                                            </td>
+
+                                            <td className="tribe-cell">
+
+                                                {
+                                                    member.tribe
                                                 }
-                                            >
 
-                                                Change
+                                            </td>
 
-                                            </button>
+                                            <td>
 
-                                        </td>
+                                                <span
+                                                    className="type-badge"
+                                                >
 
-                                    </tr>
-                                );
-                            })}
+                                                    {
+                                                        member.remarks
+                                                    }
+
+                                                </span>
+
+                                            </td>
+
+                                            <td>
+
+                                                <span
+                                                    className={`status-badge ${
+                                                        status === "Present"
+                                                            ? "status-present"
+                                                            : "status-absent"
+                                                    }`}
+                                                >
+
+                                                    {status}
+
+                                                </span>
+
+                                            </td>
+
+                                            <td>
+
+                                                <button
+                                                    className={`toggle-btn ${
+                                                        status === "Present"
+                                                            ? "present"
+                                                            : "absent"
+                                                    }`}
+                                                    onClick={() =>
+                                                        toggleNewcomerAttendance(
+                                                            member.id
+                                                        )
+                                                    }
+                                                >
+
+                                                    Change
+
+                                                </button>
+
+                                            </td>
+
+                                        </tr>
+                                    );
+                                })}
 
                         </tbody>
 

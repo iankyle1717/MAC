@@ -27,6 +27,21 @@ function Dashboard() {
         setTotalTribes
     ] = useState(0);
 
+    const [
+        totalNewcomers,
+        setTotalNewcomers
+    ] = useState(0);
+
+    const [
+        totalWinning,
+        setTotalWinning
+    ] = useState(0);
+
+    const [
+        totalSchooling,
+        setTotalSchooling
+    ] = useState(0);
+
     useEffect(() => {
 
         fetchDashboard();
@@ -36,47 +51,104 @@ function Dashboard() {
     const fetchDashboard =
         async () => {
 
+        /* =========================
+           FETCH LEADERS
+        ========================= */
+
         const {
-            data
+            data: leadersData
         } = await supabase
             .from("tblMonitoring")
             .select("*");
 
-        if (!data) return;
+        /* =========================
+           FETCH NEWCOMERS
+        ========================= */
 
-        /* TOTAL CHURCH POPULATION */
+        const {
+            data: newcomersData
+        } = await supabase
+            .from("tblNewMembers")
+            .select("*");
 
-        setTotalPeople(
-            data.length
-        );
-
-        /* ACTIVE LEADERS */
+        if (!leadersData)
+            return;
 
         const leaders =
-            data.filter(
-                (item) =>
-                    item.type !==
-                    "MEMBER"
-            );
+            leadersData || [];
+
+        const newcomers =
+            newcomersData || [];
+
+        /* =========================
+           TOTAL CHURCH POPULATION
+        ========================= */
+
+        setTotalPeople(
+            leaders.length +
+            newcomers.length
+        );
+
+        /* =========================
+           ACTIVE LEADERS
+        ========================= */
 
         setTotalLeaders(
             leaders.length
         );
 
-        /* ACTIVE TRIBES */
+        /* =========================
+           ACTIVE TRIBES
+        ========================= */
 
         const uniqueTribes =
             [
                 ...new Set(
-                    data.map(
-                        (item) =>
-                            item.tribe
-                    )
+                    leaders
+                        .map(
+                            (item) =>
+                                item.tribe
+                        )
+                        .filter(Boolean)
                 )
             ];
 
         setTotalTribes(
             uniqueTribes.length
+        );
+
+        /* =========================
+           NEWCOMERS
+        ========================= */
+
+        setTotalNewcomers(
+            newcomers.length
+        );
+
+        /* =========================
+           WINNING
+        ========================= */
+
+        setTotalWinning(
+
+            newcomers.filter(
+                (item) =>
+                    item.remarks ===
+                    "Winning"
+            ).length
+        );
+
+        /* =========================
+           SCHOOLING
+        ========================= */
+
+        setTotalSchooling(
+
+            newcomers.filter(
+                (item) =>
+                    item.remarks ===
+                    "Schooling"
+            ).length
         );
     };
 
@@ -103,18 +175,7 @@ function Dashboard() {
 
                     </h1>
 
-                    <p className="hero-text">
-
-                        A centralized church
-                        monitoring platform
-                        for leadership,
-                        discipleship,
-                        attendance,
-                        and ministry
-                        management.
-
-                    </p>
-
+                
                 </div>
 
                 {/* STATISTICS */}
@@ -133,11 +194,11 @@ function Dashboard() {
 
                         <p className="info-description">
 
-                            Total registered
-                            people inside
-                            the church system
-                            including leaders
-                            and members.
+                            Total leaders and
+                            newcomers currently
+                            recorded inside
+                            the monitoring
+                            system.
 
                         </p>
 
@@ -155,10 +216,10 @@ function Dashboard() {
 
                         <p className="info-description">
 
-                            Andrew, Peter
-                            and Tribe Leaders
-                            currently monitored
-                            by TLDA.
+                            Total registered
+                            TLDA leaders being
+                            monitored by
+                            the ministry.
 
                         </p>
 
@@ -176,13 +237,74 @@ function Dashboard() {
 
                         <p className="info-description">
 
-                            Total active tribes
-                            connected inside
-                            the ministry
+                            Total tribes
+                            connected and
+                            active inside
+                            the church
                             network system.
 
                         </p>
 
+                    </div>
+
+                    <div className="info-card">
+
+                        <p className="info-label">
+                            Newcomers
+                        </p>
+
+                        <h1 className="info-number">
+                            {totalNewcomers}
+                        </h1>
+
+                        <p className="info-description">
+
+                            Total newcomers
+                            currently undergoing 
+                            discipleship process.
+
+                        </p>
+
+                    </div>
+
+                    <div className="info-card">
+
+                        <p className="info-label">
+                            Winning Stage
+                        </p>
+
+                        <h1 className="info-number">
+                            {totalWinning}
+                        </h1>
+
+                        <p className="info-description">
+
+                            Newcomers currently
+                            in the Winning
+                            stage of the
+                            Winning process.
+
+                        </p>
+
+                    </div>
+
+                    <div className="info-card">
+
+                        <p className="info-label">
+                            Schooling Stage
+                        </p>
+
+                        <h1 className="info-number">
+                            {totalSchooling}
+                        </h1>
+
+                        <p className="info-description">
+
+                            Newcomers ready
+                            for leadership and
+                            discipleship growth.
+
+                        </p>
                     </div>
 
                 </div>
@@ -216,7 +338,7 @@ function Dashboard() {
                             Christ-like
                             individuals with
                             transformed lives
-                            to reach others
+                            that reach others
                             for Christ.
 
                         </p>
@@ -242,11 +364,10 @@ function Dashboard() {
 
                             We are disciple
                             equipping servants
-                            of God,
-                            influencing people
-                            through faith and
-                            purpose that
-                            transforms
+                            of God influencing
+                            people through
+                            faith and purpose
+                            that transforms
                             communities,
                             campuses,
                             families and lives

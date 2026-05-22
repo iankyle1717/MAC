@@ -22,6 +22,9 @@ function Leaders() {
     const [leaders, setLeaders] =
         useState([]);
 
+    const [showForm, setShowForm] =
+        useState(false);
+
     const [loading, setLoading] =
         useState(true);
 
@@ -31,11 +34,19 @@ function Leaders() {
 
     }, []);
 
-    const fetchLeaders = async () => {
+    /* =========================
+       FETCH LEADERS
+    ========================= */
+
+    const fetchLeaders =
+        async () => {
 
         setLoading(true);
 
-        const { data, error } =
+        const {
+            data,
+            error
+        } =
             await supabase
                 .from("tblMonitoring")
                 .select("*")
@@ -65,6 +76,10 @@ function Leaders() {
             <Sidebar />
 
             <div className="content">
+
+                {/* =========================
+                    PAGE HEADER
+                ========================= */}
 
                 <div
                     style={{
@@ -99,11 +114,59 @@ function Leaders() {
 
                 </div>
 
-                <LeaderForm
-                    refreshLeaders={
-                        fetchLeaders
-                    }
-                />
+                {/* =========================
+                    TOGGLE LEADER FORM
+                ========================= */}
+
+                <div className="leader-action-bar">
+
+                    <div>
+
+                        <h2 className="leader-action-title">
+                            Leader Registration
+                        </h2>
+
+
+                    </div>
+
+                    <button
+                        className="leader-toggle-btn"
+                        onClick={() =>
+                            setShowForm(
+                                !showForm
+                            )
+                        }
+                    >
+
+                        {showForm
+                            ? "Close Form"
+                            : "Add Leader"}
+
+                    </button>
+
+                </div>
+
+                {/* =========================
+                    FORM
+                ========================= */}
+
+                {showForm && (
+
+                    <div className="leader-form-wrapper">
+
+                        <LeaderForm
+                            refreshLeaders={
+                                fetchLeaders
+                            }
+                        />
+
+                    </div>
+
+                )}
+
+                {/* =========================
+                    LOADING
+                ========================= */}
 
                 {loading ? (
 
@@ -118,6 +181,10 @@ function Leaders() {
                     </p>
 
                 ) : (
+
+                    /* =========================
+                        LEADERS GRID
+                    ========================= */
 
                     <div
                         className="leaders-grid"
@@ -148,18 +215,25 @@ function Leaders() {
                                     <img
                                         src={
                                             leader.image_url ||
+
                                             "https://placehold.co/100x100"
                                         }
+
                                         alt="Leader"
+
                                         style={{
                                             width:
                                                 "60px",
+
                                             height:
                                                 "60px",
+
                                             borderRadius:
                                                 "50%",
+
                                             objectFit:
                                                 "cover",
+
                                             border:
                                                 "2px solid var(--primary)"
                                         }}
@@ -180,9 +254,11 @@ function Leaders() {
                                         </h3>
 
                                         <p>
+
                                             {
                                                 leader.tribe
                                             }
+
                                         </p>
 
                                     </div>
@@ -190,9 +266,11 @@ function Leaders() {
                                 </div>
 
                                 <span>
+
                                     {
                                         leader.type
                                     }
+
                                 </span>
 
                             </Link>
