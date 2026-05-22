@@ -1,5 +1,6 @@
 import {
-    useState
+    useState,
+    useEffect
 } from "react";
 
 import {
@@ -13,7 +14,8 @@ import {
 } from "../lib/supabase";
 
 function LeaderForm({
-    refreshLeaders
+    refreshLeaders,
+    newcomer
 }) {
 
     const [firstname, setFirstname] =
@@ -39,6 +41,29 @@ function LeaderForm({
 
     const [loading, setLoading] =
         useState(false);
+
+    /* =========================
+       AUTO FILL FROM NEWCOMER
+    ========================= */
+
+    useEffect(() => {
+
+        if (newcomer) {
+
+            setFirstname(
+                newcomer.firstname || ""
+            );
+
+            setLastname(
+                newcomer.lastname || ""
+            );
+
+            setTribe(
+                newcomer.tribe || ""
+            );
+        }
+
+    }, [newcomer]);
 
     /* =========================
        SUBMIT
@@ -82,14 +107,7 @@ function LeaderForm({
             const fileName =
                 `${Date.now()}.${fileExt}`;
 
-            /* IMPORTANT:
-               REMOVE leaders/
-               because your bucket is already
-               leader-images
-            */
-
             const {
-                data: uploadData,
                 error: uploadError
             } =
                 await supabase
@@ -99,16 +117,6 @@ function LeaderForm({
                         fileName,
                         image
                     );
-
-            console.log(
-                "UPLOAD:",
-                uploadData
-            );
-
-            console.log(
-                "UPLOAD ERROR:",
-                uploadError
-            );
 
             if (uploadError) {
 
@@ -136,7 +144,7 @@ function LeaderForm({
         }
 
         /* =========================
-           INSERT USER
+           INSERT MEMBER
         ========================= */
 
         const { error } =
@@ -163,24 +171,41 @@ function LeaderForm({
                 "Failed to add leader."
             );
 
-        } else {
+            setLoading(false);
 
-            alert(
-                "Leader added successfully."
-            );
-
-            /* RESET */
-
-            setFirstname("");
-            setLastname("");
-            setPin("");
-            setTribe("");
-            setType("");
-            setMinistry("NONE");
-            setImage(null);
-
-            refreshLeaders();
+            return;
         }
+
+        /* =========================
+           DELETE FROM NEWCOMERS
+        ========================= */
+
+        if (newcomer?.id) {
+
+            await supabase
+                .from("tblNewMembers")
+                .delete()
+                .eq(
+                    "id",
+                    newcomer.id
+                );
+        }
+
+        alert(
+            "Leader added successfully."
+        );
+
+        /* RESET */
+
+        setFirstname("");
+        setLastname("");
+        setPin("");
+        setTribe("");
+        setType("");
+        setMinistry("NONE");
+        setImage(null);
+
+        refreshLeaders();
 
         setLoading(false);
     };

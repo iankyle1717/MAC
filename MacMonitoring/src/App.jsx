@@ -25,15 +25,19 @@ from "./pages/Devotion";
 import LifeGroup
 from "./pages/LifeGroup";
 
-import "./styles/global.css";
-
-import Login from "./pages/Login";
+import Login
+from "./pages/Login";
 
 import EditLeader
 from "./pages/EditLeader";
 
 import Assimilation
 from "./pages/Assimilation";
+
+import AddLeader
+from "./pages/AddLeader";
+
+import "./styles/global.css";
 
 function App() {
 
@@ -77,18 +81,27 @@ function App() {
                     path="/lifegroup"
                     element={<LifeGroup />}
                 />
+
                 <Route
                     path="/edit-leader/:id"
                     element={<EditLeader />}
                 />
+
                 <Route
                     path="/login"
                     element={<Login />}
                 />
-                
+
                 <Route
                     path="/assimilation"
                     element={<Assimilation />}
+                />
+
+                {/* NEW ROUTE */}
+
+                <Route
+                    path="/add-leader"
+                    element={<AddLeader />}
                 />
 
             </Routes>

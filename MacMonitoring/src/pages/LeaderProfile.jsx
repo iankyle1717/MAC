@@ -59,56 +59,17 @@ function LeaderProfile() {
             return;
         }
 
-        loadData();
+        fetchLeader();
+
+        fetchTithes();
+
+        fetchAttendance();
+
+        fetchDevotion();
+
+        fetchLifeGroups();
 
     }, []);
-
-    /* =========================
-        LOAD ALL DATA
-        ========================= */
-
-        const loadData =
-            async () => {
-
-            const { data } =
-                await supabase
-                    .from("tblMonitoring")
-                    .select("*")
-                    .eq("id", id)
-                    .single();
-
-            setLeader(data);
-
-            if (data) {
-
-                const fullName =
-                    `${data.firstname} ${data.lastname}`;
-
-                const { data: inviteData } =
-                    await supabase
-                        .from("tblNewMembers")
-                        .select("*")
-                        .eq(
-                            "invited_by",
-                            fullName
-                        )
-                        .order("id", {
-                            ascending: false
-                        });
-
-                setInvites(
-                    inviteData || []
-                );
-            }
-
-            fetchTithes();
-
-            fetchAttendance();
-
-            fetchDevotion();
-
-            fetchLifeGroups();
-        };
 
     /* =========================
        FETCH LEADER
@@ -125,6 +86,35 @@ function LeaderProfile() {
                 .single();
 
         setLeader(data);
+
+        if (data) {
+
+            fetchInvites(
+                `${data.firstname} ${data.lastname}`
+            );
+        }
+    };
+
+    /* =========================
+       FETCH INVITES
+    ========================= */
+
+    const fetchInvites =
+        async (leaderName) => {
+
+        const { data } =
+            await supabase
+                .from("tblNewMembers")
+                .select("*")
+                .eq(
+                    "invited_by",
+                    leaderName
+                )
+                .order("id", {
+                    ascending: false
+                });
+
+        setInvites(data || []);
     };
 
     /* =========================
@@ -207,31 +197,6 @@ function LeaderProfile() {
     };
 
     /* =========================
-    FETCH INVITES
-    ========================= */
-
-    const fetchInvites =
-        async () => {
-
-        const fullName =
-            `${leader?.firstname} ${leader?.lastname}`;
-
-        const { data } =
-            await supabase
-                .from("tblNewMembers")
-                .select("*")
-                .eq(
-                    "invited_by",
-                    fullName
-                )
-                .order("id", {
-                    ascending: false
-                });
-
-        setInvites(data || []);
-    };
-
-    /* =========================
        LOADING
     ========================= */
 
@@ -248,17 +213,17 @@ function LeaderProfile() {
         currentUser?.id === leader.id;
 
     const isAdmin =
-        currentUser?.ministry === "Admin";
+        currentUser?.ministry === "ADMIN";
 
     const isFinance =
-        currentUser?.ministry === "Finance";
+        currentUser?.ministry === "FINANCE";
 
     const isUshering =
-        currentUser?.ministry === "Ushering";
+        currentUser?.ministry === "USHERING";
 
     const isDiscipleship =
         currentUser?.ministry ===
-        "Discipleship Journey";
+        "DISCIPLESHIP JOURNEY";
 
     /* =========================
        PAGE ACCESS
@@ -291,7 +256,8 @@ function LeaderProfile() {
                     </h1>
 
                     <p>
-                        You are not allowed to open this profile.
+                        You are not allowed
+                        to open this profile.
                     </p>
 
                 </div>
@@ -410,6 +376,93 @@ function LeaderProfile() {
 
                 </div>
 
+                {/* INVITES SUMMARY */}
+
+                <div
+                    className="stats-grid"
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                            "repeat(auto-fit,minmax(220px,1fr))",
+                        gap: "20px",
+                        marginBottom: "30px"
+                    }}
+                >
+
+                    <div className="record-card">
+
+                        <h3>
+                            Total Invites
+                        </h3>
+
+                        <h1>
+                            {invites.length}
+                        </h1>
+
+                    </div>
+
+                    <div className="record-card">
+
+                        <h3>
+                            Winning
+                        </h3>
+
+                        <h1>
+
+                            {
+                                invites.filter(
+                                    (m) =>
+                                        m.remarks ===
+                                        "Winning"
+                                ).length
+                            }
+
+                        </h1>
+
+                    </div>
+
+                    <div className="record-card">
+
+                        <h3>
+                            Soaking
+                        </h3>
+
+                        <h1>
+
+                            {
+                                invites.filter(
+                                    (m) =>
+                                        m.remarks ===
+                                        "Soaking"
+                                ).length
+                            }
+
+                        </h1>
+
+                    </div>
+
+                    <div className="record-card">
+
+                        <h3>
+                            Schooling
+                        </h3>
+
+                        <h1>
+
+                            {
+                                invites.filter(
+                                    (m) =>
+                                        m.remarks ===
+                                        "Schooling"
+                                ).length
+                            }
+
+                        </h1>
+
+                    </div>
+
+                </div>
+
                 {/* TABS */}
 
                 <div className="profile-tabs">
@@ -480,24 +533,6 @@ function LeaderProfile() {
 
                     )}
 
-                    <button
-                        className={
-                            activeTab === "invites"
-                                ? "tab-btn active-tab"
-                                : "tab-btn"
-                        }
-
-                        onClick={() =>
-                            setActiveTab(
-                                "invites"
-                            )
-                        }
-                    >
-
-                        Invites & Newcomers
-
-                    </button>
-
                     {canViewLifeGroup && (
 
                         <button
@@ -519,6 +554,26 @@ function LeaderProfile() {
                         </button>
 
                     )}
+
+                    {/* NEW TAB */}
+
+                    <button
+                        className={
+                            activeTab === "invites"
+                                ? "tab-btn active-tab"
+                                : "tab-btn"
+                        }
+
+                        onClick={() =>
+                            setActiveTab(
+                                "invites"
+                            )
+                        }
+                    >
+
+                        Invites & Newcomers
+
+                    </button>
 
                 </div>
 
@@ -894,7 +949,7 @@ function LeaderProfile() {
 
                 )}
 
-                {/* INVITES */}
+                {/* INVITES TAB */}
 
                 {activeTab ===
                     "invites" && (
@@ -904,80 +959,10 @@ function LeaderProfile() {
                         <div className="excel-header">
 
                             <h2>
-
                                 Invites & Newcomers
-
                             </h2>
 
                         </div>
-
-                        {/* STATS */}
-
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns:
-                                    "repeat(auto-fit,minmax(180px,1fr))",
-                                gap: "15px",
-                                marginBottom: "20px"
-                            }}
-                        >
-
-                            <div className="record-card">
-
-                                <h3>
-                                    Total Invites
-                                </h3>
-
-                                <h1>
-                                    {invites.length}
-                                </h1>
-
-                            </div>
-
-                            <div className="record-card">
-
-                                <h3>
-                                    Schooling
-                                </h3>
-
-                                <h1>
-
-                                    {
-                                        invites.filter(
-                                            (i) =>
-                                                i.remarks ===
-                                                "Schooling"
-                                        ).length
-                                    }
-
-                                </h1>
-
-                            </div>
-
-                            <div className="record-card">
-
-                                <h3>
-                                    Winning
-                                </h3>
-
-                                <h1>
-
-                                    {
-                                        invites.filter(
-                                            (i) =>
-                                                i.remarks ===
-                                                "Winning"
-                                        ).length
-                                    }
-
-                                </h1>
-
-                            </div>
-
-                        </div>
-
-                        {/* TABLE */}
 
                         <div className="excel-wrapper">
 
@@ -996,7 +981,7 @@ function LeaderProfile() {
                                         </th>
 
                                         <th>
-                                            Status
+                                            Current Step
                                         </th>
 
                                     </tr>
@@ -1022,7 +1007,9 @@ function LeaderProfile() {
                                     ) : (
 
                                         invites.map(
-                                            (invite) => (
+                                            (
+                                                invite
+                                            ) => (
 
                                             <tr
                                                 key={
@@ -1052,15 +1039,9 @@ function LeaderProfile() {
 
                                                 <td>
 
-                                                    <span
-                                                        className="profile-badge"
-                                                    >
-
-                                                        {
-                                                            invite.remarks
-                                                        }
-
-                                                    </span>
+                                                    {
+                                                        invite.remarks
+                                                    }
 
                                                 </td>
 

@@ -7,6 +7,10 @@ import Sidebar
 from "../components/Sidebar";
 
 import {
+    useNavigate
+} from "react-router-dom";
+
+import {
     supabase
 } from "../lib/supabase";
 
@@ -15,6 +19,9 @@ import {
 } from "../constants/options";
 
 function Assimilation() {
+
+    const navigate =
+        useNavigate();
 
     const [members,
         setMembers] =
@@ -47,6 +54,14 @@ function Assimilation() {
     const [invitedBy,
         setInvitedBy] =
         useState("");
+
+    const [search,
+        setSearch] =
+        useState("");
+
+    const [filterTribe,
+        setFilterTribe] =
+        useState("ALL");
 
     useEffect(() => {
 
@@ -216,75 +231,37 @@ function Assimilation() {
     };
 
     /* =========================
-       CONVERT TO MEMBER
+       FILTERED MEMBERS
     ========================= */
 
-    const convertToLeader =
-        async (member) => {
+    const filteredMembers =
+        members.filter(
+            (member) => {
 
-        const confirmConvert =
-            window.confirm(
+            const fullName =
+                `${member.firstname} ${member.lastname}`
+                    .toLowerCase();
 
-                "Convert this newcomer into official member?"
+            const matchesSearch =
+                fullName.includes(
+                    search.toLowerCase()
+                );
+
+            const matchesTribe =
+
+                filterTribe ===
+                "ALL"
+
+                ? true
+
+                : member.tribe ===
+                filterTribe;
+
+            return (
+                matchesSearch &&
+                matchesTribe
             );
-
-        if (!confirmConvert)
-            return;
-
-        const {
-            error: insertError
-        } =
-            await supabase
-                .from("tblMonitoring")
-                .insert([
-                    {
-                        firstname:
-                            member.firstname,
-
-                        lastname:
-                            member.lastname,
-
-                        tribe:
-                            member.tribe,
-
-                        type:
-                            "MEMBER",
-
-                        ministry:
-                            "NONE",
-
-                        pin:
-                            "1234",
-
-                        image_url:
-                            ""
-                    }
-                ]);
-
-        if (insertError) {
-
-            console.log(
-                insertError
-            );
-
-            alert(
-                "Failed to convert member."
-            );
-
-            return;
-        }
-
-        await supabase
-            .from("tblNewMembers")
-            .delete()
-            .eq("id", member.id);
-
-        alert(
-            "Member converted successfully."
-        );
-
-        fetchMembers();
-    };
+        });
 
     /* =========================
        FILTER LEADERS BY TRIBE
@@ -561,6 +538,73 @@ function Assimilation() {
                 </form>
 
                 {/* =========================
+                    SEARCH & FILTER
+                ========================= */}
+
+                <div
+                    style={{
+                        display: "flex",
+                        gap: "15px",
+                        marginTop: "30px",
+                        marginBottom: "20px",
+                        flexWrap: "wrap"
+                    }}
+                >
+
+                    {/* SEARCH */}
+
+                    <input
+                        type="text"
+                        placeholder="Search newcomer..."
+                        value={search}
+                        onChange={(e) =>
+                            setSearch(
+                                e.target.value
+                            )
+                        }
+                        style={{
+                            flex: 1,
+                            minWidth: "250px"
+                        }}
+                    />
+
+                    {/* FILTER */}
+
+                    <select
+                        value={filterTribe}
+                        onChange={(e) =>
+                            setFilterTribe(
+                                e.target.value
+                            )
+                        }
+                        style={{
+                            width: "200px"
+                        }}
+                    >
+
+                        <option value="ALL">
+                            All Tribes
+                        </option>
+
+                        {tribes.map(
+                            (tribe) => (
+
+                            <option
+                                key={tribe}
+                                value={tribe}
+                            >
+
+                                {tribe}
+
+                            </option>
+
+                        ))}
+
+                    </select>
+
+                </div>
+
+                {/* =========================
                     TABLE
                 ========================= */}
 
@@ -629,8 +673,21 @@ function Assimilation() {
                                     </tr>
 
                                 ) : (
+                                    filteredMembers.length === 0 ? (
 
-                                    members.map(
+                                        <tr>
+
+                                            <td colSpan="5">
+
+                                                No newcomers found.
+
+                                            </td>
+
+                                        </tr>
+
+                                    ) :
+
+                                    filteredMembers.map(
                                         (
                                             member
                                         ) => (
@@ -711,9 +768,14 @@ function Assimilation() {
 
                                                         <button
                                                             onClick={() =>
-                                                                convertToLeader(
-                                                                    member
-                                                                )
+                                                                navigate(
+                                                                "/add-leader",
+                                                                {
+                                                                    state: {
+                                                                        newcomer: member
+                                                                    }
+                                                                }
+                                                            )
                                                             }
                                                             style={{
                                                                 background:
