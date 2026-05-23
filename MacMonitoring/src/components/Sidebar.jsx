@@ -1,149 +1,72 @@
-import {
-    Link,
-    useLocation
-} from "react-router-dom";
-
-import logo
-from "../assets/logo.png";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getCurrentUser, getNewcomer, logout, getVisibleRoutes, isAdmin } from "../utils/auth";
+import logo from "../assets/logo.png";
 
 function Sidebar() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const user = getCurrentUser();
+    const newcomer = getNewcomer();
+    const visibleRoutes = getVisibleRoutes();
 
-    const location =
-        useLocation();
-
-    const isActive =
-        (path) => {
-
-        return location.pathname
-            === path;
+    const isActive = (path) => {
+        return location.pathname === path;
     };
 
+    const handleLogout = () => {
+        logout();
+    };
+
+    // If no user and no newcomer, don't show sidebar (login page)
+    if (!user && !newcomer) {
+        return null;
+    }
+
     return (
-
         <div className="sidebar">
-
-            <div
-                className="sidebar-logo"
-            >
-
-                <img
-                    src={logo}
-                    alt="Logo"
-                    className="logo-image"
-                />
-
+            <div className="sidebar-logo">
+                <img src={logo} alt="Logo" className="logo-image" />
                 <div>
-
-                    <h2>
-                        MAC TLDA
-                    </h2>
-
-                    <p>
-                        Monitoring
-                    </p>
-
+                    <h2>MAC TLDA</h2>
+                    <p>Monitoring</p>
                 </div>
-
             </div>
 
-            <div
-                className="sidebar-links"
-            >
-
-                <Link
-                    to="/"
-                    className={
-                        isActive("/")
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Dashboard
-                </Link>
-
-                <Link
-                    to="/leaders"
-                    className={
-                        isActive(
-                            "/leaders"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Leaders
-                </Link>
-                 <Link
-                    to="/assimilation"
-                    className={
-                        isActive(
-                            "/assimilation"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    New Invites(Members)
-                </Link>
-
-                <Link
-                    to="/attendance"
-                    className={
-                        isActive(
-                            "/attendance"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Attendance
-                </Link>
-
-                <Link
-                    to="/tithes"
-                    className={
-                        isActive(
-                            "/tithes"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Tithes
-                </Link>
-
-                <Link
-                    to="/devotion"
-                    className={
-                        isActive(
-                            "/devotion"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Devotion
-                </Link>
-
-                <Link
-                    to="/lifegroup"
-                    className={
-                        isActive(
-                            "/lifegroup"
-                        )
-                            ? "active-link"
-                            : ""
-                    }
-                >
-                    Life Group
-                </Link>
-
-               
-
+            {/* User Info */}
+            <div className="sidebar-user">
+                {user ? (
+                    <>
+                        <h3>{user.firstname} {user.lastname}</h3>
+                        <p>{user.type} • {user.tribe}</p>
+                        {isAdmin() && <span className="admin-badge">ADMIN</span>}
+                    </>
+                ) : newcomer ? (
+                    <>
+                        <h3>{newcomer.firstname} {newcomer.lastname}</h3>
+                        <p>Newcomer • {newcomer.tribe}</p>
+                        <span className="newcomer-badge">{newcomer.remarks}</span>
+                    </>
+                ) : null}
             </div>
 
+            {/* Navigation Links */}
+            <div className="sidebar-links">
+                {visibleRoutes.map((route) => (
+                    <Link
+                        key={route.path}
+                        to={route.path}
+                        className={isActive(route.path) ? "active-link" : ""}
+                    >
+                        {route.label}
+                    </Link>
+                ))}
+            </div>
+
+            {/* Logout */}
+            <button className="logout-btn" onClick={handleLogout}>
+                Logout
+            </button>
         </div>
-
     );
 }
 
