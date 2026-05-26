@@ -14,7 +14,7 @@ import AddLeader from "./pages/AddLeader";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getCurrentUser, getNewcomer, canAccessAttendance, canAccessTithes, canAccessDevotion, canAccessAssimilation, canAccessLifeGroup } from "./utils/auth";
 import "./styles/global.css";
-import "./styles/Login.css";
+import "./styles/login.css";
 
 // Redirect based on role
 const RoleBasedRedirect = () => {
