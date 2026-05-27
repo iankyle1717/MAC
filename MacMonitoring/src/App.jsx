@@ -12,7 +12,7 @@ import EditLeader from "./pages/EditLeader";
 import Assimilation from "./pages/Assimilation";
 import AddLeader from "./pages/AddLeader";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { getCurrentUser, getNewcomer, canAccessAttendance, canAccessTithes, canAccessDevotion, canAccessAssimilation, canAccessLifeGroup } from "./utils/auth";
+import { getCurrentUser, getNewcomer } from "./utils/auth";
 import "./styles/global.css";
 import "./styles/login.css";
 
@@ -25,36 +25,6 @@ const RoleBasedRedirect = () => {
     if (user) return <Navigate to="/dashboard" replace />;
     return <Navigate to="/login" replace />;
 };
-
-// Access Denied Page
-const AccessDenied = () => (
-    <div className="layout">
-        <div className="content" style={{ textAlign: 'center', paddingTop: '100px' }}>
-            <h1 style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</h1>
-            <h2 style={{ fontSize: '24px', marginBottom: '12px', color: '#111827' }}>Access Denied</h2>
-            <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-                You don't have permission to access this page.<br />
-                This module is restricted to specific ministry roles.
-            </p>
-            <button
-                onClick={() => window.location.href = "/"}
-                style={{
-                    padding: '12px 28px',
-                    borderRadius: '14px',
-                    border: 'none',
-                    background: '#c9a45c',
-                    color: '#111',
-                    fontWeight: 600,
-                    fontSize: '15px',
-                    cursor: 'pointer',
-                    transition: '0.2s'
-                }}
-            >
-                Go to Home
-            </button>
-        </div>
-    </div>
-);
 
 function App() {
     return (
@@ -110,8 +80,8 @@ function App() {
                 <Route
                     path="/attendance"
                     element={
-                        <ProtectedRoute>
-                            {canAccessAttendance() ? <Attendance /> : <AccessDenied />}
+                        <ProtectedRoute requireAttendance={true}>
+                            <Attendance />
                         </ProtectedRoute>
                     }
                 />
@@ -120,8 +90,8 @@ function App() {
                 <Route
                     path="/tithes"
                     element={
-                        <ProtectedRoute>
-                            {canAccessTithes() ? <Tithes /> : <AccessDenied />}
+                        <ProtectedRoute requireTithes={true}>
+                            <Tithes />
                         </ProtectedRoute>
                     }
                 />
@@ -130,8 +100,8 @@ function App() {
                 <Route
                     path="/devotion"
                     element={
-                        <ProtectedRoute>
-                            {canAccessDevotion() ? <Devotion /> : <AccessDenied />}
+                        <ProtectedRoute requireDevotion={true}>
+                            <Devotion />
                         </ProtectedRoute>
                     }
                 />
@@ -140,17 +110,17 @@ function App() {
                 <Route
                     path="/lifegroup"
                     element={
-                        <ProtectedRoute>
-                            {canAccessLifeGroup() ? <LifeGroup /> : <AccessDenied />}
+                        <ProtectedRoute requireLifeGroup={true}>
+                            <LifeGroup />
                         </ProtectedRoute>
                     }
                 />
 
-                {/* Edit Leader */}
+                {/* Edit Leader - Admin can edit any, users can edit own */}
                 <Route
                     path="/edit-leader/:id"
                     element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireEditAccess={true}>
                             <EditLeader />
                         </ProtectedRoute>
                     }
@@ -160,17 +130,17 @@ function App() {
                 <Route
                     path="/assimilation"
                     element={
-                        <ProtectedRoute>
-                            {canAccessAssimilation() ? <Assimilation /> : <AccessDenied />}
+                        <ProtectedRoute requireAssimilation={true}>
+                            <Assimilation />
                         </ProtectedRoute>
                     }
                 />
 
-                {/* Add Leader (Convert Newcomer) */}
+                {/* Add Leader (Convert Newcomer) - Admin & Discipleship */}
                 <Route
                     path="/add-leader"
                     element={
-                        <ProtectedRoute>
+                        <ProtectedRoute requireConvertAccess={true}>
                             <AddLeader />
                         </ProtectedRoute>
                     }

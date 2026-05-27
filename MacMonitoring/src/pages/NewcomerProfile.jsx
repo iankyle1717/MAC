@@ -232,12 +232,7 @@ function NewcomerProfile() {
                 {/* Encouragement Message */}
                 <div className="encouragement-card">
                     <h4>Keep Going! 🙏</h4>
-                    <p>
-                        {newcomer.remarks === "Schooling" 
-                            ? "You're almost ready to become an official member! Continue your discipleship journey."
-                            : "Every step brings you closer to becoming a disciple. Stay faithful!"
-                        }
-                    </p>
+                    
                 </div>
             </div>
         </div>
