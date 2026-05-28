@@ -16,7 +16,6 @@ import { getCurrentUser, getNewcomer } from "./utils/auth";
 import "./styles/global.css";
 import "./styles/login.css";
 
-// Redirect based on role
 const RoleBasedRedirect = () => {
     const user = getCurrentUser();
     const newcomer = getNewcomer();
@@ -30,13 +29,9 @@ function App() {
     return (
         <BrowserRouter>
             <Routes>
-                {/* Public Route */}
                 <Route path="/login" element={<Login />} />
-
-                {/* Root redirect */}
                 <Route path="/" element={<RoleBasedRedirect />} />
 
-                {/* DASHBOARD - All authenticated users can view */}
                 <Route
                     path="/dashboard"
                     element={
@@ -46,7 +41,6 @@ function App() {
                     }
                 />
 
-                {/* Leaders List - All authenticated users */}
                 <Route
                     path="/leaders"
                     element={
@@ -56,7 +50,6 @@ function App() {
                     }
                 />
 
-                {/* Leader Profile - with access control */}
                 <Route
                     path="/leader/:id"
                     element={
@@ -66,7 +59,6 @@ function App() {
                     }
                 />
 
-                {/* Newcomer Profile - read only */}
                 <Route
                     path="/newcomer/:id"
                     element={
@@ -76,7 +68,6 @@ function App() {
                     }
                 />
 
-                {/* ATTENDANCE - Admin & Ushering ONLY */}
                 <Route
                     path="/attendance"
                     element={
@@ -86,7 +77,6 @@ function App() {
                     }
                 />
 
-                {/* TITHES - Admin & Finance ONLY */}
                 <Route
                     path="/tithes"
                     element={
@@ -96,7 +86,6 @@ function App() {
                     }
                 />
 
-                {/* DEVOTION - Admin & Discipleship ONLY */}
                 <Route
                     path="/devotion"
                     element={
@@ -106,7 +95,6 @@ function App() {
                     }
                 />
 
-                {/* LIFE GROUP - All authenticated leaders */}
                 <Route
                     path="/lifegroup"
                     element={
@@ -116,7 +104,7 @@ function App() {
                     }
                 />
 
-                {/* Edit Leader - Admin can edit any, users can edit own */}
+                {/* Edit Leader - ADMIN ONLY now */}
                 <Route
                     path="/edit-leader/:id"
                     element={
@@ -126,7 +114,6 @@ function App() {
                     }
                 />
 
-                {/* ASSIMILATION - Admin, Discipleship, Leaders */}
                 <Route
                     path="/assimilation"
                     element={
@@ -136,7 +123,7 @@ function App() {
                     }
                 />
 
-                {/* Add Leader (Convert Newcomer) - Admin & Discipleship */}
+                {/* Add Leader - Admin & Discipleship only */}
                 <Route
                     path="/add-leader"
                     element={
@@ -146,7 +133,6 @@ function App() {
                     }
                 />
 
-                {/* Catch all */}
                 <Route path="*" element={<RoleBasedRedirect />} />
             </Routes>
         </BrowserRouter>

@@ -1,29 +1,29 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { getCurrentUser, getNewcomer, logout, getVisibleRoutes, isAdmin } from "../utils/auth";
 import logo from "../assets/logo.png";
 
 function Sidebar() {
     const location = useLocation();
-    const navigate = useNavigate();
+    const [authVersion, setAuthVersion] = useState(0);
     const user = getCurrentUser();
     const newcomer = getNewcomer();
     const visibleRoutes = getVisibleRoutes();
 
-    const isActive = (path) => {
-        return location.pathname === path;
-    };
+    useEffect(() => {
+        const handleAuthChange = () => setAuthVersion(v => v + 1);
+        window.addEventListener("ems-auth-change", handleAuthChange);
+        return () => window.removeEventListener("ems-auth-change", handleAuthChange);
+    }, []);
 
-    const handleLogout = () => {
-        logout();
-    };
+    const isActive = (path) => location.pathname === path;
 
-    // If no user and no newcomer, don't show sidebar (login page)
-    if (!user && !newcomer) {
-        return null;
-    }
+    const handleLogout = () => logout();
+
+    if (!user && !newcomer) return null;
 
     return (
-        <div className="sidebar">
+        <div className="sidebar" key={authVersion}>
             <div className="sidebar-logo">
                 <img src={logo} alt="Logo" className="logo-image" />
                 <div>
@@ -32,7 +32,6 @@ function Sidebar() {
                 </div>
             </div>
 
-            {/* User Info */}
             <div className="sidebar-user">
                 {user ? (
                     <>
@@ -49,7 +48,6 @@ function Sidebar() {
                 ) : null}
             </div>
 
-            {/* Navigation Links */}
             <div className="sidebar-links">
                 {visibleRoutes.map((route) => (
                     <Link
@@ -62,7 +60,6 @@ function Sidebar() {
                 ))}
             </div>
 
-            {/* Logout */}
             <button className="logout-btn" onClick={handleLogout}>
                 Logout
             </button>

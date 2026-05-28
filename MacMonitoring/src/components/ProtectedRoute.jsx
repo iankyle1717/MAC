@@ -10,92 +10,11 @@ import {
     canAccessAssimilation,
     canAccessLifeGroup,
     canEditAnyProfile,
+    canConvertNewcomer,
+    canAddMember,
     isAdmin
 } from "../utils/auth";
 
-function ProtectedRoute({
-    children,
-    requireAuth = true,
-    requireAdmin = false,
-    checkProfileAccess = false,
-    isNewcomerRoute = false,
-    requireAttendance = false,
-    requireTithes = false,
-    requireDevotion = false,
-    requireAssimilation = false,
-    requireLifeGroup = false,
-    requireEditAccess = false,
-    requireConvertAccess = false,
-}) {
-    const location = useLocation();
-    const params = useParams();
-    const user = getCurrentUser();
-    const newcomer = getNewcomer();
-
-    const targetId = params.id ? Number(params.id) : null;
-
-    // Not logged in - redirect to login
-    if (requireAuth && !user && !newcomer) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-
-    // Admin bypass - admin has ALL access (except newcomer routes which are separate)
-    const admin = isAdmin();
-
-    // Admin requirement check
-    if (requireAdmin && !admin) {
-        return <Navigate to="/" replace />;
-    }
-
-    // Module permission checks
-    if (requireAttendance && !admin && !canAccessAttendance()) {
-        return <AccessDenied />;
-    }
-
-    if (requireTithes && !admin && !canAccessTithes()) {
-        return <AccessDenied />;
-    }
-
-    if (requireDevotion && !admin && !canAccessDevotion()) {
-        return <AccessDenied />;
-    }
-
-    if (requireAssimilation && !admin && !canAccessAssimilation()) {
-        return <AccessDenied />;
-    }
-
-    if (requireLifeGroup && !admin && !canAccessLifeGroup()) {
-        return <AccessDenied />;
-    }
-
-    // Edit access check (for edit-leader page)
-    if (requireEditAccess && !admin && !canEditAnyProfile() && user?.id !== targetId) {
-        return <AccessDenied />;
-    }
-
-    // Convert newcomer check
-    if (requireConvertAccess && !admin && !canConvertNewcomer()) {
-        return <AccessDenied />;
-    }
-
-    // Profile access check for leaders
-    if (checkProfileAccess && targetId) {
-        if (!canViewLeaderProfile(targetId)) {
-            return <AccessDenied />;
-        }
-    }
-
-    // Profile access check for newcomers
-    if (isNewcomerRoute && targetId) {
-        if (!canViewNewcomerProfile(targetId)) {
-            return <AccessDenied />;
-        }
-    }
-
-    return children;
-}
-
-// Reusable Access Denied component
 const AccessDenied = () => (
     <div className="layout">
         <div className="content" style={{ textAlign: 'center', paddingTop: '100px' }}>
@@ -124,5 +43,85 @@ const AccessDenied = () => (
         </div>
     </div>
 );
+
+function ProtectedRoute({
+    children,
+    requireAuth = true,
+    requireAdmin = false,
+    checkProfileAccess = false,
+    isNewcomerRoute = false,
+    requireAttendance = false,
+    requireTithes = false,
+    requireDevotion = false,
+    requireAssimilation = false,
+    requireLifeGroup = false,
+    requireEditAccess = false,
+    requireConvertAccess = false,
+    requireAddMember = false,
+}) {
+    const location = useLocation();
+    const params = useParams();
+    const user = getCurrentUser();
+    const newcomer = getNewcomer();
+    const targetId = params.id ? Number(params.id) : null;
+    const admin = isAdmin();
+
+    if (requireAuth && !user && !newcomer) {
+        return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    if (requireAdmin && !admin) {
+        return <AccessDenied />;
+    }
+
+    if (requireAttendance && !admin && !canAccessAttendance()) {
+        return <AccessDenied />;
+    }
+
+    if (requireTithes && !admin && !canAccessTithes()) {
+        return <AccessDenied />;
+    }
+
+    if (requireDevotion && !admin && !canAccessDevotion()) {
+        return <AccessDenied />;
+    }
+
+    if (requireAssimilation && !admin && !canAccessAssimilation()) {
+        return <AccessDenied />;
+    }
+
+    if (requireLifeGroup && !admin && !canAccessLifeGroup()) {
+        return <AccessDenied />;
+    }
+
+    if (requireEditAccess && targetId) {
+        // Only admin can edit profiles - members cannot edit their own
+        if (!admin) {
+            return <AccessDenied />;
+        }
+    }
+
+    if (requireConvertAccess && !admin && !canConvertNewcomer()) {
+        return <AccessDenied />;
+    }
+
+    if (requireAddMember && !admin && !canAddMember()) {
+        return <AccessDenied />;
+    }
+
+    if (checkProfileAccess && targetId) {
+        if (!canViewLeaderProfile(targetId)) {
+            return <AccessDenied />;
+        }
+    }
+
+    if (isNewcomerRoute && targetId) {
+        if (!canViewNewcomerProfile(targetId)) {
+            return <AccessDenied />;
+        }
+    }
+
+    return children;
+}
 
 export default ProtectedRoute;

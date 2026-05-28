@@ -3,35 +3,49 @@ const USER_KEY = "emsUser";
 const NEWCOMER_KEY = "emsNewcomer";
 
 /* =========================
-   USER SESSION (Leaders/Admins/Members)
+   USER SESSION
 ========================= */
 export const getCurrentUser = () => {
-    const user = localStorage.getItem(USER_KEY);
-    return user ? JSON.parse(user) : null;
+    try {
+        const user = localStorage.getItem(USER_KEY);
+        return user ? JSON.parse(user) : null;
+    } catch (e) {
+        console.error("Error parsing user", e);
+        return null;
+    }
 };
 
 export const setCurrentUser = (user) => {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
+    window.dispatchEvent(new Event("ems-auth-change"));
 };
 
 export const clearCurrentUser = () => {
     localStorage.removeItem(USER_KEY);
+    window.dispatchEvent(new Event("ems-auth-change"));
 };
 
 /* =========================
    NEWCOMER SESSION
 ========================= */
 export const getNewcomer = () => {
-    const newcomer = localStorage.getItem(NEWCOMER_KEY);
-    return newcomer ? JSON.parse(newcomer) : null;
+    try {
+        const newcomer = localStorage.getItem(NEWCOMER_KEY);
+        return newcomer ? JSON.parse(newcomer) : null;
+    } catch (e) {
+        console.error("Error parsing newcomer", e);
+        return null;
+    }
 };
 
 export const setNewcomer = (newcomer) => {
     localStorage.setItem(NEWCOMER_KEY, JSON.stringify(newcomer));
+    window.dispatchEvent(new Event("ems-auth-change"));
 };
 
 export const clearNewcomer = () => {
     localStorage.removeItem(NEWCOMER_KEY);
+    window.dispatchEvent(new Event("ems-auth-change"));
 };
 
 /* =========================
@@ -40,6 +54,7 @@ export const clearNewcomer = () => {
 export const logout = () => {
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(NEWCOMER_KEY);
+    window.dispatchEvent(new Event("ems-auth-change"));
     window.location.href = "/login";
 };
 
@@ -79,56 +94,33 @@ export const isMember = () => {
 /* =========================
    PAGE ACCESS PERMISSIONS
 ========================= */
-
-// DASHBOARD: All authenticated leaders/members can VIEW (read-only stats)
 export const canAccessDashboard = () => {
     const user = getCurrentUser();
-    return !!user; // Any logged-in user from tblMonitoring
+    return !!user;
 };
 
-// Can view Leaders list
 export const canViewLeaders = () => {
     const user = getCurrentUser();
     return !!user;
 };
 
-// Can view a specific leader profile
 export const canViewLeaderProfile = (targetLeaderId) => {
     const user = getCurrentUser();
     if (!user) return false;
-
-    // Own profile
     if (user.id === targetLeaderId) return true;
-
-    // Admin can view all
     if (isAdmin()) return true;
-
-    // Finance can view profiles (for tithes)
     if (isFinance()) return true;
-
-    // Ushering can view profiles (for attendance)
     if (isUshering()) return true;
-
-    // Discipleship can view profiles (for tracking)
     if (isDiscipleship()) return true;
-
     return false;
 };
 
-// Can view newcomer profiles
 export const canViewNewcomerProfile = (targetNewcomerId) => {
     const user = getCurrentUser();
     const newcomer = getNewcomer();
-
-    // Newcomer viewing own profile
     if (newcomer && newcomer.id === targetNewcomerId) return true;
-
-    // Admin can view all
     if (user && isAdmin()) return true;
-
-    // Discipleship team can view newcomers
     if (user && isDiscipleship()) return true;
-
     return false;
 };
 
@@ -136,69 +128,84 @@ export const canViewNewcomerProfile = (targetNewcomerId) => {
    ACTION PERMISSIONS
 ========================= */
 
-// Can EDIT own profile
+// Can EDIT own profile - ONLY ADMIN can edit profiles now
+// Regular members CANNOT edit their own profile
 export const canEditOwnProfile = () => {
-    const user = getCurrentUser();
-    return !!user;
+    return isAdmin();
 };
 
 // Can EDIT any profile (Admin only)
 export const canEditAnyProfile = () => isAdmin();
 
-// Can DELETE profile
+// Can DELETE profile - Admin only
 export const canDeleteProfile = (targetLeaderId) => {
     const user = getCurrentUser();
     if (!user) return false;
-
     if (isAdmin()) return true;
-    if (user.id === targetLeaderId) return true;
-
     return false;
+};
+
+// Can ADD new member/leader - Admin and Discipleship only
+export const canAddMember = () => {
+    const user = getCurrentUser();
+    if (!user) return false;
+    return isAdmin() || isDiscipleship();
+};
+
+// Can ADD devotion - Admin, Discipleship, and Leaders (including members for their own)
+export const canAddDevotion = () => {
+    const user = getCurrentUser();
+    if (!user) return false;
+    return true; // All authenticated users can add devotion
+};
+
+// Can ADD life group entry - All authenticated leaders/members
+export const canAddLifeGroup = () => {
+    const user = getCurrentUser();
+    if (!user) return false;
+    return true; // All authenticated users can add life group
 };
 
 /* =========================
    MODULE PERMISSIONS
 ========================= */
-
-// ATTENDANCE: Only Admin and Ushering
 export const canAccessAttendance = () => {
     const user = getCurrentUser();
     if (!user) return false;
     return isAdmin() || isUshering();
 };
 
-// TITHES: Only Admin and Finance
 export const canAccessTithes = () => {
     const user = getCurrentUser();
     if (!user) return false;
     return isAdmin() || isFinance();
 };
 
-// DEVOTION: Only Admin and Discipleship
 export const canAccessDevotion = () => {
     const user = getCurrentUser();
     if (!user) return false;
     return isAdmin() || isDiscipleship();
 };
 
-// ASSIMILATION: Admin, Discipleship, and Leaders
 export const canAccessAssimilation = () => {
     const user = getCurrentUser();
     if (!user) return false;
-    return isAdmin() || isDiscipleship() || isLeader();
+    if (isAdmin()) return true;
+    if (isDiscipleship()) return true;
+    if (isLeader()) return true;
+    return false;
 };
 
-// CONVERT NEWCOMER TO MEMBER: Only Admin and Discipleship
 export const canConvertNewcomer = () => {
     const user = getCurrentUser();
     if (!user) return false;
     return isAdmin() || isDiscipleship();
 };
 
-// LIFE GROUP: All logged-in leaders
 export const canAccessLifeGroup = () => {
     const user = getCurrentUser();
-    return !!user;
+    if (!user) return false;
+    return isAdmin() || isLeader();
 };
 
 /* =========================
@@ -210,14 +217,21 @@ export const getVisibleRoutes = () => {
 
     if (!user && !newcomer) return [];
 
-    // Newcomer routes
     if (newcomer) {
         return [
             { path: "/newcomer/" + newcomer.id, label: "My Journey" },
         ];
     }
 
-    // Leader/Admin routes - ALL can see Dashboard now
+    // Regular MEMBER gets minimal routes only
+    if (isMember()) {
+        return [
+            { path: "/dashboard", label: "Dashboard" },
+            { path: "/leaders", label: "Leaders" },
+            { path: `/leader/${user.id}`, label: "My Profile" },
+        ];
+    }
+
     const routes = [
         { path: "/dashboard", label: "Dashboard" },
     ];
