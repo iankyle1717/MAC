@@ -695,17 +695,7 @@ function Tithes() {
                             </button>
                         </form>
 
-                        <div style={{
-                            marginTop: "16px",
-                            padding: "12px 16px",
-                            borderRadius: "10px",
-                            background: "#fefce8",
-                            border: "1px solid #fde68a",
-                            fontSize: "13px",
-                            color: "#92400e"
-                        }}>
-                            <strong>Tip:</strong> Start typing a name and select from suggestions. You can also filter by tribe below.
-                        </div>
+                       
                     </div>
 
                     {/* RIGHT: RECORDS CARDS */}
