@@ -39,7 +39,7 @@ function Leaders() {
         setLoading(false);
     };
 
-    // Apply all filters
+    // Apply all filters to get filtered leaders
     const filteredLeaders = leaders.filter((leader) => {
         const fullName = `${leader.firstname} ${leader.lastname}`.toLowerCase();
         const matchesSearch = fullName.includes(search.toLowerCase());
@@ -50,14 +50,33 @@ function Leaders() {
         return matchesSearch && matchesTribe && matchesMinistry && matchesType;
     });
 
-    // Count helpers for stats
-    const countByType = (type) => leaders.filter((l) => l.type === type).length;
-    const countByMinistry = (ministry) => leaders.filter((l) => l.ministry === ministry).length;
+    // Base pool for stats cards: if type is filtered, use filteredLeaders; else use all leaders filtered by tribe/ministry/search
+    const getStatsPool = () => {
+        // When filtering by type, the cards should show counts within the OTHER active filters (tribe, ministry, search)
+        // But NOT filter by type itself, so you can see all type counts
+        return leaders.filter((leader) => {
+            const fullName = `${leader.firstname} ${leader.lastname}`.toLowerCase();
+            const matchesSearch = fullName.includes(search.toLowerCase());
+            const matchesTribe = filterTribe === "ALL" ? true : leader.tribe === filterTribe;
+            const matchesMinistry = filterMinistry === "ALL" ? true : leader.ministry === filterMinistry;
+            // Note: we do NOT filter by type here, so cards show all types
+            return matchesSearch && matchesTribe && matchesMinistry;
+        });
+    };
+
+    const statsPool = getStatsPool();
+
+    // Count helpers for stats cards - based on statsPool (filtered by tribe/ministry/search but NOT type)
+    const countByType = (type) => statsPool.filter((l) => l.type === type).length;
+    const countByMinistry = (ministry) => statsPool.filter((l) => l.ministry === ministry).length;
 
     // Quick filter by clicking stats
     const handleQuickFilter = (type) => {
         setFilterType(type);
     };
+
+    // Check if any filter is active
+    const hasActiveFilters = filterTribe !== "ALL" || filterMinistry !== "ALL" || search;
 
     return (
         <div className="layout">
@@ -80,7 +99,7 @@ function Leaders() {
                     </div>
                 </div>
 
-                {/* STATS CARDS - Clickable filters */}
+                {/* STATS CARDS - Dynamic based on tribe/ministry/search filters */}
                 <div
                     className="stats-grid"
                     style={{
@@ -98,8 +117,15 @@ function Leaders() {
                             border: filterType === "ALL" ? "2px solid #c9a45c" : "none"
                         }}
                     >
-                        <h3>All Leaders</h3>
-                        <h1>{leaders.length}</h1>
+                        <h3>All {hasActiveFilters ? "Filtered" : "Leaders"}</h3>
+                        <h1>{statsPool.length}</h1>
+                        {hasActiveFilters && (
+                            <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                                {filterTribe !== "ALL" && `Tribe: ${filterTribe}`}
+                                {filterMinistry !== "ALL" && ` Ministry: ${filterMinistry}`}
+                                {search && ` Search: "${search}"`}
+                            </p>
+                        )}
                     </div>
 
                     <div
