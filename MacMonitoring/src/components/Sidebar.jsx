@@ -50,7 +50,7 @@ function Sidebar() {
                 borderRight: "1px solid rgba(201, 164, 92, 0.2)",
                 boxShadow: "4px 0 24px rgba(0, 0, 0, 0.3)",
                 overflow: "hidden"
-            }}
+            }}s
         >
             {/* LOGO - Compact */}
             <div 

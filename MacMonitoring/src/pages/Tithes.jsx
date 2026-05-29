@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
+import * as XLSX from "xlsx-js-style";
 
 function Tithes() {
     const [leaders, setLeaders] = useState([]);
@@ -22,11 +23,6 @@ function Tithes() {
     // Tab state: "records" | "monthly"
     const [activeTab, setActiveTab] = useState("records");
 
-    // Gross goal modal
-    const [showGrossModal, setShowGrossModal] = useState(false);
-    const [grossLeader, setGrossLeader] = useState(null);
-    const [grossAmount, setGrossAmount] = useState("");
-
     const searchRef = useRef(null);
 
     useEffect(() => {
@@ -37,7 +33,7 @@ function Tithes() {
     const fetchLeaders = async () => {
         const { data, error } = await supabase
             .from("tblMonitoring")
-            .select("id, firstname, lastname, type, tribe, gross_goal, ministry")
+            .select("id, firstname, lastname, type, tribe, ministry")
             .order("firstname", { ascending: true });
 
         if (error) {
@@ -64,7 +60,7 @@ function Tithes() {
             (data || []).map(async (record) => {
                 const { data: leader } = await supabase
                     .from("tblMonitoring")
-                    .select("firstname, lastname, type, tribe, gross_goal, ministry")
+                    .select("firstname, lastname, type, tribe, ministry")
                     .eq("id", record.leader_id)
                     .single();
                 return { ...record, leader };
@@ -143,54 +139,6 @@ function Tithes() {
         return { todayGivers, totalLeaders };
     };
 
-    const getLeaderYearlyProgress = (leaderId) => {
-        const now = new Date();
-        const yearRecords = records.filter(r => 
-            r.leader_id === leaderId && 
-            r.date.startsWith(`${now.getFullYear()}-`)
-        );
-        const totalGiven = yearRecords.reduce((sum, r) => sum + Number(r.amount), 0);
-        const leader = leaders.find(l => l.id === leaderId);
-        const goal = leader?.gross_goal || 0;
-        const percentage = goal > 0 ? Math.round((totalGiven / goal) * 100) : 0;
-        return { totalGiven, goal, percentage };
-    };
-
-    // FIXED: Handle setting gross goal - using correct column name
-    const handleSetGross = async () => {
-        if (!grossLeader || !grossAmount) {
-            alert("Please enter an amount.");
-            return;
-        }
-
-        const parsedAmount = parseFloat(grossAmount);
-        if (isNaN(parsedAmount) || parsedAmount <= 0) {
-            alert("Please enter a valid amount.");
-            return;
-        }
-
-        console.log("Updating gross_goal for leader:", grossLeader.id, "Amount:", parsedAmount);
-
-        const { data, error } = await supabase
-            .from("tblMonitoring")
-            .update({ gross_goal: parsedAmount })
-            .eq("id", grossLeader.id)
-            .select();
-
-        if (error) {
-            console.error("Error setting gross:", error);
-            alert("Failed to set gross goal. Error: " + error.message);
-        } else {
-            console.log("Success:", data);
-            alert(`Gross goal set for ${grossLeader.firstname}!`);
-            setShowGrossModal(false);
-            setGrossAmount("");
-            setGrossLeader(null);
-            fetchLeaders();
-            fetchRecords();
-        }
-    };
-
     // Filter displayed records
     const filteredRecords = records.filter(r => {
         const matchesTribe = filterTribe === "ALL" || r.leader?.tribe === filterTribe;
@@ -203,7 +151,9 @@ function Tithes() {
         const months = new Set();
         records.forEach(r => {
             const key = r.date.substring(0, 7);
-            const label = new Date(r.date + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+            const [year, month] = key.split("-");
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const label = `${monthNames[parseInt(month) - 1]} ${year}`;
             months.add(JSON.stringify({ key, label }));
         });
         return Array.from(months).map(m => JSON.parse(m)).sort((a, b) => b.key.localeCompare(a.key));
@@ -213,12 +163,10 @@ function Tithes() {
     const getMonthlySummary = () => {
         const summary = {};
 
-        // Filter records by selected month (or all if "ALL")
         const monthRecords = filterMonth === "ALL" 
             ? records 
             : records.filter(r => r.date.startsWith(filterMonth));
 
-        // Also filter by tribe if needed
         const tribeFiltered = filterTribe === "ALL"
             ? monthRecords
             : monthRecords.filter(r => r.leader?.tribe === filterTribe);
@@ -246,53 +194,314 @@ function Tithes() {
     const todayRatio = getTodayTithersRatio();
     const monthlySummary = getMonthlySummary();
 
-    // EXPORT TO EXCEL
-    const exportToExcel = () => {
-        const dataToExport = activeTab === "monthly" ? monthlySummary : filteredRecords;
+    // Format date nicely for display
+    const formatDate = (dateStr) => {
+        if (!dateStr) return "";
+        const d = new Date(dateStr + "T00:00:00");
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    };
 
-        let csvContent = "";
+    // Format month-year for monthly summary
+    const formatMonthYear = (dateStr) => {
+        if (!dateStr) return "";
+        const d = new Date(dateStr + "T00:00:00");
+        if (isNaN(d.getTime())) return dateStr;
+        return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    };
+
+    // Get display month for monthly summary header
+    const getDisplayMonth = () => {
+        if (filterMonth === "ALL") return "All Months";
+        const [year, month] = filterMonth.split("-");
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        return `${monthNames[parseInt(month) - 1]} ${year}`;
+    };
+
+    // EXPORT TO EXCEL with TEMPLATE STYLING
+    const exportToExcel = () => {
+        const wb = XLSX.utils.book_new();
+
+        // Define styles
+        const goldHeader = {
+            fill: { fgColor: { rgb: "C9A45C" }, patternType: "solid" },
+            font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "B8934A" } },
+                bottom: { style: "thin", color: { rgb: "B8934A" } },
+                left: { style: "thin", color: { rgb: "B8934A" } },
+                right: { style: "thin", color: { rgb: "B8934A" } }
+            }
+        };
+
+        const titleStyle = {
+            font: { bold: true, color: { rgb: "B8934A" }, sz: 18 },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        const subtitleStyle = {
+            font: { color: { rgb: "6B7280" }, sz: 11, italic: true },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        const churchInfoStyle = {
+            font: { bold: true, color: { rgb: "374151" }, sz: 12 },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        const dataCell = {
+            font: { sz: 11, color: { rgb: "374151" } },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const altRow = {
+            fill: { fgColor: { rgb: "F9FAFB" }, patternType: "solid" },
+            font: { sz: 11, color: { rgb: "374151" } },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const totalStyle = {
+            fill: { fgColor: { rgb: "ECFDF5" }, patternType: "solid" },
+            font: { bold: true, color: { rgb: "16A34A" }, sz: 12 },
+            border: {
+                top: { style: "medium", color: { rgb: "16A34A" } },
+                bottom: { style: "medium", color: { rgb: "16A34A" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const amountStyle = {
+            font: { sz: 11, color: { rgb: "16A34A" }, bold: true },
+            alignment: { horizontal: "right" },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const amountAltStyle = {
+            fill: { fgColor: { rgb: "F9FAFB" }, patternType: "solid" },
+            font: { sz: 11, color: { rgb: "16A34A" }, bold: true },
+            alignment: { horizontal: "right" },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
 
         if (activeTab === "monthly") {
-            // Monthly Summary Export
-            csvContent = "ACTS Church Cabangan - Tithes Monthly Summary\n";
-            csvContent += `Generated: ${new Date().toLocaleDateString()}\n`;
-            csvContent += `Filter: ${filterMonth === "ALL" ? "All Months" : filterMonth}, ${filterTribe === "ALL" ? "All Tribes" : filterTribe}\n\n`;
-            csvContent += "Name,Tribe,Type,Ministry,Total Amount,Number of Tithes,Dates\n";
+            // MONTHLY SUMMARY EXPORT
+            const wsData = [];
 
-            dataToExport.forEach(item => {
-                const dates = item.dates.join("; ");
-                csvContent += `"${item.leader?.firstname} ${item.leader?.lastname}","${item.leader?.tribe || ''}","${item.leader?.type || ''}","${item.leader?.ministry || ''}",${item.total},${item.count},"${dates}"\n`;
+            // Church Header
+            wsData.push(["ACTS CHURCH CABANGAN"]);
+            wsData.push(["Tithes Monthly Summary Report"]);
+            wsData.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
+            wsData.push([`Period: ${getDisplayMonth()} | Tribe: ${filterTribe === "ALL" ? "All Tribes" : filterTribe}`]);
+            wsData.push([]);
+
+            // Column Headers
+            wsData.push(["No.", "Name", "Tribe", "Type", "Ministry", "Total Amount", "Tithes Count"]);
+
+            // Data rows
+            let grandTotal = 0;
+            let grandCount = 0;
+
+            monthlySummary.forEach((item, index) => {
+                wsData.push([
+                    index + 1,
+                    `${item.leader?.firstname} ${item.leader?.lastname}`,
+                    item.leader?.tribe || "",
+                    item.leader?.type || "",
+                    item.leader?.ministry || "",
+                    item.total,
+                    item.count
+                ]);
+                grandTotal += item.total;
+                grandCount += item.count;
             });
 
-            csvContent += `\nTOTAL,,,,${dataToExport.reduce((s, i) => s + i.total, 0)},${dataToExport.reduce((s, i) => s + i.count, 0)},\n`;
+            // Total row
+            wsData.push([]);
+            wsData.push(["", "", "", "", "GRAND TOTAL", grandTotal, grandCount]);
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Set column widths
+            ws["!cols"] = [
+                { wch: 6 },   // No.
+                { wch: 25 },  // Name
+                { wch: 15 },  // Tribe
+                { wch: 15 },  // Type
+                { wch: 18 },  // Ministry
+                { wch: 15 },  // Total Amount
+                { wch: 14 }   // Tithes Count
+            ];
+
+            // Apply styles
+            // Title rows (0-3)
+            for (let r = 0; r <= 3; r++) {
+                const cell = XLSX.utils.encode_cell({ r, c: 0 });
+                if (ws[cell]) {
+                    ws[cell].s = r === 0 ? titleStyle : (r === 1 ? churchInfoStyle : subtitleStyle);
+                    ws["!merges"] = ws["!merges"] || [];
+                    ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: 6 } });
+                }
+            }
+
+            // Header row (5)
+            for (let c = 0; c <= 6; c++) {
+                const cell = XLSX.utils.encode_cell({ r: 5, c });
+                if (ws[cell]) ws[cell].s = goldHeader;
+            }
+
+            // Data rows
+            monthlySummary.forEach((_, index) => {
+                const rowNum = 6 + index;
+                const isAlt = index % 2 === 1;
+
+                for (let c = 0; c <= 6; c++) {
+                    const cell = XLSX.utils.encode_cell({ r: rowNum, c });
+                    if (ws[cell]) {
+                        if (c === 5) { // Amount column
+                            ws[cell].s = isAlt ? amountAltStyle : amountStyle;
+                            ws[cell].z = '"P"#,##0.00';
+                        } else {
+                            ws[cell].s = isAlt ? altRow : dataCell;
+                        }
+                    }
+                }
+            });
+
+            // Total row
+            const totalRow = 6 + monthlySummary.length + 1;
+            for (let c = 0; c <= 6; c++) {
+                const cell = XLSX.utils.encode_cell({ r: totalRow, c });
+                if (ws[cell]) {
+                    ws[cell].s = totalStyle;
+                    if (c === 5) ws[cell].z = '"P"#,##0.00';
+                }
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, "Monthly Summary");
+
         } else {
-            // Detailed Records Export
-            csvContent = "ACTS Church Cabangan - Tithes Records\n";
-            csvContent += `Generated: ${new Date().toLocaleDateString()}\n`;
-            csvContent += `Filter: ${filterMonth === "ALL" ? "All Months" : filterMonth}, ${filterTribe === "ALL" ? "All Tribes" : filterTribe}\n\n`;
-            csvContent += "Date,Name,Tribe,Type,Ministry,Amount,Gross Goal,Yearly Progress\n";
+            // DETAILED RECORDS EXPORT
+            const wsData = [];
 
-            dataToExport.forEach(r => {
-                const progress = getLeaderYearlyProgress(r.leader_id);
-                csvContent += `"${r.date}","${r.leader?.firstname} ${r.leader?.lastname}","${r.leader?.tribe || ''}","${r.leader?.type || ''}","${r.leader?.ministry || ''}",${r.amount},${progress.goal},${progress.percentage}%\n`;
+            // Church Header
+            wsData.push(["ACTS CHURCH CABANGAN"]);
+            wsData.push(["Tithes Records Report"]);
+            wsData.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
+            wsData.push([`Period: ${filterMonth === "ALL" ? "All Months" : getDisplayMonth()} | Tribe: ${filterTribe === "ALL" ? "All Tribes" : filterTribe}`]);
+            wsData.push([]);
+
+            // Column Headers
+            wsData.push(["No.", "Date", "Name", "Tribe", "Type", "Ministry", "Amount"]);
+
+            // Data rows
+            let grandTotal = 0;
+
+            filteredRecords.forEach((record, index) => {
+                wsData.push([
+                    index + 1,
+                    formatDate(record.date),
+                    `${record.leader?.firstname} ${record.leader?.lastname}`,
+                    record.leader?.tribe || "",
+                    record.leader?.type || "",
+                    record.leader?.ministry || "",
+                    Number(record.amount)
+                ]);
+                grandTotal += Number(record.amount);
             });
 
-            csvContent += `\nTOTAL,,,,,${dataToExport.reduce((s, r) => s + Number(r.amount), 0)},,\n`;
+            // Total row
+            wsData.push([]);
+            wsData.push(["", "", "", "", "", "GRAND TOTAL", grandTotal]);
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+            // Set column widths
+            ws["!cols"] = [
+                { wch: 6 },   // No.
+                { wch: 20 },  // Date
+                { wch: 25 },  // Name
+                { wch: 15 },  // Tribe
+                { wch: 15 },  // Type
+                { wch: 18 },  // Ministry
+                { wch: 15 }   // Amount
+            ];
+
+            // Apply styles
+            // Title rows (0-3)
+            for (let r = 0; r <= 3; r++) {
+                const cell = XLSX.utils.encode_cell({ r, c: 0 });
+                if (ws[cell]) {
+                    ws[cell].s = r === 0 ? titleStyle : (r === 1 ? churchInfoStyle : subtitleStyle);
+                    ws["!merges"] = ws["!merges"] || [];
+                    ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: 6 } });
+                }
+            }
+
+            // Header row (5)
+            for (let c = 0; c <= 6; c++) {
+                const cell = XLSX.utils.encode_cell({ r: 5, c });
+                if (ws[cell]) ws[cell].s = goldHeader;
+            }
+
+            // Data rows
+            filteredRecords.forEach((_, index) => {
+                const rowNum = 6 + index;
+                const isAlt = index % 2 === 1;
+
+                for (let c = 0; c <= 6; c++) {
+                    const cell = XLSX.utils.encode_cell({ r: rowNum, c });
+                    if (ws[cell]) {
+                        if (c === 6) { // Amount column
+                            ws[cell].s = isAlt ? amountAltStyle : amountStyle;
+                            ws[cell].z = '"P"#,##0.00';
+                        } else {
+                            ws[cell].s = isAlt ? altRow : dataCell;
+                        }
+                    }
+                }
+            });
+
+            // Total row
+            const totalRow = 6 + filteredRecords.length + 1;
+            for (let c = 0; c <= 6; c++) {
+                const cell = XLSX.utils.encode_cell({ r: totalRow, c });
+                if (ws[cell]) {
+                    ws[cell].s = totalStyle;
+                    if (c === 6) ws[cell].z = '"P"#,##0.00';
+                }
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, "Tithes Records");
         }
 
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-
+        // Save file
         const filename = activeTab === "monthly" 
-            ? `ACTS_Tithes_Monthly_${filterMonth === "ALL" ? "All" : filterMonth}.csv`
-            : `ACTS_Tithes_Records_${filterMonth === "ALL" ? "All" : filterMonth}.csv`;
+            ? `ACTS_Tithes_Monthly_${filterMonth === "ALL" ? "All" : filterMonth}.xlsx`
+            : `ACTS_Tithes_Records_${filterMonth === "ALL" ? "All" : filterMonth}.xlsx`;
 
-        link.setAttribute("download", filename);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        XLSX.writeFile(wb, filename);
     };
 
     return (
@@ -301,7 +510,7 @@ function Tithes() {
             <div className="content">
                 <h1>Tithes Recording</h1>
                 <p style={{ opacity: 0.7, marginBottom: "20px" }}>
-                    Welcome! Record tithes, track participation, and monitor yearly goals.
+                    Welcome! Record tithes and track participation.
                 </p>
 
                 {/* STATS CARDS */}
@@ -421,19 +630,6 @@ function Tithes() {
                                                         {leader.type} - {leader.tribe}
                                                     </div>
                                                 </div>
-                                                {leader.gross_goal && (
-                                                    <span style={{
-                                                        marginLeft: "auto",
-                                                        padding: "2px 8px",
-                                                        borderRadius: "10px",
-                                                        background: "#dcfce7",
-                                                        color: "#16a34a",
-                                                        fontSize: "10px",
-                                                        fontWeight: "600"
-                                                    }}>
-                                                        Gross: P{leader.gross_goal.toLocaleString()}
-                                                    </span>
-                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -499,6 +695,17 @@ function Tithes() {
                             </button>
                         </form>
 
+                        <div style={{
+                            marginTop: "16px",
+                            padding: "12px 16px",
+                            borderRadius: "10px",
+                            background: "#fefce8",
+                            border: "1px solid #fde68a",
+                            fontSize: "13px",
+                            color: "#92400e"
+                        }}>
+                            <strong>Tip:</strong> Start typing a name and select from suggestions. You can also filter by tribe below.
+                        </div>
                     </div>
 
                     {/* RIGHT: RECORDS CARDS */}
@@ -512,7 +719,7 @@ function Tithes() {
                                     borderRadius: "12px",
                                     background: "#dbeafe",
                                     color: "#1e40af",
-                                    fontSize: "8px"
+                                    fontSize: "14px"
                                 }}>
                                     {filteredRecords.length}
                                 </span>
@@ -544,98 +751,61 @@ function Tithes() {
                             <p style={{ color: "#6b7280" }}>No tithes records yet.</p>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "400px", overflowY: "auto" }}>
-                                {filteredRecords.slice(0, 10).map((record) => {
-                                    const progress = getLeaderYearlyProgress(record.leader_id);
-                                    return (
-                                        <div
-                                            key={record.id}
-                                            style={{
-                                                padding: "14px 16px",
-                                                borderRadius: "12px",
-                                                background: "#f9fafb",
-                                                border: "1px solid #e5e7eb",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                gap: "12px"
-                                            }}
-                                        >
-                                            <div style={{
-                                                width: "40px",
-                                                height: "40px",
-                                                borderRadius: "50%",
-                                                background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                                display: "flex",
-                                                alignItems: "center",
-                                                justifyContent: "center",
-                                                color: "#fff",
-                                                fontSize: "14px",
-                                                fontWeight: "700",
-                                                flexShrink: 0
-                                            }}>
-                                                {record.leader?.firstname?.charAt(0)}{record.leader?.lastname?.charAt(0)}
+                                {filteredRecords.slice(0, 10).map((record) => (
+                                    <div
+                                        key={record.id}
+                                        style={{
+                                            padding: "14px 16px",
+                                            borderRadius: "12px",
+                                            background: "#f9fafb",
+                                            border: "1px solid #e5e7eb",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "12px"
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: "40px",
+                                            height: "40px",
+                                            borderRadius: "50%",
+                                            background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            color: "#fff",
+                                            fontSize: "14px",
+                                            fontWeight: "700",
+                                            flexShrink: 0
+                                        }}>
+                                            {record.leader?.firstname?.charAt(0)}{record.leader?.lastname?.charAt(0)}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                                                <span style={{ fontWeight: "600", fontSize: "14px" }}>
+                                                    {record.leader?.firstname} {record.leader?.lastname}
+                                                </span>
+                                                <span style={{
+                                                    padding: "2px 6px",
+                                                    borderRadius: "6px",
+                                                    background: "#dbeafe",
+                                                    color: "#1e40af",
+                                                    fontSize: "10px",
+                                                    fontWeight: "600"
+                                                }}>
+                                                    {record.leader?.tribe}
+                                                </span>
                                             </div>
-                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-                                                    <span style={{ fontWeight: "600", fontSize: "14px" }}>
-                                                        {record.leader?.firstname} {record.leader?.lastname}
-                                                    </span>
-                                                    <span style={{
-                                                        padding: "2px 6px",
-                                                        borderRadius: "6px",
-                                                        background: "#dbeafe",
-                                                        color: "#1e40af",
-                                                        fontSize: "10px",
-                                                        fontWeight: "600"
-                                                    }}>
-                                                        {record.leader?.tribe}
-                                                    </span>
-                                                </div>
-                                                <div style={{ fontSize: "12px", color: "#9ca3af" }}>
-                                                    {record.date} - {record.leader?.type}
-                                                </div>
-                                                {progress.goal > 0 && (
-                                                    <div style={{ marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                                                        <div style={{ flex: 1, background: "#e5e7eb", borderRadius: "4px", height: "4px" }}>
-                                                            <div style={{
-                                                                width: `${Math.min(progress.percentage, 100)}%`,
-                                                                height: "100%",
-                                                                background: progress.percentage >= 100 ? "#16a34a" : "#f59e0b",
-                                                                borderRadius: "4px"
-                                                            }} />
-                                                        </div>
-                                                        <span style={{ fontSize: "10px", color: "#6b7280", fontWeight: "600" }}>
-                                                            {progress.percentage}%
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                                <div style={{ fontSize: "18px", fontWeight: "700", color: "#16a34a" }}>
-                                                    P{Number(record.amount).toLocaleString()}
-                                                </div>
-                                                <button
-                                                    onClick={() => {
-                                                        setGrossLeader(record.leader);
-                                                        setGrossAmount(record.leader?.gross_goal || "");
-                                                        setShowGrossModal(true);
-                                                    }}
-                                                    style={{
-                                                        marginTop: "4px",
-                                                        padding: "2px 8px",
-                                                        borderRadius: "6px",
-                                                        border: "none",
-                                                        background: "#f3f4f6",
-                                                        color: "#6b7280",
-                                                        fontSize: "10px",
-                                                        cursor: "pointer"
-                                                    }}
-                                                >
-                                                    Add Gross
-                                                </button>
+                                            <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                                                {formatDate(record.date)} - {record.leader?.type}
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                            <div style={{ fontSize: "18px", fontWeight: "700", color: "#16a34a" }}>
+                                                P{Number(record.amount).toLocaleString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -684,7 +854,7 @@ function Tithes() {
                 {/* EXPORT BUTTON */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                     <h2 style={{ margin: 0 }}>
-                        {activeTab === "records" ? "All Records" : "Monthly Summary"}
+                        {activeTab === "records" ? "All Records" : `Monthly Summary - ${getDisplayMonth()}`}
                         <span style={{
                             marginLeft: "10px",
                             padding: "4px 10px",
@@ -763,8 +933,6 @@ function Tithes() {
                                             <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Type</th>
                                             <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Ministry</th>
                                             <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Amount</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Gross Goal</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Progress</th>
                                         </>
                                     ) : (
                                         <>
@@ -774,8 +942,6 @@ function Tithes() {
                                             <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Ministry</th>
                                             <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Amount</th>
                                             <th style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tithes Count</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Gross Goal</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Progress</th>
                                         </>
                                     )}
                                 </tr>
@@ -783,20 +949,19 @@ function Tithes() {
                             <tbody>
                                 {fetching ? (
                                     <tr>
-                                        <td colSpan={activeTab === "records" ? 8 : 8} style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
+                                        <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
                                             Loading records...
                                         </td>
                                     </tr>
                                 ) : activeTab === "records" ? (
                                     filteredRecords.length === 0 ? (
                                         <tr>
-                                            <td colSpan="8" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
+                                            <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
                                                 No tithes records found.
                                             </td>
                                         </tr>
                                     ) : (
                                         filteredRecords.map((record, index) => {
-                                            const progress = getLeaderYearlyProgress(record.leader_id);
                                             const isEven = index % 2 === 0;
                                             return (
                                                 <tr
@@ -809,8 +974,8 @@ function Tithes() {
                                                     onMouseEnter={(e) => e.currentTarget.style.background = "#f3f4f6"}
                                                     onMouseLeave={(e) => e.currentTarget.style.background = isEven ? "#fff" : "#f9fafb"}
                                                 >
-                                                    <td style={{ padding: "12px 16px", color: "#374151", fontWeight: "500" }}>
-                                                        {record.date}
+                                                    <td style={{ padding: "12px 16px", color: "#374151", fontWeight: "500", whiteSpace: "nowrap" }}>
+                                                        {formatDate(record.date)}
                                                     </td>
                                                     <td style={{ padding: "12px 16px" }}>
                                                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -854,28 +1019,6 @@ function Tithes() {
                                                     <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: "700", color: "#16a34a", fontSize: "15px" }}>
                                                         P{Number(record.amount).toLocaleString()}
                                                     </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "center", color: "#6b7280", fontSize: "13px" }}>
-                                                        {record.leader?.gross_goal ? `P${Number(record.leader.gross_goal).toLocaleString()}` : "-"}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                                                        {record.leader?.gross_goal ? (
-                                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                                                                <div style={{ width: "60px", background: "#e5e7eb", borderRadius: "4px", height: "6px" }}>
-                                                                    <div style={{
-                                                                        width: `${Math.min(progress.percentage, 100)}%`,
-                                                                        height: "100%",
-                                                                        background: progress.percentage >= 100 ? "#16a34a" : "#f59e0b",
-                                                                        borderRadius: "4px"
-                                                                    }} />
-                                                                </div>
-                                                                <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: "600", minWidth: "32px" }}>
-                                                                    {progress.percentage}%
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <span style={{ fontSize: "12px", color: "#9ca3af" }}>-</span>
-                                                        )}
-                                                    </td>
                                                 </tr>
                                             );
                                         })
@@ -883,13 +1026,12 @@ function Tithes() {
                                 ) : (
                                     monthlySummary.length === 0 ? (
                                         <tr>
-                                            <td colSpan="8" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
+                                            <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
                                                 No records found for this period.
                                             </td>
                                         </tr>
                                     ) : (
                                         monthlySummary.map((item, index) => {
-                                            const progress = getLeaderYearlyProgress(item.leader?.id);
                                             const isEven = index % 2 === 0;
                                             return (
                                                 <tr
@@ -947,28 +1089,6 @@ function Tithes() {
                                                     <td style={{ padding: "12px 16px", textAlign: "center", fontWeight: "600", color: "#374151" }}>
                                                         {item.count}
                                                     </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "center", color: "#6b7280", fontSize: "13px" }}>
-                                                        {item.leader?.gross_goal ? `P${Number(item.leader.gross_goal).toLocaleString()}` : "-"}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
-                                                        {item.leader?.gross_goal ? (
-                                                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                                                                <div style={{ width: "60px", background: "#e5e7eb", borderRadius: "4px", height: "6px" }}>
-                                                                    <div style={{
-                                                                        width: `${Math.min(progress.percentage, 100)}%`,
-                                                                        height: "100%",
-                                                                        background: progress.percentage >= 100 ? "#16a34a" : "#f59e0b",
-                                                                        borderRadius: "4px"
-                                                                    }} />
-                                                                </div>
-                                                                <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: "600", minWidth: "32px" }}>
-                                                                    {progress.percentage}%
-                                                                </span>
-                                                            </div>
-                                                        ) : (
-                                                            <span style={{ fontSize: "12px", color: "#9ca3af" }}>-</span>
-                                                        )}
-                                                    </td>
                                                 </tr>
                                             );
                                         })
@@ -979,88 +1099,6 @@ function Tithes() {
                     </div>
                 </div>
             </div>
-
-            {/* ADD GROSS MODAL */}
-            {showGrossModal && grossLeader && (
-                <div style={{
-                    position: "fixed",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: "rgba(0,0,0,0.5)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 1000
-                }}>
-                    <div style={{
-                        background: "#fff",
-                        borderRadius: "20px",
-                        padding: "30px",
-                        width: "90%",
-                        maxWidth: "400px",
-                        boxShadow: "0 25px 50px rgba(0,0,0,0.2)"
-                    }}>
-                        <h3 style={{ margin: "0 0 8px 0" }}>Add Gross Goal</h3>
-                        <p style={{ color: "#6b7280", fontSize: "14px", marginBottom: "20px" }}>
-                            For {grossLeader.firstname} {grossLeader.lastname}
-                        </p>
-
-                        <input
-                            type="number"
-                            placeholder="Enter gross goal amount"
-                            value={grossAmount}
-                            onChange={(e) => setGrossAmount(e.target.value)}
-                            style={{
-                                width: "100%",
-                                padding: "14px",
-                                borderRadius: "12px",
-                                border: "2px solid #e5e7eb",
-                                fontSize: "16px",
-                                marginBottom: "20px",
-                                boxSizing: "border-box"
-                            }}
-                        />
-
-                        <div style={{ display: "flex", gap: "10px" }}>
-                            <button
-                                onClick={() => {
-                                    setShowGrossModal(false);
-                                    setGrossLeader(null);
-                                    setGrossAmount("");
-                                }}
-                                style={{
-                                    flex: 1,
-                                    padding: "14px",
-                                    borderRadius: "12px",
-                                    border: "1px solid #e5e7eb",
-                                    background: "#f9fafb",
-                                    cursor: "pointer",
-                                    fontWeight: "600"
-                                }}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSetGross}
-                                style={{
-                                    flex: 1,
-                                    padding: "14px",
-                                    borderRadius: "12px",
-                                    border: "none",
-                                    background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                    color: "#fff",
-                                    fontWeight: "700",
-                                    cursor: "pointer"
-                                }}
-                            >
-                                Save Gross
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
