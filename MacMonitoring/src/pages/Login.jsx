@@ -84,120 +84,223 @@ function Login() {
         <div className="login-page" style={{
             minHeight: "100vh",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+            background: "#fff",
             position: "relative",
             overflow: "hidden"
         }}>
-            {/* Animated background particles */}
+            {/* LEFT SIDE — CHURCH INFO (CENTERED) */}
             <div style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundImage: "radial-gradient(circle at 20% 50%, rgba(201, 164, 92, 0.1) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(201, 164, 92, 0.08) 0%, transparent 50%)",
-                animation: "pulse 8s ease-in-out infinite"
-            }} />
-
-            <div className="login-card" style={{
-                background: "rgba(255, 255, 255, 0.95)",
-                backdropFilter: "blur(20px)",
-                borderRadius: "24px",
-                padding: "40px",
-                width: "100%",
-                maxWidth: "480px",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)",
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "48px",
                 position: "relative",
-                zIndex: 1,
-                animation: "slideUp 0.6s ease-out"
+                overflow: "hidden"
             }}>
-                {/* LOGO & BRANDING */}
-                <div style={{ textAlign: "center", marginBottom: "30px" }}>
+                {/* Subtle background */}
+                <div style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: `
+                        radial-gradient(ellipse 60% 50% at 50% 30%, rgba(201,164,92,0.06) 0%, transparent 70%),
+                        radial-gradient(ellipse 40% 40% at 80% 80%, rgba(22,163,74,0.04) 0%, transparent 50%)
+                    `
+                }} />
+
+                <div style={{ position: "relative", zIndex: 1, maxWidth: "420px", width: "100%", textAlign: "center" }}>
+                    {/* Logo */}
                     <img 
                         src={logo} 
-                        alt="Modern Acts Church" 
-                        style={{
-                            width: "100px",
-                            height: "100px",
-                            objectFit: "contain",
-                            marginBottom: "16px",
-                            filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.15))"
+                        alt="MAC" 
+                        style={{ 
+                            width: "72px", 
+                            height: "72px", 
+                            objectFit: "contain", 
+                            marginBottom: "20px",
+                            filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.1))"
                         }}
                     />
+
+                    {/* Church Name */}
                     <h1 style={{
-                        fontSize: "28px",
-                        fontWeight: "800",
-                        color: "#1a1a2e",
+                        fontSize: "26px",
+                        fontWeight: 800,
+                        color: "#111827",
                         margin: "0 0 4px 0",
                         letterSpacing: "-0.5px"
                     }}>
                         Modern Acts Church
                     </h1>
                     <p style={{
-                        fontSize: "14px",
-                        color: "#c9a45c",
-                        fontWeight: "600",
+                        fontSize: "12px",
+                        color: "#9ca3af",
+                        fontWeight: 600,
                         textTransform: "uppercase",
-                        letterSpacing: "2px",
-                        margin: 0
+                        letterSpacing: "3px",
+                        margin: "0 0 32px 0"
                     }}>
-                        Cabangan • <Disciple-sheep>Disciple-Sheep</Disciple-sheep> Monitoring
+                        Cabangan • Disciple-Sheep Monitoring
                     </p>
-                </div>
 
-                {/* Scripture Quote */}
-                <div style={{
-                    background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
-                    borderRadius: "16px",
-                    padding: "16px 20px",
-                    marginBottom: "24px",
-                    textAlign: "center",
-                    borderLeft: "4px solid #c9a45c"
-                }}>
+                    {/* Scripture Quote */}
                     <p style={{
-                        fontSize: "13px",
+                        fontSize: "15px",
                         color: "#4b5563",
+                        lineHeight: 1.7,
+                        margin: "0 0 12px 0",
                         fontStyle: "italic",
-                        margin: 0,
-                        lineHeight: "1.6"
+                        fontFamily: "Georgia, serif"
                     }}>
-                        "Therefore go and make disciples of all nations..."
+                        "Therefore go and make disciples of all nations, baptizing them in the name of the Father and of the Son and of the Holy Spirit."
                     </p>
                     <p style={{
                         fontSize: "12px",
                         color: "#c9a45c",
-                        fontWeight: "600",
-                        margin: "8px 0 0 0"
+                        fontWeight: 600,
+                        margin: "0 0 40px 0"
                     }}>
-                        — Matthew 28:19
+                        Matthew 28:19
+                    </p>
+
+                    {/* Feature Cards */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", textAlign: "left" }}>
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "14px",
+                            padding: "14px 16px",
+                            background: "#f9fafb",
+                            borderRadius: "10px",
+                            border: "1px solid #f3f4f6"
+                        }}>
+                            <span style={{ fontSize: "20px" }}></span>
+                            <div>
+                                <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 2px 0" }}>Leader Monitoring</p>
+                                <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>Track TLDA performance & ministry growth</p>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "14px",
+                            padding: "14px 16px",
+                            background: "#f9fafb",
+                            borderRadius: "10px",
+                            border: "1px solid #f3f4f6"
+                        }}>
+                            <span style={{ fontSize: "20px" }}></span>
+                            <div>
+                                <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 2px 0" }}>Newcomer Tracking</p>
+                                <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>Monitor discipleship journey stages</p>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "14px",
+                            padding: "14px 16px",
+                            background: "#f9fafb",
+                            borderRadius: "10px",
+                            border: "1px solid #f3f4f6"
+                        }}>
+                            <span style={{ fontSize: "20px" }}></span>
+                            <div>
+                                <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 2px 0" }}>Tithes Recording</p>
+                                <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>Record and export tithe reports</p>
+                            </div>
+                        </div>
+
+                        <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "14px",
+                            padding: "14px 16px",
+                            background: "#f9fafb",
+                            borderRadius: "10px",
+                            border: "1px solid #f3f4f6"
+                        }}>
+                            <span style={{ fontSize: "20px" }}></span>
+                            <div>
+                                <p style={{ fontSize: "13px", fontWeight: 600, color: "#111827", margin: "0 0 2px 0" }}>Monthly Reports</p>
+                                <p style={{ fontSize: "11px", color: "#9ca3af", margin: 0 }}>Life group & devotion consistency stats</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Location */}
+                    <p style={{
+                        fontSize: "11px",
+                        color: "#d1d5db",
+                        margin: "32px 0 0 0",
+                        letterSpacing: "0.5px"
+                    }}>
+                        📍 National Highway, Brgy. Del Carmen, Cabangan, Zambales
+                    </p>
+                </div>
+            </div>
+
+            {/* RIGHT SIDE — LOGIN FORM */}
+            <div style={{
+                width: "420px",
+                minWidth: "420px",
+                background: "#f8f9fb",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                padding: "48px 40px",
+                position: "relative",
+                zIndex: 2,
+                borderLeft: "1px solid #e5e7eb"
+            }}>
+                {/* Welcome Text */}
+                <div style={{ marginBottom: "28px" }}>
+                    <h1 style={{
+                        fontSize: "24px",
+                        fontWeight: 800,
+                        color: "#111827",
+                        margin: "0 0 6px 0"
+                    }}>
+                        Welcome Back
+                    </h1>
+                    <p style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        margin: 0,
+                        lineHeight: 1.5
+                    }}>
+                        Sign in to access your discipleship records and ministry dashboard.
                     </p>
                 </div>
 
                 {/* Mode Toggle */}
                 <div style={{
                     display: "flex",
-                    gap: "8px",
-                    background: "#f3f4f6",
-                    borderRadius: "14px",
-                    padding: "6px",
+                    gap: "6px",
+                    background: "#e5e7eb",
+                    borderRadius: "10px",
+                    padding: "5px",
                     marginBottom: "24px"
                 }}>
                     <button
                         onClick={() => { setMode("leader"); setError(""); }}
                         style={{
                             flex: 1,
-                            padding: "12px 20px",
-                            borderRadius: "10px",
+                            padding: "10px 16px",
+                            borderRadius: "8px",
                             border: "none",
-                            fontSize: "14px",
-                            fontWeight: "600",
+                            fontSize: "13px",
+                            fontWeight: 600,
                             cursor: "pointer",
-                            transition: "all 0.3s ease",
+                            transition: "all 0.25s ease",
                             background: mode === "leader" ? "#c9a45c" : "transparent",
-                            color: mode === "leader" ? "#fff" : "#6b7280",
-                            boxShadow: mode === "leader" ? "0 4px 12px rgba(201, 164, 92, 0.3)" : "none"
+                            color: mode === "leader" ? "#fff" : "#6b7280"
                         }}
                     >
                         👤 Leader
@@ -206,19 +309,18 @@ function Login() {
                         onClick={() => { setMode("newcomer"); setError(""); }}
                         style={{
                             flex: 1,
-                            padding: "12px 20px",
-                            borderRadius: "10px",
+                            padding: "10px 16px",
+                            borderRadius: "8px",
                             border: "none",
-                            fontSize: "14px",
-                            fontWeight: "600",
+                            fontSize: "13px",
+                            fontWeight: 600,
                             cursor: "pointer",
-                            transition: "all 0.3s ease",
+                            transition: "all 0.25s ease",
                             background: mode === "newcomer" ? "#16a34a" : "transparent",
-                            color: mode === "newcomer" ? "#fff" : "#6b7280",
-                            boxShadow: mode === "newcomer" ? "0 4px 12px rgba(22, 163, 74, 0.3)" : "none"
+                            color: mode === "newcomer" ? "#fff" : "#6b7280"
                         }}
                     >
-                         👤 Newcomer
+                        🌱 Newcomer
                     </button>
                 </div>
 
@@ -226,29 +328,28 @@ function Login() {
                     <div style={{
                         background: "#fee2e2",
                         color: "#dc2626",
-                        padding: "12px 16px",
-                        borderRadius: "12px",
-                        fontSize: "13px",
-                        fontWeight: "500",
-                        marginBottom: "20px",
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                        fontWeight: 500,
+                        marginBottom: "16px",
                         display: "flex",
                         alignItems: "center",
-                        gap: "8px",
-                        animation: "shake 0.5s ease"
+                        gap: "6px"
                     }}>
                         ⚠️ {error}
                     </div>
                 )}
 
                 {mode === "leader" ? (
-                    <form onSubmit={handleLeaderLogin}>
-                        <div style={{ marginBottom: "16px" }}>
+                    <form onSubmit={handleLeaderLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                        <div>
                             <label style={{
                                 display: "block",
-                                fontSize: "13px",
-                                fontWeight: "600",
+                                fontSize: "11px",
+                                fontWeight: 700,
                                 color: "#374151",
-                                marginBottom: "6px",
+                                marginBottom: "5px",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.5px"
                             }}>
@@ -261,47 +362,49 @@ function Login() {
                                 onChange={(e) => setLeaderFirstname(e.target.value)}
                                 style={{
                                     width: "100%",
-                                    padding: "14px 16px",
-                                    borderRadius: "12px",
-                                    border: "2px solid #e5e7eb",
-                                    fontSize: "15px",
-                                    transition: "all 0.3s ease",
+                                    padding: "11px 14px",
+                                    borderRadius: "8px",
+                                    border: "1.5px solid #d1d5db",
+                                    fontSize: "14px",
+                                    transition: "all 0.2s",
                                     outline: "none",
-                                    boxSizing: "border-box"
+                                    boxSizing: "border-box",
+                                    background: "#fff"
                                 }}
-                                onFocus={(e) => e.target.style.borderColor = "#c9a45c"}
-                                onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                                onFocus={(e) => { e.target.style.borderColor = "#c9a45c"; e.target.style.boxShadow = "0 0 0 3px rgba(201,164,92,0.1)"; }}
+                                onBlur={(e) => { e.target.style.borderColor = "#d1d5db"; e.target.style.boxShadow = "none"; }}
                             />
                         </div>
-                        <div style={{ marginBottom: "24px" }}>
+                        <div>
                             <label style={{
                                 display: "block",
-                                fontSize: "13px",
-                                fontWeight: "600",
+                                fontSize: "11px",
+                                fontWeight: 700,
                                 color: "#374151",
-                                marginBottom: "6px",
+                                marginBottom: "5px",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.5px"
                             }}>
-                                Password
+                                Password (PIN)
                             </label>
                             <input
                                 type="password"
-                                placeholder="Enter Password (PIN)"
+                                placeholder="Enter your PIN"
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
                                 style={{
                                     width: "100%",
-                                    padding: "14px 16px",
-                                    borderRadius: "12px",
-                                    border: "2px solid #e5e7eb",
-                                    fontSize: "15px",
-                                    transition: "all 0.3s ease",
+                                    padding: "11px 14px",
+                                    borderRadius: "8px",
+                                    border: "1.5px solid #d1d5db",
+                                    fontSize: "14px",
+                                    transition: "all 0.2s",
                                     outline: "none",
-                                    boxSizing: "border-box"
+                                    boxSizing: "border-box",
+                                    background: "#fff"
                                 }}
-                                onFocus={(e) => e.target.style.borderColor = "#c9a45c"}
-                                onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                                onFocus={(e) => { e.target.style.borderColor = "#c9a45c"; e.target.style.boxShadow = "0 0 0 3px rgba(201,164,92,0.1)"; }}
+                                onBlur={(e) => { e.target.style.borderColor = "#d1d5db"; e.target.style.boxShadow = "none"; }}
                             />
                         </div>
                         <button 
@@ -309,31 +412,33 @@ function Login() {
                             disabled={loading}
                             style={{
                                 width: "100%",
-                                padding: "16px",
-                                borderRadius: "14px",
+                                padding: "12px",
+                                borderRadius: "8px",
                                 border: "none",
-                                background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
+                                background: "#c9a45c",
                                 color: "#fff",
-                                fontSize: "16px",
-                                fontWeight: "700",
+                                fontSize: "14px",
+                                fontWeight: 700,
                                 cursor: loading ? "not-allowed" : "pointer",
                                 opacity: loading ? 0.7 : 1,
-                                transition: "all 0.3s ease",
-                                boxShadow: "0 4px 16px rgba(201, 164, 92, 0.3)"
+                                transition: "all 0.2s",
+                                marginTop: "4px"
                             }}
+                            onMouseEnter={(e) => { if (!loading) e.target.style.background = "#b8934a"; }}
+                            onMouseLeave={(e) => { e.target.style.background = "#c9a45c"; }}
                         >
-                            {loading ? "⏳ Logging in..." : "🔐 Login as Leader"}
+                            {loading ? "⏳ Logging in..." : "🔐 Sign In as Leader"}
                         </button>
                     </form>
                 ) : (
-                    <form onSubmit={handleNewcomerLogin}>
-                        <div style={{ marginBottom: "16px" }}>
+                    <form onSubmit={handleNewcomerLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                        <div>
                             <label style={{
                                 display: "block",
-                                fontSize: "13px",
-                                fontWeight: "600",
+                                fontSize: "11px",
+                                fontWeight: 700,
                                 color: "#374151",
-                                marginBottom: "6px",
+                                marginBottom: "5px",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.5px"
                             }}>
@@ -346,25 +451,26 @@ function Login() {
                                 onChange={(e) => setNewcomerFirstname(e.target.value)}
                                 style={{
                                     width: "100%",
-                                    padding: "14px 16px",
-                                    borderRadius: "12px",
-                                    border: "2px solid #e5e7eb",
-                                    fontSize: "15px",
-                                    transition: "all 0.3s ease",
+                                    padding: "11px 14px",
+                                    borderRadius: "8px",
+                                    border: "1.5px solid #d1d5db",
+                                    fontSize: "14px",
+                                    transition: "all 0.2s",
                                     outline: "none",
-                                    boxSizing: "border-box"
+                                    boxSizing: "border-box",
+                                    background: "#fff"
                                 }}
-                                onFocus={(e) => e.target.style.borderColor = "#16a34a"}
-                                onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                                onFocus={(e) => { e.target.style.borderColor = "#16a34a"; e.target.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.1)"; }}
+                                onBlur={(e) => { e.target.style.borderColor = "#d1d5db"; e.target.style.boxShadow = "none"; }}
                             />
                         </div>
-                        <div style={{ marginBottom: "24px" }}>
+                        <div>
                             <label style={{
                                 display: "block",
-                                fontSize: "13px",
-                                fontWeight: "600",
+                                fontSize: "11px",
+                                fontWeight: 700,
                                 color: "#374151",
-                                marginBottom: "6px",
+                                marginBottom: "5px",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.5px"
                             }}>
@@ -377,16 +483,17 @@ function Login() {
                                 onChange={(e) => setNewcomerLastname(e.target.value)}
                                 style={{
                                     width: "100%",
-                                    padding: "14px 16px",
-                                    borderRadius: "12px",
-                                    border: "2px solid #e5e7eb",
-                                    fontSize: "15px",
-                                    transition: "all 0.3s ease",
+                                    padding: "11px 14px",
+                                    borderRadius: "8px",
+                                    border: "1.5px solid #d1d5db",
+                                    fontSize: "14px",
+                                    transition: "all 0.2s",
                                     outline: "none",
-                                    boxSizing: "border-box"
+                                    boxSizing: "border-box",
+                                    background: "#fff"
                                 }}
-                                onFocus={(e) => e.target.style.borderColor = "#16a34a"}
-                                onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                                onFocus={(e) => { e.target.style.borderColor = "#16a34a"; e.target.style.boxShadow = "0 0 0 3px rgba(22,163,74,0.1)"; }}
+                                onBlur={(e) => { e.target.style.borderColor = "#d1d5db"; e.target.style.boxShadow = "none"; }}
                             />
                         </div>
                         <button 
@@ -394,72 +501,66 @@ function Login() {
                             disabled={loading}
                             style={{
                                 width: "100%",
-                                padding: "16px",
-                                borderRadius: "14px",
+                                padding: "12px",
+                                borderRadius: "8px",
                                 border: "none",
-                                background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                                background: "#16a34a",
                                 color: "#fff",
-                                fontSize: "16px",
-                                fontWeight: "700",
+                                fontSize: "14px",
+                                fontWeight: 700,
                                 cursor: loading ? "not-allowed" : "pointer",
                                 opacity: loading ? 0.7 : 1,
-                                transition: "all 0.3s ease",
-                                boxShadow: "0 4px 16px rgba(22, 163, 74, 0.3)"
+                                transition: "all 0.2s",
+                                marginTop: "4px"
                             }}
+                            onMouseEnter={(e) => { if (!loading) e.target.style.background = "#15803d"; }}
+                            onMouseLeave={(e) => { e.target.style.background = "#16a34a"; }}
                         >
-                            {loading ? "⏳ Loading..." : "✨ View My Journey"}
+                            {loading ? "⏳ Loading..." : " View My Journey"}
                         </button>
                         <p style={{
                             textAlign: "center",
-                            fontSize: "12px",
+                            fontSize: "11px",
                             color: "#9ca3af",
-                            marginTop: "16px",
-                            lineHeight: "1.5"
+                            margin: "8px 0 0 0",
+                            lineHeight: 1.4
                         }}>
-                            No password needed. Just enter your name to track your discipleship progress.
+                            No password needed. Just enter your name to track your progress.
                         </p>
                     </form>
                 )}
 
                 {/* Footer */}
                 <div style={{
-                    marginTop: "30px",
-                    paddingTop: "20px",
-                    borderTop: "1px solid #e5e7eb",
+                    marginTop: "auto",
+                    paddingTop: "24px",
                     textAlign: "center"
                 }}>
                     <p style={{
-                        fontSize: "12px",
-                        color: "#9ca3af",
+                        fontSize: "11px",
+                        color: "#d1d5db",
                         margin: 0
                     }}>
-                        © 2026 Modern Acts Church Cabangan. All rights reserved.
-                    </p>
-                    <p style={{
-                        fontSize: "11px",
-                        color: "#c9a45c",
-                        margin: "4px 0 0 0",
-                        fontWeight: "600"
-                    }}>
-                        Made with ❤️ for the Kingdom
+                        © 2026 Modern Acts Church Cabangan
                     </p>
                 </div>
             </div>
 
-            {/* CSS Animations */}
+            {/* Mobile responsive */}
             <style>{`
-                @keyframes slideUp {
-                    from { opacity: 0; transform: translateY(30px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes pulse {
-                    0%, 100% { opacity: 0.5; }
-                    50% { opacity: 1; }
-                }
-                @keyframes shake {
-                    0%, 100% { transform: translateX(0); }
-                    25% { transform: translateX(-5px); }
-                    75% { transform: translateX(5px); }
+                @media (max-width: 900px) {
+                    .login-page {
+                        flex-direction: column-reverse !important;
+                    }
+                    .login-page > div:first-child {
+                        display: none !important;
+                    }
+                    .login-page > div:last-child {
+                        width: 100% !important;
+                        min-width: auto !important;
+                        border-left: none !important;
+                        min-height: 100vh;
+                    }
                 }
             `}</style>
         </div>
