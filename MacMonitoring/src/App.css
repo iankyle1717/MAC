@@ -755,7 +755,7 @@ body { background: var(--bg-base); color: var(--text-primary); min-height: 100vh
 .fade-up-3 { animation-delay: 0.15s; }
 .fade-up-4 { animation-delay: 0.20s; }
 
-.attendance-controls {
+/* .attendance-controls {
     display: flex;
     gap: 12px;
     margin: 20px 0;
@@ -803,7 +803,7 @@ body { background: var(--bg-base); color: var(--text-primary); min-height: 100vh
     text-transform: uppercase;
     opacity: 0.7;
 }
-
+ 
 .status-present {
     color: #16a34a;
     font-weight: 700;
@@ -830,4 +830,4 @@ body { background: var(--bg-base); color: var(--text-primary); min-height: 100vh
     border-radius: 10px;
     border: none;
     cursor: pointer;
-}
+} */
