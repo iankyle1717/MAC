@@ -1,13 +1,31 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
+import Swal from "sweetalert2";
 import * as XLSX from "xlsx-js-style";
 
+const tribes = [
+    "DANALI",
+    "REUBEN",
+    "ASHER",
+    "EPHRAIM",
+    "MANASSEH",
+    "JOSEPH",
+    "GAD",
+    "EZRA"
+];
+
 function Tithes() {
+    const navigate = useNavigate();
     const [leaders, setLeaders] = useState([]);
     const [records, setRecords] = useState([]);
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
+
+    // Modal states
+    const [showRecordModal, setShowRecordModal] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
 
     // Form states
     const [searchName, setSearchName] = useState("");
@@ -20,8 +38,8 @@ function Tithes() {
     const [filterTribe, setFilterTribe] = useState("ALL");
     const [filterMonth, setFilterMonth] = useState("ALL");
 
-    // Tab state: "records" | "monthly"
-    const [activeTab, setActiveTab] = useState("records");
+    // Tab state: "records" | "monthly" — DEFAULT TO "monthly"
+    const [activeTab, setActiveTab] = useState("monthly");
 
     const searchRef = useRef(null);
 
@@ -71,32 +89,24 @@ function Tithes() {
         setFetching(false);
     };
 
-    // Smart search with suggestions
-    const getSuggestions = () => {
-        if (!searchName.trim()) return [];
-        const term = searchName.toLowerCase();
-        return leaders
-            .filter(l => 
-                l.firstname.toLowerCase().includes(term) || 
-                l.lastname.toLowerCase().includes(term) ||
-                `${l.firstname} ${l.lastname}`.toLowerCase().includes(term)
-            )
-            .filter(l => filterTribe === "ALL" || l.tribe === filterTribe)
-            .slice(0, 5);
-    };
-
-    const suggestions = getSuggestions();
-
     const handleSelectLeader = (leader) => {
         setSelectedLeader(leader);
         setSearchName(`${leader.firstname} ${leader.lastname}`);
         setShowSuggestions(false);
     };
 
-    const handleSubmit = async (e) => {
+    // FIXED: Accept submitData as an object directly, not from state
+    const handleSubmit = async (e, submitData = null) => {
         e.preventDefault();
-        if (!selectedLeader || !amount) {
-            alert("Please select a person and enter the amount.");
+
+        const dataToSubmit = submitData || {
+            selectedLeader,
+            amount,
+            date
+        };
+
+        if (!dataToSubmit.selectedLeader || !dataToSubmit.amount) {
+            Swal.fire({ icon: "warning", title: "Incomplete", text: "Please select a person and enter the amount." });
             return;
         }
 
@@ -104,19 +114,20 @@ function Tithes() {
         const { error } = await supabase
             .from("tblTithes")
             .insert([{
-                leader_id: selectedLeader.id,
-                amount: parseFloat(amount),
-                date
+                leader_id: dataToSubmit.selectedLeader.id,
+                amount: parseFloat(dataToSubmit.amount),
+                date: dataToSubmit.date
             }]);
 
         if (error) {
-            alert("Failed to record tithe. Please try again.");
+            Swal.fire({ icon: "error", title: "Failed", text: "Failed to record tithe. Please try again." });
             console.error(error);
         } else {
-            alert("Tithe recorded successfully!");
+            Swal.fire({ icon: "success", title: "Success", text: "Tithe recorded successfully!", timer: 1500, showConfirmButton: false });
             setAmount("");
             setSearchName("");
             setSelectedLeader(null);
+            setShowRecordModal(false);
             fetchRecords();
         }
         setLoading(false);
@@ -190,7 +201,7 @@ function Tithes() {
     };
 
     const monthOptions = getMonthOptions();
-    const tribes = [...new Set(leaders.map(l => l.tribe))].sort();
+    const uniqueTribes = [...new Set(leaders.map(l => l.tribe))].sort();
     const todayRatio = getTodayTithersRatio();
     const monthlySummary = getMonthlySummary();
 
@@ -200,14 +211,6 @@ function Tithes() {
         const d = new Date(dateStr + "T00:00:00");
         if (isNaN(d.getTime())) return dateStr;
         return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    };
-
-    // Format month-year for monthly summary
-    const formatMonthYear = (dateStr) => {
-        if (!dateStr) return "";
-        const d = new Date(dateStr + "T00:00:00");
-        if (isNaN(d.getTime())) return dateStr;
-        return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
     };
 
     // Get display month for monthly summary header
@@ -222,7 +225,6 @@ function Tithes() {
     const exportToExcel = () => {
         const wb = XLSX.utils.book_new();
 
-        // Define styles
         const goldHeader = {
             fill: { fgColor: { rgb: "C9A45C" }, patternType: "solid" },
             font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
@@ -306,20 +308,14 @@ function Tithes() {
         };
 
         if (activeTab === "monthly") {
-            // MONTHLY SUMMARY EXPORT
             const wsData = [];
-
-            // Church Header
             wsData.push(["ACTS CHURCH CABANGAN"]);
             wsData.push(["Tithes Monthly Summary Report"]);
             wsData.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
             wsData.push([`Period: ${getDisplayMonth()} | Tribe: ${filterTribe === "ALL" ? "All Tribes" : filterTribe}`]);
             wsData.push([]);
-
-            // Column Headers
             wsData.push(["No.", "Name", "Tribe", "Type", "Ministry", "Total Amount", "Tithes Count"]);
 
-            // Data rows
             let grandTotal = 0;
             let grandCount = 0;
 
@@ -337,25 +333,14 @@ function Tithes() {
                 grandCount += item.count;
             });
 
-            // Total row
             wsData.push([]);
             wsData.push(["", "", "", "", "GRAND TOTAL", grandTotal, grandCount]);
 
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-            // Set column widths
             ws["!cols"] = [
-                { wch: 6 },   // No.
-                { wch: 25 },  // Name
-                { wch: 15 },  // Tribe
-                { wch: 15 },  // Type
-                { wch: 18 },  // Ministry
-                { wch: 15 },  // Total Amount
-                { wch: 14 }   // Tithes Count
+                { wch: 6 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 14 }
             ];
 
-            // Apply styles
-            // Title rows (0-3)
             for (let r = 0; r <= 3; r++) {
                 const cell = XLSX.utils.encode_cell({ r, c: 0 });
                 if (ws[cell]) {
@@ -365,21 +350,18 @@ function Tithes() {
                 }
             }
 
-            // Header row (5)
             for (let c = 0; c <= 6; c++) {
                 const cell = XLSX.utils.encode_cell({ r: 5, c });
                 if (ws[cell]) ws[cell].s = goldHeader;
             }
 
-            // Data rows
             monthlySummary.forEach((_, index) => {
                 const rowNum = 6 + index;
                 const isAlt = index % 2 === 1;
-
                 for (let c = 0; c <= 6; c++) {
                     const cell = XLSX.utils.encode_cell({ r: rowNum, c });
                     if (ws[cell]) {
-                        if (c === 5) { // Amount column
+                        if (c === 5) {
                             ws[cell].s = isAlt ? amountAltStyle : amountStyle;
                             ws[cell].z = '"P"#,##0.00';
                         } else {
@@ -389,7 +371,6 @@ function Tithes() {
                 }
             });
 
-            // Total row
             const totalRow = 6 + monthlySummary.length + 1;
             for (let c = 0; c <= 6; c++) {
                 const cell = XLSX.utils.encode_cell({ r: totalRow, c });
@@ -400,22 +381,15 @@ function Tithes() {
             }
 
             XLSX.utils.book_append_sheet(wb, ws, "Monthly Summary");
-
         } else {
-            // DETAILED RECORDS EXPORT
             const wsData = [];
-
-            // Church Header
             wsData.push(["ACTS CHURCH CABANGAN"]);
             wsData.push(["Tithes Records Report"]);
             wsData.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
             wsData.push([`Period: ${filterMonth === "ALL" ? "All Months" : getDisplayMonth()} | Tribe: ${filterTribe === "ALL" ? "All Tribes" : filterTribe}`]);
             wsData.push([]);
-
-            // Column Headers
             wsData.push(["No.", "Date", "Name", "Tribe", "Type", "Ministry", "Amount"]);
 
-            // Data rows
             let grandTotal = 0;
 
             filteredRecords.forEach((record, index) => {
@@ -431,25 +405,14 @@ function Tithes() {
                 grandTotal += Number(record.amount);
             });
 
-            // Total row
             wsData.push([]);
             wsData.push(["", "", "", "", "", "GRAND TOTAL", grandTotal]);
 
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-            // Set column widths
             ws["!cols"] = [
-                { wch: 6 },   // No.
-                { wch: 20 },  // Date
-                { wch: 25 },  // Name
-                { wch: 15 },  // Tribe
-                { wch: 15 },  // Type
-                { wch: 18 },  // Ministry
-                { wch: 15 }   // Amount
+                { wch: 6 }, { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 15 }
             ];
 
-            // Apply styles
-            // Title rows (0-3)
             for (let r = 0; r <= 3; r++) {
                 const cell = XLSX.utils.encode_cell({ r, c: 0 });
                 if (ws[cell]) {
@@ -459,21 +422,18 @@ function Tithes() {
                 }
             }
 
-            // Header row (5)
             for (let c = 0; c <= 6; c++) {
                 const cell = XLSX.utils.encode_cell({ r: 5, c });
                 if (ws[cell]) ws[cell].s = goldHeader;
             }
 
-            // Data rows
             filteredRecords.forEach((_, index) => {
                 const rowNum = 6 + index;
                 const isAlt = index % 2 === 1;
-
                 for (let c = 0; c <= 6; c++) {
                     const cell = XLSX.utils.encode_cell({ r: rowNum, c });
                     if (ws[cell]) {
-                        if (c === 6) { // Amount column
+                        if (c === 6) {
                             ws[cell].s = isAlt ? amountAltStyle : amountStyle;
                             ws[cell].z = '"P"#,##0.00';
                         } else {
@@ -483,7 +443,6 @@ function Tithes() {
                 }
             });
 
-            // Total row
             const totalRow = 6 + filteredRecords.length + 1;
             for (let c = 0; c <= 6; c++) {
                 const cell = XLSX.utils.encode_cell({ r: totalRow, c });
@@ -496,137 +455,147 @@ function Tithes() {
             XLSX.utils.book_append_sheet(wb, ws, "Tithes Records");
         }
 
-        // Save file
         const filename = activeTab === "monthly" 
             ? `ACTS_Tithes_Monthly_${filterMonth === "ALL" ? "All" : filterMonth}.xlsx`
             : `ACTS_Tithes_Records_${filterMonth === "ALL" ? "All" : filterMonth}.xlsx`;
 
         XLSX.writeFile(wb, filename);
+        setShowExportModal(false);
     };
 
-    return (
-        <div className="layout">
-            <Sidebar />
-            <div className="content">
-                <h1>Tithes Recording</h1>
-                <p style={{ opacity: 0.7, marginBottom: "20px" }}>
-                    Welcome! Record tithes and track participation.
-                </p>
+    // Move suggestions to useMemo so it doesn't recreate on every render
+    const suggestions = useMemo(() => {
+        if (!searchName.trim()) return [];
+        const term = searchName.toLowerCase();
+        return leaders
+            .filter(l => 
+                l.firstname.toLowerCase().includes(term) || 
+                l.lastname.toLowerCase().includes(term) ||
+                `${l.firstname} ${l.lastname}`.toLowerCase().includes(term)
+            )
+            .filter(l => filterTribe === "ALL" || l.tribe === filterTribe)
+            .slice(0, 5);
+    }, [searchName, leaders, filterTribe]);
 
-                {/* STATS CARDS */}
-                <div style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
-                    gap: "15px",
-                    marginBottom: "25px"
-                }}>
-                    <div className="record-card" style={{ background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)", color: "#fff" }}>
-                        <h3 style={{ color: "rgba(255,255,255,0.9)" }}>Today's Collection</h3>
-                        <h1 style={{ fontSize: "32px" }}>P{getTodayTotal().toLocaleString()}</h1>
-                        <p style={{ fontSize: "13px", opacity: 0.9 }}>
-                            {getTodayCount()} people gave today
-                        </p>
+    // Handle clicks outside dropdown
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchRef.current && !searchRef.current.contains(e.target)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // Record Modal Component - FIXED
+    const RecordModal = () => {
+        // Local state for modal to prevent parent re-renders from clearing input
+        const [localSearch, setLocalSearch] = useState(searchName);
+        const [localAmount, setLocalAmount] = useState(amount);
+        const [localDate, setLocalDate] = useState(date);
+        const [localSelected, setLocalSelected] = useState(selectedLeader);
+        const [localShowSuggestions, setLocalShowSuggestions] = useState(false);
+        const modalSearchRef = useRef(null);
+
+        // Sync with parent when modal opens
+        useEffect(() => {
+            setLocalSearch(searchName);
+            setLocalAmount(amount);
+            setLocalDate(date);
+            setLocalSelected(selectedLeader);
+        }, [showRecordModal]);
+
+        // Local suggestions
+        const localSuggestions = useMemo(() => {
+            if (!localSearch.trim()) return [];
+            const term = localSearch.toLowerCase();
+            return leaders
+                .filter(l => 
+                    l.firstname.toLowerCase().includes(term) || 
+                    l.lastname.toLowerCase().includes(term) ||
+                    `${l.firstname} ${l.lastname}`.toLowerCase().includes(term)
+                )
+                .filter(l => filterTribe === "ALL" || l.tribe === filterTribe)
+                .slice(0, 5);
+        }, [localSearch, leaders, filterTribe]);
+
+        const handleLocalSelect = (leader) => {
+            setLocalSelected(leader);
+            setLocalSearch(`${leader.firstname} ${leader.lastname}`);
+            setLocalShowSuggestions(false);
+        };
+
+        // FIXED: Pass local data directly to handleSubmit instead of relying on setState + setTimeout
+        const handleLocalSubmit = (e) => {
+            e.preventDefault();
+            if (!localSelected || !localAmount) {
+                Swal.fire({ icon: "warning", title: "Incomplete", text: "Please select a person and enter the amount." });
+                return;
+            }
+
+            // Pass the local values directly — no setState + setTimeout hack needed
+            handleSubmit(e, {
+                selectedLeader: localSelected,
+                amount: localAmount,
+                date: localDate
+            });
+        };
+
+        // Handle click outside for local dropdown
+        useEffect(() => {
+            const handleClickOutside = (e) => {
+                if (modalSearchRef.current && !modalSearchRef.current.contains(e.target)) {
+                    setLocalShowSuggestions(false);
+                }
+            };
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+        }, []);
+
+        return (
+            <div className="modal-overlay" onClick={(e) => {
+                if (e.target === e.currentTarget) setShowRecordModal(false);
+            }}>
+                <div className="modal-box">
+                    <button className="modal-close" onClick={() => setShowRecordModal(false)}>✕</button>
+                    <div className="modal-header">
+                        <h2>Record New Tithe</h2>
+                        <p>Enter tithe details below</p>
                     </div>
-
-                    <div className="record-card">
-                        <h3>Today's Tithers</h3>
-                        <h1>{todayRatio.todayGivers} <span style={{ fontSize: "18px", color: "#9ca3af" }}>/ {todayRatio.totalLeaders}</span></h1>
-                        <div style={{ marginTop: "8px", background: "#e5e7eb", borderRadius: "8px", height: "8px", overflow: "hidden" }}>
-                            <div style={{
-                                width: `${todayRatio.totalLeaders > 0 ? (todayRatio.todayGivers / todayRatio.totalLeaders) * 100 : 0}%`,
-                                height: "100%",
-                                background: todayRatio.todayGivers >= todayRatio.totalLeaders * 0.8 ? "#16a34a" : "#f59e0b",
-                                borderRadius: "8px",
-                                transition: "width 0.5s"
-                            }} />
-                        </div>
-                        <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
-                            {todayRatio.totalLeaders > 0 ? Math.round((todayRatio.todayGivers / todayRatio.totalLeaders) * 100) : 0}% of leaders gave today
-                        </p>
-                    </div>
-
-                    <div className="record-card" style={{ background: "#ecfdf5" }}>
-                        <h3>Total Records</h3>
-                        <h1 style={{ color: "#16a34a" }}>{records.length}</h1>
-                    </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "30px" }}>
-                    {/* LEFT: FORM */}
-                    <div>
-                        <h2 style={{ marginBottom: "15px" }}>Record New Tithe</h2>
-                        <form className="leader-form" onSubmit={handleSubmit}>
-                            <div style={{ position: "relative" }} ref={searchRef}>
+                    <div className="modal-body">
+                        <form onSubmit={handleLocalSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                            <div style={{ position: "relative" }} ref={modalSearchRef}>
+                                <label className="modal-label">Search Person *</label>
                                 <input
                                     type="text"
                                     placeholder="Type a name..."
-                                    value={searchName}
+                                    value={localSearch}
                                     onChange={(e) => {
-                                        setSearchName(e.target.value);
-                                        setShowSuggestions(true);
-                                        setSelectedLeader(null);
+                                        setLocalSearch(e.target.value);
+                                        setLocalShowSuggestions(true);
+                                        setLocalSelected(null);
                                     }}
-                                    onFocus={() => setShowSuggestions(true)}
-                                    style={{
-                                        width: "100%",
-                                        padding: "14px 16px",
-                                        borderRadius: "12px",
-                                        border: "2px solid #e5e7eb",
-                                        fontSize: "15px",
-                                        outline: "none",
-                                        boxSizing: "border-box"
-                                    }}
+                                    onFocus={() => setLocalShowSuggestions(true)}
+                                    className="modal-input"
+                                    autoComplete="off"
                                 />
-
-                                {showSuggestions && suggestions.length > 0 && (
-                                    <div style={{
-                                        position: "absolute",
-                                        top: "100%",
-                                        left: 0,
-                                        right: 0,
-                                        background: "#fff",
-                                        borderRadius: "12px",
-                                        boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
-                                        marginTop: "6px",
-                                        zIndex: 100,
-                                        overflow: "hidden",
-                                        border: "1px solid #e5e7eb"
-                                    }}>
-                                        {suggestions.map((leader) => (
+                                {localShowSuggestions && localSuggestions.length > 0 && (
+                                    <div className="suggestions-dropdown">
+                                        {localSuggestions.map((leader) => (
                                             <div
                                                 key={leader.id}
-                                                onClick={() => handleSelectLeader(leader)}
-                                                style={{
-                                                    padding: "12px 16px",
-                                                    cursor: "pointer",
-                                                    borderBottom: "1px solid #f3f4f6",
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    gap: "10px",
-                                                    transition: "background 0.2s"
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                                                onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
+                                                onClick={() => handleLocalSelect(leader)}
+                                                className="suggestion-item"
                                             >
-                                                <div style={{
-                                                    width: "36px",
-                                                    height: "36px",
-                                                    borderRadius: "50%",
-                                                    background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "center",
-                                                    color: "#fff",
-                                                    fontSize: "14px",
-                                                    fontWeight: "700"
-                                                }}>
+                                                <div className="avatar-xs">
                                                     {leader.firstname.charAt(0)}{leader.lastname.charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <div style={{ fontWeight: "600", fontSize: "14px" }}>
+                                                    <div style={{ fontWeight: "600", fontSize: "13px" }}>
                                                         {leader.firstname} {leader.lastname}
                                                     </div>
-                                                    <div style={{ fontSize: "12px", color: "#9ca3af" }}>
+                                                    <div style={{ fontSize: "11px", color: "#9ca3af" }}>
                                                         {leader.type} - {leader.tribe}
                                                     </div>
                                                 </div>
@@ -636,459 +605,243 @@ function Tithes() {
                                 )}
                             </div>
 
-                            {selectedLeader && (
-                                <div style={{
-                                    padding: "12px 16px",
-                                    borderRadius: "12px",
-                                    background: "#f0fdf4",
-                                    border: "1px solid #86efac",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "10px"
-                                }}>
-                                    <span style={{ fontSize: "20px" }}>OK</span>
+                            {localSelected && (
+                                <div className="selected-leader-pill">
+                                    <span style={{ fontSize: "16px" }}>✓</span>
                                     <div>
-                                        <div style={{ fontWeight: "600", color: "#166534" }}>
-                                            {selectedLeader.firstname} {selectedLeader.lastname}
+                                        <div style={{ fontWeight: "600", color: "#166534", fontSize: "13px" }}>
+                                            {localSelected.firstname} {localSelected.lastname}
                                         </div>
-                                        <div style={{ fontSize: "12px", color: "#16a34a" }}>
+                                        <div style={{ fontSize: "11px", color: "#16a34a" }}>
                                             Ready to record tithe
                                         </div>
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setSelectedLeader(null);
-                                            setSearchName("");
-                                        }}
-                                        style={{
-                                            marginLeft: "auto",
-                                            background: "none",
-                                            border: "none",
-                                            color: "#16a34a",
-                                            cursor: "pointer",
-                                            fontSize: "18px"
-                                        }}
+                                        onClick={() => { setLocalSelected(null); setLocalSearch(""); }}
+                                        className="clear-btn"
                                     >
-                                        x
+                                        ✕
                                     </button>
                                 </div>
                             )}
 
-                            <input
-                                type="number"
-                                placeholder="Amount (P)"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                min="0"
-                                step="0.01"
-                            />
+                            <div>
+                                <label className="modal-label">Amount (P) *</label>
+                                <input
+                                    type="number"
+                                    placeholder="0.00"
+                                    value={localAmount}
+                                    onChange={(e) => setLocalAmount(e.target.value)}
+                                    min="0"
+                                    step="0.01"
+                                    className="modal-input"
+                                />
+                            </div>
 
-                            <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                            />
+                            <div>
+                                <label className="modal-label">Date *</label>
+                                <input
+                                    type="date"
+                                    value={localDate}
+                                    onChange={(e) => setLocalDate(e.target.value)}
+                                    className="modal-input"
+                                />
+                            </div>
 
-                            <button type="submit" disabled={loading || !selectedLeader}>
+                            <button
+                                type="submit"
+                                disabled={loading || !localSelected}
+                                className="modal-btn-record"
+                                style={{ marginTop: "4px" }}
+                            >
                                 {loading ? "Recording..." : "Record Tithe"}
                             </button>
                         </form>
-
-                       
-                    </div>
-
-                    {/* RIGHT: RECORDS CARDS */}
-                    <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                            <h2 style={{ margin: 0 }}>
-                                Recent Records
-                                <span style={{
-                                    marginLeft: "10px",
-                                    padding: "4px 10px",
-                                    borderRadius: "12px",
-                                    background: "#dbeafe",
-                                    color: "#1e40af",
-                                    fontSize: "14px"
-                                }}>
-                                    {filteredRecords.length}
-                                </span>
-                            </h2>
-                        </div>
-
-                        <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
-                            <select
-                                value={filterTribe}
-                                onChange={(e) => setFilterTribe(e.target.value)}
-                                style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }}
-                            >
-                                <option value="ALL">All Tribes</option>
-                                {tribes.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                            <select
-                                value={filterMonth}
-                                onChange={(e) => setFilterMonth(e.target.value)}
-                                style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }}
-                            >
-                                <option value="ALL">All Months</option>
-                                {monthOptions.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-                            </select>
-                        </div>
-
-                        {fetching ? (
-                            <p>Loading records...</p>
-                        ) : filteredRecords.length === 0 ? (
-                            <p style={{ color: "#6b7280" }}>No tithes records yet.</p>
-                        ) : (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "400px", overflowY: "auto" }}>
-                                {filteredRecords.slice(0, 10).map((record) => (
-                                    <div
-                                        key={record.id}
-                                        style={{
-                                            padding: "14px 16px",
-                                            borderRadius: "12px",
-                                            background: "#f9fafb",
-                                            border: "1px solid #e5e7eb",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "12px"
-                                        }}
-                                    >
-                                        <div style={{
-                                            width: "40px",
-                                            height: "40px",
-                                            borderRadius: "50%",
-                                            background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            color: "#fff",
-                                            fontSize: "14px",
-                                            fontWeight: "700",
-                                            flexShrink: 0
-                                        }}>
-                                            {record.leader?.firstname?.charAt(0)}{record.leader?.lastname?.charAt(0)}
-                                        </div>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-                                                <span style={{ fontWeight: "600", fontSize: "14px" }}>
-                                                    {record.leader?.firstname} {record.leader?.lastname}
-                                                </span>
-                                                <span style={{
-                                                    padding: "2px 6px",
-                                                    borderRadius: "6px",
-                                                    background: "#dbeafe",
-                                                    color: "#1e40af",
-                                                    fontSize: "10px",
-                                                    fontWeight: "600"
-                                                }}>
-                                                    {record.leader?.tribe}
-                                                </span>
-                                            </div>
-                                            <div style={{ fontSize: "12px", color: "#9ca3af" }}>
-                                                {formatDate(record.date)} - {record.leader?.type}
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                            <div style={{ fontSize: "18px", fontWeight: "700", color: "#16a34a" }}>
-                                                P{Number(record.amount).toLocaleString()}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* TABS */}
-                <div style={{ marginTop: "40px", marginBottom: "20px" }}>
-                    <div style={{ display: "flex", gap: "4px", borderBottom: "2px solid #e5e7eb" }}>
-                        <button
-                            onClick={() => setActiveTab("records")}
-                            style={{
-                                padding: "12px 24px",
-                                border: "none",
-                                background: "none",
-                                fontSize: "15px",
-                                fontWeight: "600",
-                                cursor: "pointer",
-                                color: activeTab === "records" ? "#b8934a" : "#6b7280",
-                                borderBottom: activeTab === "records" ? "3px solid #b8934a" : "3px solid transparent",
-                                marginBottom: "-2px",
-                                transition: "all 0.2s"
-                            }}
-                        >
-                            All Records Table
-                        </button>
-                        <button
-                            onClick={() => setActiveTab("monthly")}
-                            style={{
-                                padding: "12px 24px",
-                                border: "none",
-                                background: "none",
-                                fontSize: "15px",
-                                fontWeight: "600",
-                                cursor: "pointer",
-                                color: activeTab === "monthly" ? "#b8934a" : "#6b7280",
-                                borderBottom: activeTab === "monthly" ? "3px solid #b8934a" : "3px solid transparent",
-                                marginBottom: "-2px",
-                                transition: "all 0.2s"
-                            }}
-                        >
-                            Monthly Summary
-                        </button>
-                    </div>
-                </div>
-
-                {/* EXPORT BUTTON */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                    <h2 style={{ margin: 0 }}>
-                        {activeTab === "records" ? "All Records" : `Monthly Summary - ${getDisplayMonth()}`}
-                        <span style={{
-                            marginLeft: "10px",
-                            padding: "4px 10px",
-                            borderRadius: "12px",
-                            background: "#dbeafe",
-                            color: "#1e40af",
-                            fontSize: "14px"
-                        }}>
-                            {activeTab === "records" ? filteredRecords.length : monthlySummary.length}
-                        </span>
-                    </h2>
-                    <button
-                        onClick={exportToExcel}
-                        style={{
-                            padding: "10px 20px",
-                            borderRadius: "10px",
-                            border: "none",
-                            background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
-                            color: "#fff",
-                            fontWeight: "700",
-                            fontSize: "14px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px"
-                        }}
-                    >
-                        Export to Excel
-                    </button>
-                </div>
-
-                {/* FILTERS FOR TABLE */}
-                <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
-                    <select
-                        value={filterTribe}
-                        onChange={(e) => setFilterTribe(e.target.value)}
-                        style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }}
-                    >
-                        <option value="ALL">All Tribes</option>
-                        {tribes.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <select
-                        value={filterMonth}
-                        onChange={(e) => setFilterMonth(e.target.value)}
-                        style={{ padding: "8px 12px", borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }}
-                    >
-                        <option value="ALL">All Months</option>
-                        {monthOptions.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
-                    </select>
-                </div>
-
-                {/* TABLE CONTENT */}
-                <div style={{
-                    borderRadius: "12px",
-                    border: "1px solid #e5e7eb",
-                    overflow: "hidden",
-                    background: "#fff",
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
-                }}>
-                    <div style={{ overflowX: "auto" }}>
-                        <table style={{
-                            width: "100%",
-                            borderCollapse: "collapse",
-                            fontSize: "14px"
-                        }}>
-                            <thead>
-                                <tr style={{
-                                    background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                    color: "#fff"
-                                }}>
-                                    {activeTab === "records" ? (
-                                        <>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Date</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Name</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tribe</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Type</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Ministry</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Amount</th>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Name</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tribe</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Type</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "left", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Ministry</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "right", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Amount</th>
-                                            <th style={{ padding: "14px 16px", textAlign: "center", fontWeight: "600", fontSize: "13px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tithes Count</th>
-                                        </>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {fetching ? (
-                                    <tr>
-                                        <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
-                                            Loading records...
-                                        </td>
-                                    </tr>
-                                ) : activeTab === "records" ? (
-                                    filteredRecords.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
-                                                No tithes records found.
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        filteredRecords.map((record, index) => {
-                                            const isEven = index % 2 === 0;
-                                            return (
-                                                <tr
-                                                    key={record.id}
-                                                    style={{
-                                                        background: isEven ? "#fff" : "#f9fafb",
-                                                        transition: "background 0.15s",
-                                                        borderBottom: "1px solid #f3f4f6"
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.background = "#f3f4f6"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.background = isEven ? "#fff" : "#f9fafb"}
-                                                >
-                                                    <td style={{ padding: "12px 16px", color: "#374151", fontWeight: "500", whiteSpace: "nowrap" }}>
-                                                        {formatDate(record.date)}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px" }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                                            <div style={{
-                                                                width: "32px",
-                                                                height: "32px",
-                                                                borderRadius: "50%",
-                                                                background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                                                display: "flex",
-                                                                alignItems: "center",
-                                                                justifyContent: "center",
-                                                                color: "#fff",
-                                                                fontSize: "12px",
-                                                                fontWeight: "700"
-                                                            }}>
-                                                                {record.leader?.firstname?.charAt(0)}{record.leader?.lastname?.charAt(0)}
-                                                            </div>
-                                                            <span style={{ fontWeight: "600", color: "#111827" }}>
-                                                                {record.leader?.firstname} {record.leader?.lastname}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px" }}>
-                                                        <span style={{
-                                                            padding: "4px 10px",
-                                                            borderRadius: "8px",
-                                                            background: "#dbeafe",
-                                                            color: "#1e40af",
-                                                            fontSize: "12px",
-                                                            fontWeight: "600"
-                                                        }}>
-                                                            {record.leader?.tribe}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", color: "#6b7280", fontSize: "13px" }}>
-                                                        {record.leader?.type}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", color: "#6b7280", fontSize: "13px" }}>
-                                                        {record.leader?.ministry}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: "700", color: "#16a34a", fontSize: "15px" }}>
-                                                        P{Number(record.amount).toLocaleString()}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )
-                                ) : (
-                                    monthlySummary.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
-                                                No records found for this period.
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        monthlySummary.map((item, index) => {
-                                            const isEven = index % 2 === 0;
-                                            return (
-                                                <tr
-                                                    key={item.leader?.id}
-                                                    style={{
-                                                        background: isEven ? "#fff" : "#f9fafb",
-                                                        transition: "background 0.15s",
-                                                        borderBottom: "1px solid #f3f4f6"
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.background = "#f3f4f6"}
-                                                    onMouseLeave={(e) => e.currentTarget.style.background = isEven ? "#fff" : "#f9fafb"}
-                                                >
-                                                    <td style={{ padding: "12px 16px" }}>
-                                                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                                            <div style={{
-                                                                width: "32px",
-                                                                height: "32px",
-                                                                borderRadius: "50%",
-                                                                background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
-                                                                display: "flex",
-                                                                alignItems: "center",
-                                                                justifyContent: "center",
-                                                                color: "#fff",
-                                                                fontSize: "12px",
-                                                                fontWeight: "700"
-                                                            }}>
-                                                                {item.leader?.firstname?.charAt(0)}{item.leader?.lastname?.charAt(0)}
-                                                            </div>
-                                                            <span style={{ fontWeight: "600", color: "#111827" }}>
-                                                                {item.leader?.firstname} {item.leader?.lastname}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px" }}>
-                                                        <span style={{
-                                                            padding: "4px 10px",
-                                                            borderRadius: "8px",
-                                                            background: "#dbeafe",
-                                                            color: "#1e40af",
-                                                            fontSize: "12px",
-                                                            fontWeight: "600"
-                                                        }}>
-                                                            {item.leader?.tribe}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", color: "#6b7280", fontSize: "13px" }}>
-                                                        {item.leader?.type}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", color: "#6b7280", fontSize: "13px" }}>
-                                                        {item.leader?.ministry}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: "700", color: "#16a34a", fontSize: "15px" }}>
-                                                        P{item.total.toLocaleString()}
-                                                    </td>
-                                                    <td style={{ padding: "12px 16px", textAlign: "center", fontWeight: "600", color: "#374151" }}>
-                                                        {item.count}
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )
-                                )}
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
+        );
+    };
+
+    // Export Modal Component
+    const ExportModal = () => (
+        <div className="modal-overlay">
+            <div className="modal-box">
+                <button className="modal-close" onClick={() => setShowExportModal(false)}>✕</button>
+                <div className="modal-header">
+                    <h2>Export Report</h2>
+                    <p>Download tithes data as Excel</p>
+                </div>
+                <div className="modal-body">
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div>
+                            <label className="modal-label">Export Tab</label>
+                            <div style={{ padding: "10px 14px", background: "#f3f4f6", borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+                                {activeTab === "monthly" ? "Monthly Summary" : "Detailed Records"}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="modal-label">Period</label>
+                            <div style={{ padding: "10px 14px", background: "#f3f4f6", borderRadius: "8px", fontSize: "13px", fontWeight: "600", color: "#374151" }}>
+                                {filterMonth === "ALL" ? "All Months" : getDisplayMonth()} | {filterTribe === "ALL" ? "All Tribes" : filterTribe}
+                            </div>
+                        </div>
+                        <button
+                            onClick={exportToExcel}
+                            className="modal-btn-export"
+                            style={{ marginTop: "8px" }}
+                        >
+                            <span>Export to Excel</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="tithes-layout">
+            <Sidebar />
+            <div className="tithes-content">
+                {/* Header */}
+                <div className="tithes-topbar">
+                    <div>
+                        <h1 className="tithes-heading">Tithes Recording</h1>
+                        <span className="tithes-subtitle">Welcome! Record tithes and track participation.</span>
+                    </div>
+                </div>
+
+                {/* Stats */}
+                <div className="stats-grid">
+                    <div className="stat-card stat-card-gold">
+                        <h3>Today\'s Collection</h3>
+                        <h1>P{getTodayTotal().toLocaleString()}</h1>
+                        <p>{getTodayCount()} people gave today</p>
+                    </div>
+                    <div className="stat-card">
+                        <h3>Today\'s Tithers</h3>
+                        <h1>{todayRatio.todayGivers} <span>/ {todayRatio.totalLeaders}</span></h1>
+                        <div className="progress-bar">
+                            <div className="progress-fill" style={{
+                                width: `${todayRatio.totalLeaders > 0 ? (todayRatio.todayGivers / todayRatio.totalLeaders) * 100 : 0}%`
+                            }} />
+                        </div>
+                        <p>{todayRatio.totalLeaders > 0 ? Math.round((todayRatio.todayGivers / todayRatio.totalLeaders) * 100) : 0}% of leaders gave today</p>
+                    </div>
+                    <div className="stat-card stat-card-green">
+                        <h3>Total Records</h3>
+                        <h1>{records.length}</h1>
+                    </div>
+                </div>
+
+                {/* Toolbar */}
+                <div className="tithes-toolbar">
+                    <div className="toolbar-group">
+                        <select className="input-sm" value={filterTribe} onChange={(e) => setFilterTribe(e.target.value)}>
+                            <option value="ALL">All Tribes</option>
+                            {uniqueTribes.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <select className="input-sm" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
+                            <option value="ALL">All Months</option>
+                            {monthOptions.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                        </select>
+                    </div>
+                    <div className="toolbar-group">
+                        <button className="btn-sm btn-outline" onClick={() => setShowExportModal(true)}>
+                            Export
+                        </button>
+                        <button className="btn-sm btn-primary" onClick={() => setShowRecordModal(true)}>
+                            Record Tithe
+                        </button>
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="tithes-tabs">
+                       <button className={activeTab === "monthly" ? "tab active" : "tab"} onClick={() => setActiveTab("monthly")}>
+                        Monthly Summary
+                    </button>
+                    <button className={activeTab === "records" ? "tab active" : "tab"} onClick={() => setActiveTab("records")}>
+                        All Records
+                    </button>
+                </div>
+
+                {/* Table */}
+                <div className="tithes-table-container">
+                    <div className="flex-table-header">
+                        {activeTab === "records" ? (
+                            <>
+                                <div className="flex-col flex-col-date">Date</div>
+                                <div className="flex-col flex-col-name">Name</div>
+                                <div className="flex-col flex-col-tribe">Tribe</div>
+                                <div className="flex-col flex-col-type">Type</div>
+                                <div className="flex-col flex-col-ministry">Ministry</div>
+                                <div className="flex-col flex-col-amount">Amount</div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex-col flex-col-name">Name</div>
+                                <div className="flex-col flex-col-tribe">Tribe</div>
+                                <div className="flex-col flex-col-type">Type</div>
+                                <div className="flex-col flex-col-ministry">Ministry</div>
+                                <div className="flex-col flex-col-amount">Total</div>
+                                <div className="flex-col flex-col-count">Count</div>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex-table-body">
+                        {fetching ? (
+                            <div className="flex-row empty-row">Loading records...</div>
+                        ) : activeTab === "records" ? (
+                            filteredRecords.length === 0 ? (
+                                <div className="flex-row empty-row">No tithes records found.</div>
+                            ) : (
+                                filteredRecords.map((record) => (
+                                    <div className="flex-row" key={record.id}>
+                                        <div className="flex-col flex-col-date">{formatDate(record.date)}</div>
+                                        <div className="flex-col flex-col-name">
+                                            <div className="avatar-xs">{record.leader?.firstname?.charAt(0)}{record.leader?.lastname?.charAt(0)}</div>
+                                            <span className="name-text">{record.leader?.firstname} {record.leader?.lastname}</span>
+                                        </div>
+                                        <div className="flex-col flex-col-tribe">
+                                            <span className="badge-sm">{record.leader?.tribe}</span>
+                                        </div>
+                                        <div className="flex-col flex-col-type">{record.leader?.type}</div>
+                                        <div className="flex-col flex-col-ministry">{record.leader?.ministry}</div>
+                                        <div className="flex-col flex-col-amount">P{Number(record.amount).toLocaleString()}</div>
+                                    </div>
+                                ))
+                            )
+                        ) : (
+                            monthlySummary.length === 0 ? (
+                                <div className="flex-row empty-row">No records found for this period.</div>
+                            ) : (
+                                monthlySummary.map((item) => (
+                                    <div className="flex-row" key={item.leader?.id}>
+                                        <div className="flex-col flex-col-name">
+                                            <div className="avatar-xs">{item.leader?.firstname?.charAt(0)}{item.leader?.lastname?.charAt(0)}</div>
+                                            <span className="name-text">{item.leader?.firstname} {item.leader?.lastname}</span>
+                                        </div>
+                                        <div className="flex-col flex-col-tribe">
+                                            <span className="badge-sm">{item.leader?.tribe}</span>
+                                        </div>
+                                        <div className="flex-col flex-col-type">{item.leader?.type}</div>
+                                        <div className="flex-col flex-col-ministry">{item.leader?.ministry}</div>
+                                        <div className="flex-col flex-col-amount">P{item.total.toLocaleString()}</div>
+                                        <div className="flex-col flex-col-count">{item.count}</div>
+                                    </div>
+                                ))
+                            )
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Modals */}
+            {showRecordModal && <RecordModal />}
+            {showExportModal && <ExportModal />}
         </div>
     );
 }

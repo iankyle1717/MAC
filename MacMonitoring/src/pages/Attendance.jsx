@@ -1,31 +1,61 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
 import Swal from "sweetalert2";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
+
+const tribes = [
+    "DANALI",
+    "REUBEN",
+    "ASHER",
+    "EPHRAIM",
+    "MANASSEH",
+    "JOSEPH",
+    "GAD",
+    "EZRA"
+];
 
 function Attendance() {
+    const navigate = useNavigate();
     const [leaders, setLeaders] = useState([]);
-    const [newcomers, setNewcomers] = useState([]);
     const [attendanceMap, setAttendanceMap] = useState({});
-    const [newcomerAttendanceMap, setNewcomerAttendanceMap] = useState({});
-    const [activeTab, setActiveTab] = useState("members");
     const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
     const [selectedTribe, setSelectedTribe] = useState("");
     const [sortOrder, setSortOrder] = useState("asc");
     const [loading, setLoading] = useState(false);
     const [exportMonth, setExportMonth] = useState("");
+    const [exportDate, setExportDate] = useState("");  // <-- ADDED: was missing!
+    const [serviceType, setServiceType] = useState("");
+
+    // Modal states
+    const [showModal, setShowModal] = useState(true);
+    const [modalTab, setModalTab] = useState("record"); // "record" | "export"
+    const [isRecording, setIsRecording] = useState(false);
+
+    // Stats
+    const [stats, setStats] = useState({ total: 0, present: 0, absent: 0 });
 
     useEffect(() => {
         fetchLeaders();
-        fetchNewcomers();
     }, []);
 
     useEffect(() => {
-        if (date) fetchAttendance(date);
-    }, [date]);
+        if (isRecording && date) {
+            fetchAttendance(date);
+        }
+    }, [date, isRecording]);
 
-    /* ========================= FETCH LEADERS ========================= */
+    useEffect(() => {
+        const present = Object.values(attendanceMap).filter(s => s === "Present").length;
+        const absent = Object.values(attendanceMap).filter(s => s === "Absent" || !s).length;
+        setStats({
+            total: sorted.length,
+            present,
+            absent
+        });
+    }, [attendanceMap, selectedTribe, sortOrder]);
+
     const fetchLeaders = async () => {
         const { data } = await supabase
             .from("tblMonitoring")
@@ -34,21 +64,12 @@ function Attendance() {
         setLeaders(data || []);
     };
 
-    /* ========================= FETCH NEWCOMERS ========================= */
-    const fetchNewcomers = async () => {
-        const { data } = await supabase
-            .from("tblNewMembers")
-            .select("*")
-            .order("firstname", { ascending: true });
-        setNewcomers(data || []);
-    };
-
-    /* ========================= FETCH ATTENDANCE ========================= */
     const fetchAttendance = async (selectedDate) => {
         const { data } = await supabase
             .from("tblAttendance")
             .select("*")
             .eq("service_date", selectedDate);
+
         const map = {};
         data?.forEach((item) => {
             map[item.leader_id] = item.status;
@@ -56,709 +77,900 @@ function Attendance() {
         setAttendanceMap(map);
     };
 
-    /* ========================= TOGGLE MEMBER ========================= */
+    // Auto-detect service type from date
+    const getAutoServiceType = (d) => {
+        const day = new Date(d).getDay();
+        const formattedDate = new Date(d).toLocaleDateString("en-US", {
+            month: "long", day: "numeric", year: "numeric",
+        });
+        if (day === 0) return `SUNDAY ${formattedDate}`;
+        if (day === 4) return `PRAYERWORKS ${formattedDate}`;
+        if (day === 5) return `FRIDAY YG ${formattedDate}`;
+        return `SERVICE ${formattedDate}`;
+    };
+
+    const handleDateChange = (e) => {
+        const newDate = e.target.value;
+        setDate(newDate);
+        setServiceType(getAutoServiceType(newDate));
+    };
+
+    const startRecording = () => {
+        if (!date) {
+            Swal.fire({ icon: "warning", title: "Date Required", text: "Please select a date.", confirmButtonColor: "#c9a45c" });
+            return;
+        }
+        if (!serviceType.trim()) {
+            Swal.fire({ icon: "warning", title: "Service Type Required", text: "Please enter the service type.", confirmButtonColor: "#c9a45c" });
+            return;
+        }
+        setIsRecording(true);
+        setShowModal(false);
+    };
+
     const toggleAttendance = (leaderId) => {
         const current = attendanceMap[leaderId];
         const newStatus = current === "Present" ? "Absent" : "Present";
         setAttendanceMap((prev) => ({ ...prev, [leaderId]: newStatus }));
     };
 
-    /* ========================= TOGGLE NEWCOMER ========================= */
-    const toggleNewcomerAttendance = (memberId) => {
-        const current = newcomerAttendanceMap[memberId];
-        const newStatus = current === "Present" ? "Absent" : "Present";
-        setNewcomerAttendanceMap((prev) => ({ ...prev, [memberId]: newStatus }));
-    };
-
-    /* ========================= SERVICE LABEL ========================= */
-    const getServiceLabel = () => {
-        const selectedDay = new Date(date).getDay();
-        const formattedDate = new Date(date).toLocaleDateString("en-US", {
-            month: "long",
-            day: "numeric",
-            year: "numeric",
-        });
-        if (selectedDay === 4) return `PRAYERWORKS ${formattedDate}`;
-        if (selectedDay === 5) return `FRIDAY YG ${formattedDate}`;
-        if (selectedDay === 0) return `SUNDAY ${formattedDate}`;
-        return null;
-    };
-
-    /* ========================= SAVE ATTENDANCE ========================= */
     const handleSave = async () => {
-        const day = new Date(date).getDay();
-        if (day !== 0 && day !== 4 && day !== 5) {
-            Swal.fire({
-                icon: "warning",
-                title: "No Service Day",
-                text: "Today is not a church service schedule.",
-                confirmButtonColor: "#c9a45c",
-            });
+        if (!serviceType.trim()) {
+            Swal.fire({ icon: "warning", title: "Service Type Required", text: "Please enter the service type.", confirmButtonColor: "#c9a45c" });
             return;
         }
+        if (!date) {
+            Swal.fire({ icon: "warning", title: "Date Required", text: "Please select a date.", confirmButtonColor: "#c9a45c" });
+            return;
+        }
+
         setLoading(true);
-        const remarks = getServiceLabel();
-        const records = leaders.map((leader) => ({
+
+        // Delete existing records for this date first
+        const { error: deleteError } = await supabase
+            .from("tblAttendance")
+            .delete()
+            .eq("service_date", date);
+
+        if (deleteError) {
+            setLoading(false);
+            Swal.fire({ icon: "error", title: "Save Failed", text: deleteError.message });
+            return;
+        }
+
+        // Insert fresh records
+        const records = sorted.map((leader) => ({
             leader_id: leader.id,
             service_date: date,
             status: attendanceMap[leader.id] || "Absent",
-            remarks,
+            remarks: serviceType,
         }));
-        const { error } = await supabase.from("tblAttendance").upsert(records);
+
+        const { error: insertError } = await supabase
+            .from("tblAttendance")
+            .insert(records);
+
         setLoading(false);
-        if (error) {
-            Swal.fire({
-                icon: "error",
-                title: "Save Failed",
-                text: "Attendance could not be saved.",
-            });
+
+        if (insertError) {
+            console.error("Save error:", insertError);
+            Swal.fire({ icon: "error", title: "Save Failed", text: insertError.message || "Attendance could not be saved." });
         } else {
             Swal.fire({
                 icon: "success",
                 title: "Attendance Saved",
-                text: remarks,
-                timer: 1800,
+                text: `${serviceType} — ${stats.present} Present, ${stats.absent} Absent`,
+                timer: 2000,
                 showConfirmButton: false,
             });
         }
     };
 
-    /* ========================= EXPORT EXCEL ========================= */
-    const exportExcel = async () => {
-        if (!exportMonth) {
-            Swal.fire({
-                icon: "warning",
-                title: "Select Month",
-                text: "Please select a month first.",
-            });
-            return;
-        }
+   const handleExport = async () => {
+    if (!exportMonth && !exportDate) {
+        Swal.fire({ icon: "warning", title: "Select Period", text: "Please select a month or date to export.", confirmButtonColor: "#c9a45c" });
+        return;
+    }
+
+    // Build base query for attendance
+    let attendanceQuery = supabase
+        .from("tblAttendance")
+        .select("*")
+        .order("service_date", { ascending: true });
+
+    if (exportDate) {
+        attendanceQuery = attendanceQuery.eq("service_date", exportDate);
+    } else {
+        const [year, month] = exportMonth.split("-");
+        const lastDay = new Date(year, month, 0).getDate();
         const startDate = `${exportMonth}-01`;
-        const endDate = `${exportMonth}-31`;
-        const { data } = await supabase
-            .from("tblAttendance")
-            .select(`*, tblMonitoring (firstname, lastname, tribe, type)`)
-            .gte("service_date", startDate)
-            .lte("service_date", endDate)
-            .order("service_date", { ascending: true });
+        const endDate = `${exportMonth}-${String(lastDay).padStart(2, "0")}`;
+        
+        attendanceQuery = attendanceQuery.gte("service_date", startDate).lte("service_date", endDate);
+    }
 
-        if (!data || data.length === 0) {
-            Swal.fire({
-                icon: "info",
-                title: "No Records",
-                text: "No attendance records found.",
-            });
-            return;
+    const { data: attendanceData, error: attendanceError } = await attendanceQuery;
+
+    if (attendanceError) {
+        Swal.fire({ icon: "error", title: "Export Failed", text: attendanceError.message });
+        return;
+    }
+
+    if (!attendanceData || attendanceData.length === 0) {
+        Swal.fire({ icon: "info", title: "No Records", text: "No attendance records found for the selected period." });
+        return;
+    }
+
+    // Fetch all leader data separately
+    const leaderIds = [...new Set(attendanceData.map(a => a.leader_id))];
+    const { data: leadersData, error: leadersError } = await supabase
+        .from("tblMonitoring")
+        .select("id, firstname, lastname, tribe, type, ministry")
+        .in("id", leaderIds);
+
+    if (leadersError) {
+        Swal.fire({ icon: "error", title: "Export Failed", text: leadersError.message });
+        return;
+    }
+
+    // Build leader lookup map
+    const leaderMap = {};
+    leadersData?.forEach(l => {
+        leaderMap[l.id] = l;
+    });
+
+    // Merge data manually
+    const mergedData = attendanceData.map(record => ({
+        ...record,
+        tblMonitoring: leaderMap[record.leader_id] || null
+    }));
+
+    // Pass the current export values explicitly
+    exportToExcel(mergedData, exportDate, exportMonth);
+};
+
+    const exportToExcel = (data, exportDateVal, exportMonthVal) => {
+        const wb = XLSX.utils.book_new();
+
+        // Styles
+        const goldHeader = {
+            fill: { fgColor: { rgb: "C9A45C" }, patternType: "solid" },
+            font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "B8934A" } },
+                bottom: { style: "thin", color: { rgb: "B8934A" } },
+                left: { style: "thin", color: { rgb: "B8934A" } },
+                right: { style: "thin", color: { rgb: "B8934A" } }
+            }
+        };
+
+        const titleStyle = {
+            font: { bold: true, color: { rgb: "B8934A" }, sz: 18 },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        const churchInfoStyle = {
+            font: { bold: true, color: { rgb: "374151" }, sz: 12 },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        const subtitleStyle = {
+            font: { color: { rgb: "6B7280" }, sz: 11, italic: true },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        const dataCell = {
+            font: { sz: 11, color: { rgb: "374151" } },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const altRow = {
+            fill: { fgColor: { rgb: "F9FAFB" }, patternType: "solid" },
+            font: { sz: 11, color: { rgb: "374151" } },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const totalStyle = {
+            fill: { fgColor: { rgb: "ECFDF5" }, patternType: "solid" },
+            font: { bold: true, color: { rgb: "16A34A" }, sz: 12 },
+            border: {
+                top: { style: "medium", color: { rgb: "16A34A" } },
+                bottom: { style: "medium", color: { rgb: "16A34A" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const presentStyle = {
+            font: { sz: 11, color: { rgb: "16A34A" }, bold: true },
+            alignment: { horizontal: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        const absentStyle = {
+            font: { sz: 11, color: { rgb: "DC2626" }, bold: true },
+            alignment: { horizontal: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+
+        // Group by service date for summary
+        const byDate = {};
+        data.forEach(item => {
+            const dateKey = item.service_date;
+            if (!byDate[dateKey]) {
+                byDate[dateKey] = { records: [], present: 0, absent: 0, remarks: item.remarks };
+            }
+            byDate[dateKey].records.push(item);
+            if (item.status === "Present") byDate[dateKey].present++;
+            else byDate[dateKey].absent++;
+        });
+
+        // --- SHEET 1: Detailed Records ---
+        const wsData1 = [];
+        wsData1.push(["MAC TLDA CHURCH"]);
+        wsData1.push(["Attendance Monitoring Report"]);
+        wsData1.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
+        wsData1.push([`Period: ${exportDateVal || exportMonthVal || "All"} | Sorted by: Tribe`]);
+        wsData1.push([]);
+
+        wsData1.push(["No.", "Date", "Service", "Name", "Tribe", "Type", "Ministry", "Status"]);
+
+        let grandTotal = 0;
+        let grandPresent = 0;
+        let grandAbsent = 0;
+
+        // Sort by tribe
+        const sortedData = [...data].sort((a, b) => {
+            const tribeA = a.tblMonitoring?.tribe || "";
+            const tribeB = b.tblMonitoring?.tribe || "";
+            if (tribeA !== tribeB) return tribeA.localeCompare(tribeB);
+            return (a.tblMonitoring?.firstname || "").localeCompare(b.tblMonitoring?.firstname || "");
+        });
+
+        sortedData.forEach((item, index) => {
+            wsData1.push([
+                index + 1,
+                item.service_date,
+                item.remarks,
+                `${item.tblMonitoring?.firstname || ""} ${item.tblMonitoring?.lastname || ""}`,
+                item.tblMonitoring?.tribe || "",
+                item.tblMonitoring?.type || "",
+                item.tblMonitoring?.ministry || "",
+                item.status
+            ]);
+            if (item.status === "Present") grandPresent++;
+            else grandAbsent++;
+            grandTotal++;
+        });
+
+        wsData1.push([]);
+        wsData1.push(["", "", "", "", "", "", "TOTAL PRESENT", grandPresent]);
+        wsData1.push(["", "", "", "", "", "", "TOTAL ABSENT", grandAbsent]);
+        wsData1.push(["", "", "", "", "", "", "GRAND TOTAL", grandTotal]);
+
+        const ws1 = XLSX.utils.aoa_to_sheet(wsData1);
+        ws1["!cols"] = [
+            { wch: 6 }, { wch: 14 }, { wch: 30 }, { wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 18 }, { wch: 12 }
+        ];
+
+        // Styles for sheet 1
+        for (let r = 0; r <= 3; r++) {
+            const cell = XLSX.utils.encode_cell({ r, c: 0 });
+            if (ws1[cell]) {
+                ws1[cell].s = r === 0 ? titleStyle : (r === 1 ? churchInfoStyle : subtitleStyle);
+                ws1["!merges"] = ws1["!merges"] || [];
+                ws1["!merges"].push({ s: { r, c: 0 }, e: { r, c: 7 } });
+            }
         }
 
-        const excelData = data.map((item) => ({
-            Name: `${item.tblMonitoring?.firstname || ""} ${item.tblMonitoring?.lastname || ""}`,
-            Tribe: item.tblMonitoring?.tribe,
-            Type: item.tblMonitoring?.type,
-            Status: item.status,
-            Date: item.service_date,
-            Remarks: item.remarks,
-        }));
+        for (let c = 0; c <= 7; c++) {
+            const cell = XLSX.utils.encode_cell({ r: 5, c });
+            if (ws1[cell]) ws1[cell].s = goldHeader;
+        }
 
-        const worksheet = XLSX.utils.json_to_sheet([]);
-        XLSX.utils.sheet_add_aoa(
-            worksheet,
-            [
-                ["MAC TLDA CHURCH"],
-                ["Attendance Monitoring Report"],
-                [],
-                ["Generated:", new Date().toLocaleString()],
-                [],
-            ],
-            { origin: "A1" }
-        );
-        XLSX.utils.sheet_add_json(worksheet, excelData, { origin: "A6" });
-        worksheet["!cols"] = [
-            { wch: 35 },
-            { wch: 20 },
-            { wch: 18 },
-            { wch: 15 },
-            { wch: 18 },
-            { wch: 40 },
-        ];
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Attendance");
-        XLSX.writeFile(workbook, `Attendance-${exportMonth}.xlsx`);
-        Swal.fire({
-            icon: "success",
-            title: "Excel Exported",
-            text: "Attendance report downloaded successfully.",
+        sortedData.forEach((_, index) => {
+            const r = 6 + index;
+            const isAlt = index % 2 === 1;
+            for (let c = 0; c <= 7; c++) {
+                const cell = XLSX.utils.encode_cell({ r, c });
+                if (ws1[cell]) {
+                    if (c === 7) {
+                        ws1[cell].s = ws1[cell].v === "Present" ? presentStyle : absentStyle;
+                    } else {
+                        ws1[cell].s = isAlt ? altRow : dataCell;
+                    }
+                }
+            }
         });
+
+        // Total rows
+        [grandPresent, grandAbsent, grandTotal].forEach((_, i) => {
+            const r = 6 + sortedData.length + 1 + i;
+            for (let c = 0; c <= 7; c++) {
+                const cell = XLSX.utils.encode_cell({ r, c });
+                if (ws1[cell]) ws1[cell].s = totalStyle;
+            }
+        });
+
+        XLSX.utils.book_append_sheet(wb, ws1, "Detailed Records");
+
+        // --- SHEET 2: By Service Date Summary ---
+        const wsData2 = [];
+        wsData2.push(["MAC TLDA CHURCH"]);
+        wsData2.push(["Attendance Summary by Service Date"]);
+        wsData2.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
+        wsData2.push([]);
+
+        wsData2.push(["Date", "Service", "Present", "Absent", "Total", "Attendance Rate"]);
+
+        Object.entries(byDate).sort((a, b) => a[0].localeCompare(b[0])).forEach(([svcDate, info]) => {
+            const rate = info.records.length > 0 ? Math.round((info.present / info.records.length) * 100) : 0;
+            wsData2.push([
+                svcDate,
+                info.remarks,
+                info.present,
+                info.absent,
+                info.records.length,
+                `${rate}%`
+            ]);
+        });
+
+        const ws2 = XLSX.utils.aoa_to_sheet(wsData2);
+        ws2["!cols"] = [{ wch: 14 }, { wch: 30 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }];
+
+        for (let r = 0; r <= 2; r++) {
+            const cell = XLSX.utils.encode_cell({ r, c: 0 });
+            if (ws2[cell]) {
+                ws2[cell].s = r === 0 ? titleStyle : (r === 1 ? churchInfoStyle : subtitleStyle);
+                ws2["!merges"] = ws2["!merges"] || [];
+                ws2["!merges"].push({ s: { r, c: 0 }, e: { r, c: 5 } });
+            }
+        }
+
+        for (let c = 0; c <= 5; c++) {
+            const cell = XLSX.utils.encode_cell({ r: 4, c });
+            if (ws2[cell]) ws2[cell].s = goldHeader;
+        }
+
+        Object.keys(byDate).forEach((_, index) => {
+            const r = 5 + index;
+            const isAlt = index % 2 === 1;
+            for (let c = 0; c <= 5; c++) {
+                const cell = XLSX.utils.encode_cell({ r, c });
+                if (ws2[cell]) ws2[cell].s = isAlt ? altRow : dataCell;
+            }
+        });
+
+        XLSX.utils.book_append_sheet(wb, ws2, "By Service Date");
+
+        // --- SHEET 3: By Tribe Summary ---
+        const byTribe = {};
+        data.forEach(item => {
+            const tribe = item.tblMonitoring?.tribe || "Unknown";
+            if (!byTribe[tribe]) byTribe[tribe] = { present: 0, absent: 0, total: 0 };
+            byTribe[tribe].total++;
+            if (item.status === "Present") byTribe[tribe].present++;
+            else byTribe[tribe].absent++;
+        });
+
+        const tribeOrder = [...tribes, "Unknown"];
+        const wsData3 = [];
+        wsData3.push(["MAC TLDA CHURCH"]);
+        wsData3.push(["Attendance Summary by Tribe"]);
+        wsData3.push([`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`]);
+        wsData3.push([]);
+
+        wsData3.push(["Tribe", "Present", "Absent", "Total", "Attendance Rate"]);
+
+        let tribeGrandPresent = 0;
+        let tribeGrandAbsent = 0;
+        let tribeGrandTotal = 0;
+
+        tribeOrder.forEach(tribe => {
+            if (byTribe[tribe]) {
+                const info = byTribe[tribe];
+                const rate = info.total > 0 ? Math.round((info.present / info.total) * 100) : 0;
+                wsData3.push([tribe, info.present, info.absent, info.total, `${rate}%`]);
+                tribeGrandPresent += info.present;
+                tribeGrandAbsent += info.absent;
+                tribeGrandTotal += info.total;
+            }
+        });
+
+        wsData3.push([]);
+        wsData3.push(["GRAND TOTAL", tribeGrandPresent, tribeGrandAbsent, tribeGrandTotal, `${tribeGrandTotal > 0 ? Math.round((tribeGrandPresent / tribeGrandTotal) * 100) : 0}%`]);
+
+        const ws3 = XLSX.utils.aoa_to_sheet(wsData3);
+        ws3["!cols"] = [{ wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }];
+
+        for (let r = 0; r <= 2; r++) {
+            const cell = XLSX.utils.encode_cell({ r, c: 0 });
+            if (ws3[cell]) {
+                ws3[cell].s = r === 0 ? titleStyle : (r === 1 ? churchInfoStyle : subtitleStyle);
+                ws3["!merges"] = ws3["!merges"] || [];
+                ws3["!merges"].push({ s: { r, c: 0 }, e: { r, c: 4 } });
+            }
+        }
+
+        for (let c = 0; c <= 4; c++) {
+            const cell = XLSX.utils.encode_cell({ r: 4, c });
+            if (ws3[cell]) ws3[cell].s = goldHeader;
+        }
+
+        const tribeRows = tribeOrder.filter(t => byTribe[t]).length;
+        for (let i = 0; i < tribeRows; i++) {
+            const r = 5 + i;
+            const isAlt = i % 2 === 1;
+            for (let c = 0; c <= 4; c++) {
+                const cell = XLSX.utils.encode_cell({ r, c });
+                if (ws3[cell]) ws3[cell].s = isAlt ? altRow : dataCell;
+            }
+        }
+
+        // Grand total row
+        const totalRow = 5 + tribeRows + 1;
+        for (let c = 0; c <= 4; c++) {
+            const cell = XLSX.utils.encode_cell({ r: totalRow, c });
+            if (ws3[cell]) ws3[cell].s = totalStyle;
+        }
+
+       XLSX.utils.book_append_sheet(wb, ws3, "By Tribe");
+
+    const filename = exportDateVal
+        ? `Attendance_${exportDateVal}.xlsx`
+        : `Attendance_${exportMonthVal}.xlsx`;
+
+    XLSX.writeFile(wb, filename);
+
+    Swal.fire({
+        icon: "success",
+        title: "Excel Exported",
+        text: `${data.length} records exported successfully.`,
+        timer: 1500,
+        showConfirmButton: false,
+    }).then(() => {
+        // Reset states and return to modal
+        setShowModal(true);
+        setIsRecording(false);
+        setExportMonth("");
+        setExportDate("");
+        setAttendanceMap({});
+    });
     };
 
-    /* ========================= HELPERS ========================= */
-    const tribes = [...new Set(leaders.map((l) => l.tribe))];
+    const handleCloseModal = () => {
+        navigate("/dashboard");
+    };
+
+    const handleBackToModal = () => {
+        setIsRecording(false);
+        setAttendanceMap({});
+        setShowModal(true);
+    };
 
     const filtered = leaders.filter((leader) =>
         selectedTribe ? leader.tribe === selectedTribe : true
     );
-
     const sorted = [...filtered].sort((a, b) =>
         sortOrder === "asc"
             ? a.firstname.localeCompare(b.firstname)
             : b.firstname.localeCompare(a.firstname)
     );
 
-    // Profile card data (all leaders, not filtered, to show summary counts)
-    const getProfileData = () => {
-        return leaders.map((leader) => {
-            const status = attendanceMap[leader.id] || "Absent";
-            // Count how many times this person appears in attendance records for the selected date
-            // For the card, we show their current status count (1/1 if present, 0/1 if absent)
-            const presentCount = status === "Present" ? 1 : 0;
-            return { ...leader, presentCount, totalCount: 1 };
-        });
-    };
+    // Modal Component
+    const Modal = () => (
+        <div style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            backdropFilter: "blur(4px)"
+        }}>
+            <div style={{
+                background: "#fff",
+                borderRadius: "16px",
+                width: "90%",
+                maxWidth: "520px",
+                boxShadow: "0 25px 50px rgba(0,0,0,0.25)",
+                overflow: "hidden",
+                position: "relative"
+            }}>
+                {/* Close Button */}
+                <button
+                    onClick={handleCloseModal}
+                    style={{
+                        position: "absolute",
+                        top: "16px",
+                        right: "16px",
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        border: "none",
+                        background: "rgba(255,255,255,0.2)",
+                        color: "#fff",
+                        fontSize: "18px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "background 0.2s",
+                        zIndex: 10
+                    }}
+                    onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,0.35)"}
+                    onMouseLeave={(e) => e.target.style.background = "rgba(255,255,255,0.2)"}
+                    title="Close and go to Dashboard"
+                >
+                    ✕
+                </button>
 
-    const profileData = getProfileData();
+                {/* Modal Header */}
+                <div style={{
+                    background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
+                    padding: "24px 28px",
+                    color: "#fff",
+                    position: "relative"
+                }}>
+                    <h2 style={{ margin: 0, fontSize: "22px", fontWeight: "700" }}>Attendance</h2>
+                    <p style={{ margin: "6px 0 0 0", opacity: 0.9, fontSize: "14px" }}>
+                        Record attendance or export reports
+                    </p>
+                </div>
 
-    // For the table, we use the filtered + sorted data
-    const tableData = activeTab === "members" ? sorted : newcomers;
+                {/* Tabs */}
+                <div style={{ display: "flex", borderBottom: "1px solid #e5e7eb" }}>
+                    <button
+                        onClick={() => setModalTab("record")}
+                        style={{
+                            flex: 1,
+                            padding: "16px",
+                            border: "none",
+                            background: modalTab === "record" ? "#fff" : "#f9fafb",
+                            color: modalTab === "record" ? "#b8934a" : "#6b7280",
+                            fontWeight: "700",
+                            fontSize: "14px",
+                            cursor: "pointer",
+                            borderBottom: modalTab === "record" ? "3px solid #b8934a" : "3px solid transparent",
+                            transition: "all 0.2s"
+                        }}
+                    >
+                        Record Attendance
+                    </button>
+                    <button
+                        onClick={() => setModalTab("export")}
+                        style={{
+                            flex: 1,
+                            padding: "16px",
+                            border: "none",
+                            background: modalTab === "export" ? "#fff" : "#f9fafb",
+                            color: modalTab === "export" ? "#b8934a" : "#6b7280",
+                            fontWeight: "700",
+                            fontSize: "14px",
+                            cursor: "pointer",
+                            borderBottom: modalTab === "export" ? "3px solid #b8934a" : "3px solid transparent",
+                            transition: "all 0.2s"
+                        }}
+                    >
+                        Export Report
+                    </button>
+                </div>
 
-    /* ========================= STATUS STYLES ========================= */
-    const getStatusBadgeClass = (status) => {
-        if (status === "Present") return "status-present";
-        if (status === "On Leave") return "status-onleave";
-        return "status-absent";
-    };
+                {/* Modal Body */}
+                <div style={{ padding: "28px" }}>
+                    {modalTab === "record" ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                            <div>
+                                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                                    Service Date *
+                                </label>
+                                <input
+                                    type="date"
+                                    value={date}
+                                    onChange={handleDateChange}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 14px",
+                                        borderRadius: "10px",
+                                        border: "2px solid #e5e7eb",
+                                        fontSize: "15px",
+                                        outline: "none",
+                                        boxSizing: "border-box",
+                                        transition: "border-color 0.2s"
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = "#c9a45c"}
+                                    onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                                    Service Type / Remarks *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={serviceType}
+                                    onChange={(e) => setServiceType(e.target.value)}
+                                    placeholder="e.g. SUNDAY June 4, 2026"
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 14px",
+                                        borderRadius: "10px",
+                                        border: "2px solid #e5e7eb",
+                                        fontSize: "15px",
+                                        outline: "none",
+                                        boxSizing: "border-box",
+                                        transition: "border-color 0.2s"
+                                    }}
+                                    onFocus={(e) => e.target.style.borderColor = "#c9a45c"}
+                                    onBlur={(e) => e.target.style.borderColor = "#e5e7eb"}
+                                />
+                                <p style={{ fontSize: "12px", color: "#9ca3af", margin: "4px 0 0 0" }}>
+                                    Auto-filled based on date. Edit as needed.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={startRecording}
+                                style={{
+                                    width: "100%",
+                                    padding: "14px",
+                                    borderRadius: "10px",
+                                    border: "none",
+                                    background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
+                                    color: "#fff",
+                                    fontWeight: "700",
+                                    fontSize: "15px",
+                                    cursor: "pointer",
+                                    marginTop: "8px",
+                                    transition: "transform 0.15s, box-shadow 0.15s"
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.target.style.transform = "translateY(-1px)";
+                                    e.target.style.boxShadow = "0 8px 20px rgba(201,164,92,0.4)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.target.style.transform = "translateY(0)";
+                                    e.target.style.boxShadow = "none";
+                                }}
+                            >
+                                Start Recording
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+                            <div>
+                                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                                    Export by Month
+                                </label>
+                                <input
+                                    type="month"
+                                    value={exportMonth}
+                                    onChange={(e) => {
+                                        setExportMonth(e.target.value);
+                                        setExportDate("");
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 14px",
+                                        borderRadius: "10px",
+                                        border: "2px solid #e5e7eb",
+                                        fontSize: "15px",
+                                        outline: "none",
+                                        boxSizing: "border-box"
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ textAlign: "center", color: "#9ca3af", fontSize: "13px", fontWeight: "600" }}>
+                                — OR —
+                            </div>
+
+                            <div>
+                                <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#374151", marginBottom: "6px" }}>
+                                    Export by Specific Date
+                                </label>
+                                <input
+                                    type="date"
+                                    value={exportDate}
+                                    onChange={(e) => {
+                                        setExportDate(e.target.value);
+                                        setExportMonth("");
+                                    }}
+                                    style={{
+                                        width: "100%",
+                                        padding: "12px 14px",
+                                        borderRadius: "10px",
+                                        border: "2px solid #e5e7eb",
+                                        fontSize: "15px",
+                                        outline: "none",
+                                        boxSizing: "border-box"
+                                    }}
+                                />
+                            </div>
+
+                            <button
+                                onClick={handleExport}
+                                style={{
+                                    width: "100%",
+                                    padding: "14px",
+                                    borderRadius: "10px",
+                                    border: "none",
+                                    background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                                    color: "#fff",
+                                    fontWeight: "700",
+                                    fontSize: "15px",
+                                    cursor: "pointer",
+                                    marginTop: "8px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "8px",
+                                    transition: "transform 0.15s, box-shadow 0.15s"
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.target.style.transform = "translateY(-1px)";
+                                    e.target.style.boxShadow = "0 8px 20px rgba(22,163,74,0.4)";
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.target.style.transform = "translateY(0)";
+                                    e.target.style.boxShadow = "none";
+                                }}
+                            >
+                                <span>Export to Excel</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    if (!isRecording) {
+        return (
+            <div className="attendance-layout">
+                <Sidebar />
+                <div className="attendance-content" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "80vh" }}>
+                    {showModal && <Modal />}
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="layout">
+        <div className="attendance-layout">
             <Sidebar />
-            <div className="content">
-                {/* ===== HEADER ===== */}
-                <div className="attendance-header">
-                    <div className="attendance-title">
-                        <h1>Attendance</h1>
-                        <p>Church attendance monitoring</p>
+            <div className="attendance-content">
+                {/* Recording Header */}
+                <div className="attendance-topbar">
+                    <div>
+                        <h1 className="attendance-heading">Attendance</h1>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
+                            <span className="attendance-service">{serviceType}</span>
+                            <span style={{
+                                padding: "3px 10px",
+                                borderRadius: "8px",
+                                background: "#dbeafe",
+                                color: "#1e40af",
+                                fontSize: "12px",
+                                fontWeight: "600"
+                            }}>
+                                {date}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="attendance-stats">
+                        <div className="stat-pill"><span className="stat-num">{stats.present}</span> Present</div>
+                        <div className="stat-pill"><span className="stat-num">{stats.absent}</span> Absent</div>
+                        <div className="stat-pill"><span className="stat-num">{stats.total}</span> Total</div>
                     </div>
                 </div>
 
-                {/* ===== CONTROLS ===== */}
-                <div className="attendance-controls">
-                    <input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                    />
-                    <select
-                        value={selectedTribe}
-                        onChange={(e) => setSelectedTribe(e.target.value)}
-                    >
-                        <option value="">All Tribes</option>
-                        {tribes.map((tribe) => (
-                            <option key={tribe} value={tribe}>
-                                {tribe}
-                            </option>
-                        ))}
-                    </select>
-                    <button onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}>
-                        Sort {sortOrder === "asc" ? "A-Z" : "Z-A"}
-                    </button>
-                    <button className="save-attendance-btn" onClick={handleSave}>
-                        {loading ? "Saving..." : "Save Attendance"}
-                    </button>
-                    <input
-                        type="month"
-                        value={exportMonth}
-                        onChange={(e) => setExportMonth(e.target.value)}
-                    />
-                    <button className="export-btn" onClick={exportExcel}>
-                        <span className="export-btn-icon">⬇</span> Export Excel
-                    </button>
+                {/* Toolbar */}
+                <div className="attendance-toolbar">
+                    <div className="toolbar-group">
+                        <select
+                            className="input-sm"
+                            value={selectedTribe}
+                            onChange={(e) => setSelectedTribe(e.target.value)}
+                        >
+                            <option value="">All Tribes</option>
+                            {tribes.map((tribe) => (
+                                <option key={tribe} value={tribe}>{tribe}</option>
+                            ))}
+                        </select>
+                        <button
+                            className="btn-sm btn-outline"
+                            onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                        >
+                            {sortOrder === "asc" ? "A-Z" : "Z-A"}
+                        </button>
+                    </div>
+                    <div className="toolbar-group">
+                        <button
+                            className="btn-sm btn-outline"
+                            onClick={handleBackToModal}
+                        >
+                            Change Service
+                        </button>
+                        <button
+                            className="btn-sm btn-primary"
+                            onClick={handleSave}
+                            disabled={loading}
+                        >
+                            {loading ? "Saving..." : "Save Attendance"}
+                        </button>
+                    </div>
                 </div>
 
-                {/* ===== TABS ===== */}
-                <div className="attendance-tabs">
-                    <button
-                        className={activeTab === "members" ? "tab-btn active-tab" : "tab-btn"}
-                        onClick={() => setActiveTab("members")}
-                    >
-                        Members
-                    </button>
-                    <button
-                        className={activeTab === "newcomers" ? "tab-btn active-tab" : "tab-btn"}
-                        onClick={() => setActiveTab("newcomers")}
-                    >
-                        Newcomers
-                    </button>
-                </div>
+                {/* Table */}
+                <div className="attendance-table-container">
+                    <div className="flex-table-header">
+                        <div className="flex-col flex-col-name">Name</div>
+                        <div className="flex-col flex-col-tribe">Tribe</div>
+                        <div className="flex-col flex-col-type">Type</div>
+                        <div className="flex-col flex-col-status">Status</div>
+                        <div className="flex-col flex-col-action">Action</div>
+                    </div>
 
-                {/* ===== PROFILES CARD GRID (Members only) ===== */}
-                {activeTab === "members" && (
-                    <div className="profiles-section">
-                        <div className="profiles-header">
-                            <h2>
-                                <span className="profiles-icon">👤</span> Profiles
-                            </h2>
-                            <button className="minimize-btn">⌃ Minimize</button>
-                        </div>
-                        <div className="profiles-grid">
-                            {profileData.map((leader) => (
-                                <div className="profile-card" key={leader.id}>
-                                    <div className="profile-card-left">
-                                        <div className="profile-avatar">
-                                            {leader.image_url ? (
-                                                <img src={leader.image_url} alt="" />
-                                            ) : (
-                                                <div className="avatar-placeholder">👤</div>
-                                            )}
-                                        </div>
-                                        <div className="profile-info">
-                                            <div className="profile-name">
-                                                {leader.firstname} {leader.lastname}
-                                            </div>
-                                            <div className="profile-label">NAME</div>
-                                        </div>
+                    <div className="flex-table-body">
+                        {sorted.map((leader) => {
+                            const status = attendanceMap[leader.id] || "Absent";
+                            return (
+                                <div className="flex-row" key={leader.id}>
+                                    <div className="flex-col flex-col-name">
+                                        <img
+                                            src={leader.image_url || "https://via.placeholder.com/32"}
+                                            alt=""
+                                            className="avatar-sm"
+                                        />
+                                        <span className="name-text">{leader.firstname} {leader.lastname}</span>
                                     </div>
-                                    <div className="profile-card-right">
-                                        <div
-                                            className={`profile-count ${
-                                                leader.presentCount > 0 ? "count-active" : "count-inactive"
-                                            }`}
+                                    <div className="flex-col flex-col-tribe">{leader.tribe}</div>
+                                    <div className="flex-col flex-col-type">
+                                        <span className="badge-sm">{leader.type}</span>
+                                    </div>
+                                    <div className="flex-col flex-col-status">
+                                        <span className={`dot ${status === "Present" ? "dot-present" : "dot-absent"}`}></span>
+                                        <span className="status-text">{status}</span>
+                                    </div>
+                                    <div className="flex-col flex-col-action">
+                                        <button
+                                            className={`toggle-sm ${status === "Present" ? "is-present" : "is-absent"}`}
+                                            onClick={() => toggleAttendance(leader.id)}
                                         >
-                                            {leader.presentCount}/{leader.totalCount}
-                                        </div>
-                                        <div className="profile-label">TRIBE</div>
+                                            {status === "Present" ? "Absent" : "Present"}
+                                        </button>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ===== ATTENDANCE LIST TABLE ===== */}
-                <div className="attendance-list-section">
-                    <div className="attendance-list-header">
-                        <h2>
-                            <span className="list-icon">☰</span> Attendance List
-                        </h2>
-                    </div>
-                    <div className="attendance-table-wrapper">
-                        <table className="attendance-table">
-                            <thead>
-                                <tr>
-                                    <th>Full Name</th>
-                                    <th>Tribe</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {activeTab === "members" &&
-                                    sorted.map((leader) => {
-                                        const status = attendanceMap[leader.id] || "Absent";
-                                        return (
-                                            <tr key={leader.id}>
-                                                <td>{leader.firstname} {leader.lastname}</td>
-                                                <td>
-                                                    <span className="tribe-badge">{leader.tribe}</span>
-                                                </td>
-                                                <td>
-                                                    <span className={`status-badge ${getStatusBadgeClass(status)}`}>
-                                                        {status}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div className="action-buttons">
-                                                        <button
-                                                            className="action-edit"
-                                                            onClick={() => toggleAttendance(leader.id)}
-                                                        >
-                                                            {status === "Present" ? "Edit/Mark Absent" : "Edit/Mark Present"}
-                                                        </button>
-                                                        <button className="action-icon edit-icon">✏️</button>
-                                                        <button className="action-icon delete-icon">🗑️</button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-
-                                {activeTab === "newcomers" &&
-                                    newcomers.map((member) => {
-                                        const status = newcomerAttendanceMap[member.id] || "Absent";
-                                        return (
-                                            <tr key={member.id}>
-                                                <td>{member.firstname} {member.lastname}</td>
-                                                <td>
-                                                    <span className="tribe-badge">{member.tribe}</span>
-                                                </td>
-                                                <td>
-                                                    <span className={`status-badge ${getStatusBadgeClass(status)}`}>
-                                                        {status}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div className="action-buttons">
-                                                        <button
-                                                            className="action-edit"
-                                                            onClick={() => toggleNewcomerAttendance(member.id)}
-                                                        >
-                                                            {status === "Present" ? "Edit/Mark Absent" : "Edit/Mark Present"}
-                                                        </button>
-                                                        <button className="action-icon edit-icon">✏️</button>
-                                                        <button className="action-icon delete-icon">🗑️</button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                            </tbody>
-                        </table>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
-            
-//#region --CSS STYLES--
-            {/* ===== STYLES ===== */}
-            <style>{`
-                .layout {
-                    display: flex;
-                    min-height: 100vh;
-                    background: #f8f9fa;
-                }
-                .content {
-                    flex: 1;
-                    padding: 24px 32px;
-                    overflow-y: auto;
-                }
-                .attendance-header {
-                    margin-bottom: 20px;
-                }
-                .attendance-title h1 {
-                    font-size: 28px;
-                    font-weight: 700;
-                    color: #1a1a2e;
-                    margin: 0;
-                }
-                .attendance-title p {
-                    color: #6b7280;
-                    margin: 4px 0 0 0;
-                    font-size: 14px;
-                }
-                .attendance-controls {
-                    display: flex;
-                    gap: 10px;
-                    flex-wrap: wrap;
-                    align-items: center;
-                    margin-bottom: 20px;
-                    background: #fff;
-                    padding: 16px;
-                    border-radius: 12px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                }
-                .attendance-controls input,
-                .attendance-controls select {
-                    padding: 8px 12px;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 8px;
-                    font-size: 14px;
-                    outline: none;
-                }
-                .attendance-controls button {
-                    padding: 8px 16px;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 8px;
-                    background: #fff;
-                    cursor: pointer;
-                    font-size: 14px;
-                    transition: all 0.2s;
-                }
-                .attendance-controls button:hover {
-                    background: #f3f4f6;
-                }
-                .save-attendance-btn {
-                    background: #c9a45c !important;
-                    color: #fff !important;
-                    border-color: #c9a45c !important;
-                }
-                .save-attendance-btn:hover {
-                    background: #b8944f !important;
-                }
-                .export-btn {
-                    background: #1a1a2e !important;
-                    color: #fff !important;
-                    border-color: #1a1a2e !important;
-                }
-                .export-btn:hover {
-                    background: #2d2d44 !important;
-                }
-                .attendance-tabs {
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 20px;
-                }
-                .tab-btn {
-                    padding: 10px 24px;
-                    border: none;
-                    border-radius: 8px;
-                    background: #e5e7eb;
-                    color: #6b7280;
-                    cursor: pointer;
-                    font-size: 14px;
-                    font-weight: 500;
-                    transition: all 0.2s;
-                }
-                .tab-btn:hover {
-                    background: #d1d5db;
-                }
-                .active-tab {
-                    background: #1a1a2e !important;
-                    color: #fff !important;
-                }
-
-                /* ===== PROFILES SECTION ===== */
-                .profiles-section {
-                    background: #fff;
-                    border-radius: 12px;
-                    padding: 20px;
-                    margin-bottom: 24px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                }
-                .profiles-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 16px;
-                }
-                .profiles-header h2 {
-                    font-size: 16px;
-                    font-weight: 600;
-                    color: #1a1a2e;
-                    margin: 0;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .profiles-icon {
-                    font-size: 18px;
-                }
-                .minimize-btn {
-                    background: #f3f4f6;
-                    border: none;
-                    padding: 6px 12px;
-                    border-radius: 6px;
-                    font-size: 12px;
-                    color: #6b7280;
-                    cursor: pointer;
-                }
-                .profiles-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                    gap: 12px;
-                }
-                .profile-card {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 14px 16px;
-                    border: 1px solid #e5e7eb;
-                    border-radius: 10px;
-                    background: #fff;
-                    transition: box-shadow 0.2s;
-                }
-                .profile-card:hover {
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                }
-                .profile-card-left {
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                }
-                .profile-avatar {
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 50%;
-                    overflow: hidden;
-                    background: #e5e7eb;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .profile-avatar img {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                }
-                .avatar-placeholder {
-                    font-size: 20px;
-                }
-                .profile-info {
-                    display: flex;
-                    flex-direction: column;
-                }
-                .profile-name {
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: #1a1a2e;
-                }
-                .profile-label {
-                    font-size: 10px;
-                    color: #9ca3af;
-                    letter-spacing: 0.5px;
-                    margin-top: 2px;
-                }
-                .profile-card-right {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: flex-end;
-                }
-                .profile-count {
-                    font-size: 16px;
-                    font-weight: 700;
-                }
-                .count-active {
-                    color: #c9a45c;
-                }
-                .count-inactive {
-                    color: #6b7280;
-                }
-
-                /* ===== ATTENDANCE LIST SECTION ===== */
-                .attendance-list-section {
-                    background: #fff;
-                    border-radius: 12px;
-                    padding: 20px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-                }
-                .attendance-list-header {
-                    margin-bottom: 16px;
-                }
-                .attendance-list-header h2 {
-                    font-size: 16px;
-                    font-weight: 600;
-                    color: #1a1a2e;
-                    margin: 0;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .list-icon {
-                    font-size: 18px;
-                }
-                .attendance-table-wrapper {
-                    overflow-x: auto;
-                }
-                .attendance-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                }
-                .attendance-table thead th {
-                    text-align: left;
-                    padding: 12px 16px;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #374151;
-                    background: #f3f4f6;
-                    border-bottom: 1px solid #e5e7eb;
-                }
-                .attendance-table tbody td {
-                    padding: 14px 16px;
-                    border-bottom: 1px solid #f3f4f6;
-                    font-size: 14px;
-                    color: #1f2937;
-                }
-                .attendance-table tbody tr:hover {
-                    background: #f9fafb;
-                }
-                .tribe-badge {
-                    display: inline-block;
-                    padding: 4px 12px;
-                    background: #e5e7eb;
-                    border-radius: 20px;
-                    font-size: 12px;
-                    color: #4b5563;
-                    font-weight: 500;
-                }
-                .status-badge {
-                    display: inline-block;
-                    padding: 4px 14px;
-                    border-radius: 20px;
-                    font-size: 12px;
-                    font-weight: 600;
-                }
-                .status-present {
-                    background: #d1fae5;
-                    color: #065f46;
-                }
-                .status-absent {
-                    background: #fee2e2;
-                    color: #991b1b;
-                }
-                .status-onleave {
-                    background: #fef3c7;
-                    color: #92400e;
-                }
-                .action-buttons {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                }
-                .action-edit {
-                    background: none;
-                    border: none;
-                    color: #2563eb;
-                    font-size: 13px;
-                    cursor: pointer;
-                    padding: 0;
-                    text-decoration: none;
-                }
-                .action-edit:hover {
-                    text-decoration: underline;
-                }
-                .action-icon {
-                    width: 32px;
-                    height: 32px;
-                    border: none;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 14px;
-                }
-                .edit-icon {
-                    background: #dbeafe;
-                    color: #2563eb;
-                }
-                .edit-icon:hover {
-                    background: #bfdbfe;
-                }
-                .delete-icon {
-                    background: #fee2e2;
-                    color: #dc2626;
-                }
-                .delete-icon:hover {
-                    background: #fecaca;
-                }
-
-                /* ===== RESPONSIVE ===== */
-                @media (max-width: 768px) {
-                    .content {
-                        padding: 16px;
-                    }
-                    .profiles-grid {
-                        grid-template-columns: 1fr;
-                    }
-                    .attendance-controls {
-                        flex-direction: column;
-                        align-items: stretch;
-                    }
-                    .attendance-controls input,
-                    .attendance-controls select,
-                    .attendance-controls button {
-                        width: 100%;
-                    }
-                }
-            `}</style>
-//#endregion
-
         </div>
     );
 }

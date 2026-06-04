@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import Sidebar from "../components/Sidebar";
 import { useNavigate } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
 import {
     tribes,
@@ -94,7 +94,7 @@ function Assimilation() {
 
     const updateRemarks = async (id, currentRemark) => {
         const nextRemark = getNextStage(currentRemark);
-        
+
         if (!nextRemark) {
             alert("This newcomer has completed all stages!");
             return;
@@ -117,8 +117,7 @@ function Assimilation() {
         const fullName = `${member.firstname} ${member.lastname}`.toLowerCase();
         const matchesSearch = fullName.includes(search.toLowerCase());
         const matchesTribe = filterTribe === "ALL" ? true : member.tribe === filterTribe;
-        
-        // Stage filter: by category or specific stage
+
         let matchesStage = true;
         if (filterStage !== "ALL") {
             if (filterStage === "CONSO") {
@@ -135,7 +134,7 @@ function Assimilation() {
                 matchesStage = member.remarks === filterStage;
             }
         }
-        
+
         return matchesSearch && matchesTribe && matchesStage;
     });
 
@@ -164,47 +163,94 @@ function Assimilation() {
         }
     };
 
+    const getStageBorderColor = (stage) => {
+        const category = getStageCategory(stage);
+        switch (category) {
+            case "CONSO": return "#3b82f6";
+            case "SOUL WINNING": return "#22c55e";
+            case "SOAKING": return "#f59e0b";
+            case "SCHOOLING": return "#ec4899";
+            default: return "#9ca3af";
+        }
+    };
+
     // Quick filter by clicking a stats card
     const handleQuickFilter = (category) => {
         setFilterStage(category);
+    };
+
+    const getInitials = (first, last) => {
+        return `${first?.charAt(0) || ""}${last?.charAt(0) || ""}`.toUpperCase();
     };
 
     return (
         <div className="layout">
             <Sidebar />
             <div className="content">
-                <h1>Assimilation</h1>
-                <p style={{ opacity: 0.7, marginBottom: "20px" }}>
-                    Monitor visitors, invites, and newcomers.
-                </p>
+                {/* COMPACT HEADER */}
+                <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "12px",
+                    padding: "12px 0",
+                    borderBottom: "1px solid #e5e7eb"
+                }}>
+                    <div>
+                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>Assimilation</h1>
+                        <p style={{ opacity: 0.7, margin: "2px 0 0 0", fontSize: "12px" }}>
+                            Monitor visitors, invites, and newcomers.
+                        </p>
+                    </div>
+                    {canAdd && (
+                        <button
+                            className="btn-sm btn-primary"
+                            onClick={() => setShowForm(true)}
+                            style={{ padding: "6px 14px", fontSize: "13px" }}
+                        >
+                            + Add Newcomer
+                        </button>
+                    )}
+                </div>
 
-                {/* STATS CARDS - Clickable filters */}
+                {/* COMPACT STATS CARDS */}
                 <div
-                    className="stats-grid"
                     style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
-                        gap: "15px",
-                        marginBottom: "30px"
+                        gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
+                        gap: "8px",
+                        marginBottom: "15px"
                     }}
                 >
                     <div 
-                        className="record-card" 
+                        className="record-card"
                         onClick={() => handleQuickFilter("CONSO")}
-                        style={{ cursor: "pointer", border: filterStage === "CONSO" ? "2px solid #3b82f6" : "none" }}
+                        style={{ 
+                            cursor: "pointer", 
+                            border: filterStage === "CONSO" ? "2px solid #3b82f6" : "1px solid #e5e7eb",
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "#fff"
+                        }}
                     >
-                        <h3>Conso</h3>
-                        <h1>{countByStage(consoStages)}</h1>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Conso</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#3b82f6" }}>{countByStage(consoStages)}</h1>
                     </div>
 
                     <div 
                         className="record-card"
                         onClick={() => handleQuickFilter("SOUL WINNING")}
-                        style={{ cursor: "pointer", border: filterStage === "SOUL WINNING" ? "2px solid #22c55e" : "none" }}
+                        style={{ 
+                            cursor: "pointer", 
+                            border: filterStage === "SOUL WINNING" ? "2px solid #22c55e" : "1px solid #e5e7eb",
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "#fff"
+                        }}
                     >
-                        <h3>Soul Winning</h3>
-                        <h1>{countByStage(soulWinningStages)}</h1>
-                        <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Soul Winning</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#22c55e" }}>{countByStage(soulWinningStages)}</h1>
+                        <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "2px", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {soulWinningStages.slice(0, 3).map(s => `${s.split(" - ")[1] || s}: ${countByExactStage(s)}`).join(" | ")}
                         </p>
                     </div>
@@ -212,12 +258,18 @@ function Assimilation() {
                     <div 
                         className="record-card"
                         onClick={() => handleQuickFilter("SOAKING")}
-                        style={{ cursor: "pointer", border: filterStage === "SOAKING" ? "2px solid #f59e0b" : "none" }}
+                        style={{ 
+                            cursor: "pointer", 
+                            border: filterStage === "SOAKING" ? "2px solid #f59e0b" : "1px solid #e5e7eb",
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "#fff"
+                        }}
                     >
-                        <h3>Soaking</h3>
-                        <h1>{countByStage(soakingStages)}</h1>
-                        <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
-                            Candidate LR: {countByExactStage("Candidate for Life Retreat")}
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Soaking</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#f59e0b" }}>{countByStage(soakingStages)}</h1>
+                        <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "2px", margin: 0 }}>
+                            LR: {countByExactStage("Candidate for Life Retreat")}
                         </p>
                     </div>
 
@@ -226,22 +278,30 @@ function Assimilation() {
                         onClick={() => handleQuickFilter("Candidate for Life Retreat")}
                         style={{ 
                             cursor: "pointer", 
-                            border: filterStage === "Candidate for Life Retreat" ? "3px solid #c9a45c" : "2px solid #c9a45c",
-                            background: filterStage === "Candidate for Life Retreat" ? "#fefce8" : "white"
+                            border: filterStage === "Candidate for Life Retreat" ? "3px solid #c9a45c" : "1px solid #c9a45c",
+                            background: filterStage === "Candidate for Life Retreat" ? "#fefce8" : "#fff",
+                            padding: "10px 12px",
+                            borderRadius: "8px"
                         }}
                     >
-                        <h3>🎯 Candidates for LR</h3>
-                        <h1>{countByExactStage("Candidate for Life Retreat")}</h1>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#92400e", fontWeight: 500 }}>🎯 Candidates for LR</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#c9a45c" }}>{countByExactStage("Candidate for Life Retreat")}</h1>
                     </div>
 
                     <div 
                         className="record-card"
                         onClick={() => handleQuickFilter("SCHOOLING")}
-                        style={{ cursor: "pointer", border: filterStage === "SCHOOLING" ? "2px solid #ec4899" : "none" }}
+                        style={{ 
+                            cursor: "pointer", 
+                            border: filterStage === "SCHOOLING" ? "2px solid #ec4899" : "1px solid #e5e7eb",
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "#fff"
+                        }}
                     >
-                        <h3>Schooling</h3>
-                        <h1>{countByStage(schoolingStages)}</h1>
-                        <p style={{ fontSize: "11px", color: "#6b7280", marginTop: "4px" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Schooling</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#ec4899" }}>{countByStage(schoolingStages)}</h1>
+                        <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "2px", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {schoolingStages.map(s => `${s.replace(" Class", "")}: ${countByExactStage(s)}`).join(" | ")}
                         </p>
                     </div>
@@ -252,103 +312,27 @@ function Assimilation() {
                         style={{ 
                             cursor: "pointer", 
                             background: "#ecfdf5",
-                            border: filterStage === "READY" ? "2px solid #16a34a" : "none"
+                            border: filterStage === "READY" ? "2px solid #16a34a" : "1px solid #bbf7d0",
+                            padding: "10px 12px",
+                            borderRadius: "8px"
                         }}
                     >
-                        <h3>Ready to Convert</h3>
-                        <h1 style={{ color: "#16a34a" }}>{countByExactStage("Life Group Class")}</h1>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>Ready to Convert</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>{countByExactStage("Life Group Class")}</h1>
                     </div>
                 </div>
 
-                {/* ADD NEWCOMER BUTTON - ONLY ADMIN & USHERING */}
-                {canAdd && (
-                    <div
-                        style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            marginBottom: "20px"
-                        }}
-                    >
-                        <h2>Newcomer Registration</h2>
-                        <button
-                            onClick={() => setShowForm(!showForm)}
-                            style={{
-                                background: showForm ? "#dc2626" : "#16a34a"
-                            }}
-                        >
-                            {showForm ? "Close Form" : "Add Newcomer"}
-                        </button>
-                    </div>
-                )}
-
-                {/* FORM - ONLY ADMIN & USHERING */}
-                {canAdd && showForm && (
-                    <form className="leader-form" onSubmit={handleSubmit}>
-                        <input
-                            type="text"
-                            placeholder="First Name"
-                            value={firstname}
-                            onChange={(e) => setFirstname(e.target.value)}
-                        />
-                        <input
-                            type="text"
-                            placeholder="Last Name"
-                            value={lastname}
-                            onChange={(e) => setLastname(e.target.value)}
-                        />
-
-                        <select
-                            value={tribe}
-                            onChange={(e) => {
-                                setTribe(e.target.value);
-                                setInvitedBy("");
-                            }}
-                        >
-                            <option value="">Select Tribe</option>
-                            {tribes.map((tribe) => (
-                                <option key={tribe} value={tribe}>
-                                    {tribe}
-                                </option>
-                            ))}
-                        </select>
-
-                        <select
-                            value={invitedBy}
-                            onChange={(e) => setInvitedBy(e.target.value)}
-                        >
-                            <option value="">Select Inviter</option>
-                            {filteredLeaders.map((leader) => (
-                                <option key={leader.id} value={`${leader.firstname} ${leader.lastname}`}>
-                                    {leader.firstname} {leader.lastname}
-                                </option>
-                            ))}
-                        </select>
-
-                        <select
-                            value={remarks}
-                            onChange={(e) => setRemarks(e.target.value)}
-                        >
-                            {allNewcomerStages.map((stage) => (
-                                <option key={stage} value={stage}>
-                                    {stage}
-                                </option>
-                            ))}
-                        </select>
-
-                        <button type="submit">Add Newcomer</button>
-                    </form>
-                )}
-
-                {/* SEARCH & FILTER BAR */}
+                {/* COMPACT SEARCH & FILTER BAR */}
                 <div
                     style={{
                         display: "flex",
-                        gap: "15px",
-                        marginTop: canAdd ? "30px" : "0",
-                        marginBottom: "20px",
+                        gap: "8px",
+                        marginBottom: "12px",
                         flexWrap: "wrap",
-                        alignItems: "center"
+                        alignItems: "center",
+                        padding: "10px",
+                        background: "#f9fafb",
+                        borderRadius: "8px"
                     }}
                 >
                     <input
@@ -356,158 +340,179 @@ function Assimilation() {
                         placeholder="Search newcomer..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        style={{ flex: 1, minWidth: "200px" }}
+                        style={{ flex: 1, minWidth: "150px", padding: "6px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                     />
-                    
+
                     <select
                         value={filterTribe}
                         onChange={(e) => setFilterTribe(e.target.value)}
-                        style={{ width: "160px" }}
+                        style={{ width: "130px", padding: "6px 8px", fontSize: "12px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                     >
                         <option value="ALL">All Tribes</option>
                         {tribes.map((tribe) => (
-                            <option key={tribe} value={tribe}>
-                                {tribe}
-                            </option>
+                            <option key={tribe} value={tribe}>{tribe}</option>
                         ))}
                     </select>
 
                     <select
                         value={filterStage}
                         onChange={(e) => setFilterStage(e.target.value)}
-                        style={{ width: "200px" }}
+                        style={{ width: "140px", padding: "6px 8px", fontSize: "12px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                     >
                         <option value="ALL">All Stages</option>
                         <optgroup label="By Category">
-                            <option value="CONSO">Conso (1st-3rd Timer)</option>
+                            <option value="CONSO">Conso</option>
                             <option value="SOUL WINNING">Soul Winning</option>
                             <option value="SOAKING">Soaking</option>
                             <option value="SCHOOLING">Schooling</option>
                             <option value="READY">Ready to Convert</option>
                         </optgroup>
-                        <optgroup label="By Specific Stage">
+                        <optgroup label="By Stage">
                             {allNewcomerStages.map((stage) => (
-                                <option key={stage} value={stage}>
-                                    {stage}
-                                </option>
+                                <option key={stage} value={stage}>{stage}</option>
                             ))}
                         </optgroup>
                     </select>
 
-                    {filterStage !== "ALL" && (
+                    {(filterTribe !== "ALL" || filterStage !== "ALL" || search) && (
                         <button
-                            onClick={() => setFilterStage("ALL")}
+                            onClick={() => { setFilterTribe("ALL"); setFilterStage("ALL"); setSearch(""); }}
                             style={{
-                                padding: "8px 16px",
-                                borderRadius: "8px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
                                 border: "1px solid #d1d5db",
-                                background: "#f3f4f6",
+                                background: "#fff",
                                 cursor: "pointer",
-                                fontSize: "13px"
+                                fontSize: "12px",
+                                color: "#6b7280"
                             }}
                         >
-                            Clear Filter
+                            Clear
                         </button>
                     )}
                 </div>
 
-                {/* ACTIVE FILTER INDICATOR */}
+                {/* COMPACT ACTIVE FILTER INDICATOR */}
                 {filterStage !== "ALL" && (
-                    <div style={{ marginBottom: "15px", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "14px", color: "#6b7280" }}>
-                            Showing:
-                        </span>
-                        <span
-                            style={{
-                                padding: "4px 12px",
-                                borderRadius: "20px",
-                                background: getStageColor(filterStage === "READY" ? "Life Group Class" : filterStage),
-                                color: getStageTextColor(filterStage === "READY" ? "Life Group Class" : filterStage),
-                                fontSize: "13px",
-                                fontWeight: "600"
-                            }}
-                        >
+                    <div style={{ marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "12px", color: "#6b7280" }}>Showing:</span>
+                        <span style={{
+                            padding: "2px 8px",
+                            borderRadius: "12px",
+                            background: getStageColor(filterStage === "READY" ? "Life Group Class" : filterStage),
+                            color: getStageTextColor(filterStage === "READY" ? "Life Group Class" : filterStage),
+                            fontSize: "11px",
+                            fontWeight: 600
+                        }}>
                             {filterStage === "READY" ? "Ready to Convert" : filterStage}
                         </span>
-                        <span style={{ fontSize: "14px", color: "#6b7280" }}>
-                            ({filteredMembers.length} results)
-                        </span>
+                        <span style={{ fontSize: "12px", color: "#6b7280" }}>({filteredMembers.length} results)</span>
                     </div>
                 )}
 
-                {/* TABLE */}
-                <div className="excel-card" style={{ marginTop: "10px" }}>
-                    <div className="excel-header">
-                        <h2>Newcomers List</h2>
+                {/* COMPACT TABLE */}
+                <div style={{ borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden", background: "#fff" }}>
+                    <div style={{ padding: "10px 14px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>Newcomers List</h2>
+                        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{filteredMembers.length} total</span>
                     </div>
-                    <div className="excel-wrapper">
-                        <table className="excel-table">
+                    <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
                             <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Tribe</th>
-                                    <th>Invited By</th>
-                                    <th>Stage</th>
-                                    <th>Action</th>
+                                <tr style={{ background: "#f9fafb" }}>
+                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Name</th>
+                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tribe</th>
+                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Invited By</th>
+                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Stage</th>
+                                    <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {loading ? (
-                                    <tr>
-                                        <td colSpan="5">Loading...</td>
-                                    </tr>
+                                    <tr><td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#6b7280" }}>Loading...</td></tr>
                                 ) : filteredMembers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="5">No newcomers found.</td>
-                                    </tr>
+                                    <tr><td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#6b7280" }}>No newcomers found.</td></tr>
                                 ) : (
                                     filteredMembers.map((member) => (
-                                        <tr key={member.id}>
-                                            <td>{member.firstname} {member.lastname}</td>
-                                            <td>{member.tribe}</td>
-                                            <td>{member.invited_by}</td>
-                                            <td>
-                                                <span
-                                                    style={{
-                                                        padding: "6px 12px",
-                                                        borderRadius: "20px",
+                                        <tr key={member.id} style={{ borderBottom: "1px solid #f3f4f6", transition: "background 0.15s" }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                                        >
+                                            <td style={{ padding: "8px 10px" }}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                    <div style={{
+                                                        width: "28px",
+                                                        height: "28px",
+                                                        borderRadius: "50%",
                                                         background: getStageColor(member.remarks),
                                                         color: getStageTextColor(member.remarks),
-                                                        fontSize: "13px",
-                                                        fontWeight: "600"
-                                                    }}
-                                                >
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        fontSize: "10px",
+                                                        fontWeight: 700,
+                                                        flexShrink: 0
+                                                    }}>
+                                                        {getInitials(member.firstname, member.lastname)}
+                                                    </div>
+                                                    <span style={{ fontWeight: 600, color: "#111827" }}>{member.firstname} {member.lastname}</span>
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: "8px 10px", color: "#6b7280" }}>{member.tribe}</td>
+                                            <td style={{ padding: "8px 10px", color: "#6b7280", fontSize: "11px" }}>{member.invited_by || "—"}</td>
+                                            <td style={{ padding: "8px 10px" }}>
+                                                <span style={{
+                                                    padding: "2px 8px",
+                                                    borderRadius: "10px",
+                                                    background: getStageColor(member.remarks),
+                                                    color: getStageTextColor(member.remarks),
+                                                    fontSize: "10px",
+                                                    fontWeight: 700
+                                                }}>
                                                     {member.remarks}
                                                 </span>
                                             </td>
-                                            <td>
-                                                <div style={{ display: "flex", gap: "10px" }}>
+                                            <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                                                <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
                                                     {canAdd && !isReadyForConversion(member.remarks) && (
                                                         <button
-                                                            onClick={() =>
-                                                                updateRemarks(member.id, member.remarks)
-                                                            }
+                                                            onClick={() => updateRemarks(member.id, member.remarks)}
+                                                            style={{
+                                                                padding: "4px 10px",
+                                                                borderRadius: "6px",
+                                                                border: `1px solid ${getStageBorderColor(member.remarks)}`,
+                                                                background: getStageColor(member.remarks),
+                                                                color: getStageTextColor(member.remarks),
+                                                                fontSize: "10px",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer"
+                                                            }}
                                                         >
-                                                            Next Step
+                                                            Next
                                                         </button>
                                                     )}
 
                                                     {canConvert && isReadyForConversion(member.remarks) && (
                                                         <button
-                                                            onClick={() =>
-                                                                navigate("/add-leader", {
-                                                                    state: { newcomer: member }
-                                                                })
-                                                            }
-                                                            style={{ background: "#16a34a" }}
+                                                            onClick={() => navigate("/add-leader", { state: { newcomer: member } })}
+                                                            style={{
+                                                                padding: "4px 10px",
+                                                                borderRadius: "6px",
+                                                                border: "1px solid #16a34a",
+                                                                background: "#dcfce7",
+                                                                color: "#166534",
+                                                                fontSize: "10px",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer"
+                                                            }}
                                                         >
-                                                            Convert to Leader
+                                                            Convert
                                                         </button>
                                                     )}
 
                                                     {!canConvert && isReadyForConversion(member.remarks) && (
-                                                        <span style={{ color: "#16a34a", fontWeight: 600, fontSize: "13px" }}>
-                                                            Ready for Conversion
+                                                        <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10px" }}>
+                                                            Ready
                                                         </span>
                                                     )}
                                                 </div>
@@ -520,6 +525,129 @@ function Assimilation() {
                     </div>
                 </div>
             </div>
+
+            {/* ADD NEWCOMER MODAL */}
+            {showForm && (
+                <div
+                    className="modal-overlay"
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                        padding: "20px"
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowForm(false);
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            borderRadius: "12px",
+                            width: "100%",
+                            maxWidth: "500px",
+                            maxHeight: "90vh",
+                            overflow: "auto",
+                            position: "relative"
+                        }}
+                    >
+                        <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "14px 18px",
+                            borderBottom: "1px solid #e5e7eb",
+                            position: "sticky",
+                            top: 0,
+                            background: "#fff",
+                            zIndex: 10,
+                            borderRadius: "12px 12px 0 0"
+                        }}>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Add New Newcomer</h2>
+                            <button
+                                onClick={() => setShowForm(false)}
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    fontSize: "18px",
+                                    cursor: "pointer",
+                                    color: "#6b7280",
+                                    padding: "4px",
+                                    lineHeight: 1
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: "14px 18px 18px" }}>
+                            <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                <input
+                                    type="text"
+                                    placeholder="First Name"
+                                    value={firstname}
+                                    onChange={(e) => setFirstname(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Last Name"
+                                    value={lastname}
+                                    onChange={(e) => setLastname(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <select
+                                    value={tribe}
+                                    onChange={(e) => {
+                                        setTribe(e.target.value);
+                                        setInvitedBy("");
+                                    }}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                >
+                                    <option value="">Select Tribe</option>
+                                    {tribes.map((tribe) => (
+                                        <option key={tribe} value={tribe}>{tribe}</option>
+                                    ))}
+                                </select>
+
+                                <select
+                                    value={invitedBy}
+                                    onChange={(e) => setInvitedBy(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                >
+                                    <option value="">Select Inviter</option>
+                                    {filteredLeaders.map((leader) => (
+                                        <option key={leader.id} value={`${leader.firstname} ${leader.lastname}`}>
+                                            {leader.firstname} {leader.lastname}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <select
+                                    value={remarks}
+                                    onChange={(e) => setRemarks(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                >
+                                    {allNewcomerStages.map((stage) => (
+                                        <option key={stage} value={stage}>{stage}</option>
+                                    ))}
+                                </select>
+
+                                <button type="submit" style={{ marginTop: "4px", padding: "8px", fontSize: "13px" }}>
+                                    Add Newcomer
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

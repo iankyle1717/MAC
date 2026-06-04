@@ -164,17 +164,11 @@ function Dashboard() {
 
                 <div className="dashboard-hero">
 
-                    <p className="hero-label">
-                        MAC TLDA Monitoring
-                    </p>
-
                     <h1 className="hero-heading">
 
-                        Ministry Monitoring
-                        System
+                        Modern Acts Church Monitoring System
 
                     </h1>
-
                 
                 </div>
 
@@ -266,7 +260,7 @@ function Dashboard() {
                         </p>
 
                     </div>
-
+{/* 
                     <div className="info-card">
 
                         <p className="info-label">
@@ -286,7 +280,7 @@ function Dashboard() {
 
                         </p>
 
-                    </div>
+                    </div> */}
 
                     <div className="info-card">
 

@@ -10,7 +10,7 @@ const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 function Devotion() {
     const user = getCurrentUser();
     const userRef = useRef(user);
-    
+
     useEffect(() => {
         userRef.current = user;
     }, [user?.id]);
@@ -23,6 +23,7 @@ function Devotion() {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [filterMonth, setFilterMonth] = useState("ALL");
+    const [showForm, setShowForm] = useState(false);
 
     useEffect(() => {
         if (userRef.current) {
@@ -33,7 +34,7 @@ function Devotion() {
 
     const fetchRecords = async () => {
         if (!userRef.current) return;
-        
+
         setFetching(true);
         const { data, error } = await supabase
             .from("tblDevotion")
@@ -80,6 +81,7 @@ function Devotion() {
             setMonth("");
             setCompletedDays("");
             setTotalDays("");
+            setShowForm(false);
             const newRecord = {
                 id: Date.now(),
                 leader_id: userRef.current.id,
@@ -97,10 +99,10 @@ function Devotion() {
     // Group records by month and check consistency
     const getMonthlyStats = () => {
         const monthly = {};
-        
+
         records.forEach((record) => {
             const key = record.month;
-            
+
             if (!monthly[key]) {
                 monthly[key] = { monthName: key, count: 0, totalCompleted: 0, totalDays: 0, records: [] };
             }
@@ -160,44 +162,65 @@ function Devotion() {
         <div className="layout">
             <Sidebar />
             <div className="content">
-                <h1>Devotion Recording</h1>
-                <p style={{ opacity: 0.7, marginBottom: "20px" }}>
-                    Welcome, <strong>{user.firstname} {user.lastname}</strong> • {user.tribe}
-                </p>
+                {/* COMPACT HEADER */}
+                <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "12px",
+                    padding: "12px 0",
+                    borderBottom: "1px solid #e5e7eb"
+                }}>
+                    <div>
+                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>Devotion Recording</h1>
+                        <p style={{ opacity: 0.7, margin: "2px 0 0 0", fontSize: "12px" }}>
+                            Welcome, <strong>{user.firstname} {user.lastname}</strong> • {user.tribe}
+                        </p>
+                    </div>
+                    <button
+                        className="btn-sm btn-primary"
+                        onClick={() => setShowForm(true)}
+                        style={{ padding: "6px 14px", fontSize: "13px" }}
+                    >
+                        + Record Devotion
+                    </button>
+                </div>
 
-                {/* MONTHLY CONSISTENCY STATS */}
+                {/* COMPACT STATS CARDS */}
                 <div
                     style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
-                        gap: "15px",
-                        marginBottom: "25px"
+                        gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
+                        gap: "8px",
+                        marginBottom: "15px"
                     }}
                 >
-                    {/* Current Month Card */}
                     <div
                         className="record-card"
                         style={{
-                            border: currentMonth ? `2px solid ${currentMonth.statusColor}` : "2px solid #e5e7eb"
+                            border: currentMonth ? `2px solid ${currentMonth.statusColor}` : "2px solid #e5e7eb",
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "#fff"
                         }}
                     >
-                        <h3>This Month ({currentMonthName})</h3>
-                        <h1 style={{ color: currentMonth ? currentMonth.statusColor : "#6b7280" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>
+                            This Month ({currentMonthName})
+                        </h3>
+                        <h1 style={{ color: currentMonth ? currentMonth.statusColor : "#6b7280", fontSize: "22px", margin: 0 }}>
                             {currentMonth ? currentMonth.totalCompleted : 0}
                         </h1>
-                        <p style={{ fontSize: "13px", marginTop: "4px" }}>
-                            Target: 25 days
-                        </p>
+                        <p style={{ fontSize: "10px", marginTop: "2px", margin: 0, color: "#9ca3af" }}>Target: 25 days</p>
                         {currentMonth && (
                             <span
                                 style={{
                                     display: "inline-block",
-                                    marginTop: "8px",
-                                    padding: "4px 12px",
-                                    borderRadius: "20px",
+                                    marginTop: "4px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
                                     background: currentMonth.statusBg,
                                     color: currentMonth.statusColor,
-                                    fontSize: "12px",
+                                    fontSize: "10px",
                                     fontWeight: "700"
                                 }}
                             >
@@ -208,12 +231,12 @@ function Devotion() {
                             <span
                                 style={{
                                     display: "inline-block",
-                                    marginTop: "8px",
-                                    padding: "4px 12px",
-                                    borderRadius: "20px",
+                                    marginTop: "4px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
                                     background: "#f3f4f6",
                                     color: "#6b7280",
-                                    fontSize: "12px",
+                                    fontSize: "10px",
                                     fontWeight: "700"
                                 }}
                             >
@@ -222,256 +245,187 @@ function Devotion() {
                         )}
                     </div>
 
-                    {/* Total Records */}
-                    <div className="record-card">
-                        <h3>Total Entries</h3>
-                        <h1>{records.length}</h1>
+                    <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#fff", border: "1px solid #e5e7eb" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Total Entries</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#111827" }}>{records.length}</h1>
                     </div>
 
-                    {/* Consistent Months */}
-                    <div className="record-card" style={{ background: "#ecfdf5" }}>
-                        <h3>Consistent Months</h3>
-                        <h1 style={{ color: "#16a34a" }}>
+                    <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#ecfdf5", border: "1px solid #bbf7d0" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>Consistent Months</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>
                             {monthlyStats.filter(m => m.status === "CONSISTENT").length}
                         </h1>
                     </div>
 
-                    {/* Inconsistent Months */}
-                    <div className="record-card" style={{ background: "#fef2f2" }}>
-                        <h3>Inconsistent Months</h3>
-                        <h1 style={{ color: "#dc2626" }}>
+                    <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#dc2626", fontWeight: 500 }}>Inconsistent Months</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#dc2626" }}>
                             {monthlyStats.filter(m => m.status === "INCONSISTENT").length}
                         </h1>
                     </div>
                 </div>
 
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "30px"
-                    }}
-                >
-                    {/* LEFT: FORM */}
-                    <div>
-                        <h2 style={{ marginBottom: "15px" }}>Record New Devotion</h2>
-                        <form className="leader-form" onSubmit={handleSubmit}>
-                            <div style={{ display: "flex", gap: "10px" }}>
-                                <select
-                                    value={month}
-                                    onChange={(e) => setMonth(e.target.value)}
-                                    style={{ flex: 2 }}
-                                >
-                                    <option value="">Select Month</option>
-                                    <option value="January">January</option>
-                                    <option value="February">February</option>
-                                    <option value="March">March</option>
-                                    <option value="April">April</option>
-                                    <option value="May">May</option>
-                                    <option value="June">June</option>
-                                    <option value="July">July</option>
-                                    <option value="August">August</option>
-                                    <option value="September">September</option>
-                                    <option value="October">October</option>
-                                    <option value="November">November</option>
-                                    <option value="December">December</option>
-                                </select>
+                {/* COMPACT RECORDS SECTION */}
+                <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
+                            My Devotion Records
+                            <span
+                                style={{
+                                    marginLeft: "8px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
+                                    background: "#dbeafe",
+                                    color: "#1e40af",
+                                    fontSize: "11px",
+                                    fontWeight: 600
+                                }}
+                            >
+                                {filteredRecords.length} entries
+                            </span>
+                        </h2>
 
-                                <select
-                                    value={year}
-                                    onChange={(e) => setYear(e.target.value)}
-                                    style={{ flex: 1 }}
-                                >
-                                    <option value="">Year</option>
-                                    {yearOptions.map((yr) => (
-                                        <option key={yr} value={yr}>
-                                            {yr}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <input
-                                type="number"
-                                placeholder="Completed Days"
-                                value={completedDays}
-                                onChange={(e) => setCompletedDays(e.target.value)}
-                                min="0"
-                                max="31"
-                            />
-
-                            <input
-                                type="number"
-                                placeholder="Total Days in Month"
-                                value={totalDays}
-                                onChange={(e) => setTotalDays(e.target.value)}
-                                min="1"
-                                max="31"
-                            />
-
-                            <button type="submit">
-                                {loading ? "Recording..." : "Record Devotion"}
-                            </button>
-                        </form>
+                        <select
+                            value={filterMonth}
+                            onChange={(e) => setFilterMonth(e.target.value)}
+                            style={{
+                                padding: "4px 8px",
+                                borderRadius: "6px",
+                                border: "1px solid #e5e7eb",
+                                fontSize: "12px",
+                                cursor: "pointer"
+                            }}
+                        >
+                            <option value="ALL">All Months</option>
+                            {monthOptions.map((month) => (
+                                <option key={month.key} value={month.key}>
+                                    {month.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
-                    {/* RIGHT: RECORDS */}
-                    <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                            <h2 style={{ margin: 0 }}>
-                                My Devotion Records
-                                <span
+                    {fetching ? (
+                        <p style={{ fontSize: "13px", color: "#6b7280" }}>Loading records...</p>
+                    ) : filteredRecords.length === 0 ? (
+                        <p style={{ fontSize: "13px", color: "#6b7280" }}>No devotion records yet.</p>
+                    ) : (
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+                                gap: "8px"
+                            }}
+                        >
+                            {filteredRecords.map((record) => (
+                                <div
+                                    key={record.id}
                                     style={{
-                                        marginLeft: "10px",
-                                        padding: "4px 10px",
-                                        borderRadius: "12px",
-                                        background: "#dbeafe",
-                                        color: "#1e40af",
-                                        fontSize: "14px"
+                                        padding: "10px 12px",
+                                        borderRadius: "8px",
+                                        background: "#f9fafb",
+                                        border: "1px solid #e5e7eb"
                                     }}
                                 >
-                                    {filteredRecords.length} entries
-                                </span>
-                            </h2>
-                            
-                            {/* MONTH FILTER */}
-                            <select
-                                value={filterMonth}
-                                onChange={(e) => setFilterMonth(e.target.value)}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: "10px",
-                                    border: "1px solid #e5e7eb",
-                                    fontSize: "14px",
-                                    cursor: "pointer"
-                                }}
-                            >
-                                <option value="ALL">All Months</option>
-                                {monthOptions.map((month) => (
-                                    <option key={month.key} value={month.key}>
-                                        {month.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {fetching ? (
-                            <p>Loading records...</p>
-                        ) : filteredRecords.length === 0 ? (
-                            <p style={{ color: "#6b7280" }}>No devotion records yet.</p>
-                        ) : (
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "12px"
-                                }}
-                            >
-                                {filteredRecords.map((record) => (
                                     <div
-                                        key={record.id}
                                         style={{
-                                            padding: "16px 20px",
-                                            borderRadius: "14px",
-                                            background: "#f9fafb",
-                                            border: "1px solid #e5e7eb"
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            marginBottom: "6px"
                                         }}
                                     >
-                                        <div
+                                        <h3 style={{ margin: 0, fontSize: "13px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                            {record.month}
+                                        </h3>
+                                        <span
                                             style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                marginBottom: "8px"
+                                                padding: "2px 8px",
+                                                borderRadius: "8px",
+                                                background: record.completed_days >= 25 ? "#dcfce7" : "#fee2e2",
+                                                color: record.completed_days >= 25 ? "#16a34a" : "#dc2626",
+                                                fontSize: "10px",
+                                                fontWeight: "600",
+                                                marginLeft: "6px",
+                                                flexShrink: 0
                                             }}
                                         >
-                                            <h3 style={{ margin: 0, fontSize: "16px" }}>
-                                                {record.month}
-                                            </h3>
-                                            <span
-                                                style={{
-                                                    padding: "4px 10px",
-                                                    borderRadius: "10px",
-                                                    background: record.completed_days >= 25 ? "#dcfce7" : "#fee2e2",
-                                                    color: record.completed_days >= 25 ? "#16a34a" : "#dc2626",
-                                                    fontSize: "12px",
-                                                    fontWeight: "600"
-                                                }}
-                                            >
-                                                {record.completed_days >= 25 ? "Consistent" : "Inconsistent"}
-                                            </span>
-                                        </div>
-                                        <div style={{ display: "flex", gap: "20px", marginTop: "8px" }}>
-                                            <p style={{ margin: 0, color: "#6b7280", fontSize: "14px" }}>
-                                                ✅ <strong>{record.completed_days}</strong> days completed
-                                            </p>
-                                            <p style={{ margin: 0, color: "#9ca3af", fontSize: "14px" }}>
-                                                📅 {record.total_days} total days
-                                            </p>
-                                        </div>
-                                        <div style={{ marginTop: "8px", background: "#e5e7eb", borderRadius: "8px", height: "8px", overflow: "hidden" }}>
-                                            <div
-                                                style={{
-                                                    width: `${(record.completed_days / record.total_days) * 100}%`,
-                                                    height: "100%",
-                                                    background: record.completed_days >= 25 ? "#16a34a" : "#f59e0b",
-                                                    borderRadius: "8px",
-                                                    transition: "width 0.3s"
-                                                }}
-                                            />
-                                        </div>
+                                            {record.completed_days >= 25 ? "Consistent" : "Inconsistent"}
+                                        </span>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                                    <div style={{ display: "flex", gap: "12px", marginBottom: "6px" }}>
+                                        <p style={{ margin: 0, color: "#6b7280", fontSize: "11px" }}>
+                                            ✅ <strong>{record.completed_days}</strong> done
+                                        </p>
+                                        <p style={{ margin: 0, color: "#9ca3af", fontSize: "11px" }}>
+                                            📅 {record.total_days} total
+                                        </p>
+                                    </div>
+                                    <div style={{ background: "#e5e7eb", borderRadius: "6px", height: "6px", overflow: "hidden" }}>
+                                        <div
+                                            style={{
+                                                width: `${(record.completed_days / record.total_days) * 100}%`,
+                                                height: "100%",
+                                                background: record.completed_days >= 25 ? "#16a34a" : "#f59e0b",
+                                                borderRadius: "6px",
+                                                transition: "width 0.3s"
+                                            }}
+                                        />
+                                    </div>
+                                    <p style={{ margin: "4px 0 0 0", color: "#9ca3af", fontSize: "10px", textAlign: "right" }}>
+                                        {Math.round((record.completed_days / record.total_days) * 100)}%
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* MONTHLY BREAKDOWN TABLE */}
+                {/* COMPACT MONTHLY BREAKDOWN TABLE */}
                 {monthlyStats.length > 0 && (
-                    <div className="excel-card" style={{ marginTop: "30px" }}>
-                        <div className="excel-header">
-                            <h2>Monthly Devotion Consistency Report</h2>
+                    <div className="excel-card" style={{ marginTop: "20px", borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                        <div className="excel-header" style={{ padding: "10px 14px" }}>
+                            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>Monthly Devotion Consistency Report</h2>
                         </div>
                         <div className="excel-wrapper">
-                            <table className="excel-table">
+                            <table className="excel-table" style={{ fontSize: "12px" }}>
                                 <thead>
                                     <tr>
-                                        <th>Month</th>
-                                        <th>Entries</th>
-                                        <th>Total Completed</th>
-                                        <th>Avg / Entry</th>
-                                        <th>Target</th>
-                                        <th>Status</th>
-                                        <th>Details</th>
+                                        <th style={{ padding: "8px 10px" }}>Month</th>
+                                        <th style={{ padding: "8px 10px" }}>Entries</th>
+                                        <th style={{ padding: "8px 10px" }}>Total Done</th>
+                                        <th style={{ padding: "8px 10px" }}>Avg</th>
+                                        <th style={{ padding: "8px 10px" }}>Target</th>
+                                        <th style={{ padding: "8px 10px" }}>Status</th>
+                                        <th style={{ padding: "8px 10px" }}>Details</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {monthlyStats.map((month) => (
                                         <tr key={month.key}>
-                                            <td style={{ fontWeight: 600 }}>{month.monthName}</td>
-                                            <td>{month.count}</td>
-                                            <td>{month.totalCompleted} days</td>
-                                            <td>{month.avgCompleted} days</td>
-                                            <td>25</td>
-                                            <td>
+                                            <td style={{ fontWeight: 600, padding: "6px 10px" }}>{month.monthName}</td>
+                                            <td style={{ padding: "6px 10px" }}>{month.count}</td>
+                                            <td style={{ padding: "6px 10px" }}>{month.totalCompleted} days</td>
+                                            <td style={{ padding: "6px 10px" }}>{month.avgCompleted} days</td>
+                                            <td style={{ padding: "6px 10px" }}>25</td>
+                                            <td style={{ padding: "6px 10px" }}>
                                                 <span
                                                     style={{
-                                                        padding: "6px 14px",
-                                                        borderRadius: "20px",
+                                                        padding: "2px 8px",
+                                                        borderRadius: "10px",
                                                         background: month.statusBg,
                                                         color: month.statusColor,
-                                                        fontSize: "13px",
+                                                        fontSize: "10px",
                                                         fontWeight: "700"
                                                     }}
                                                 >
                                                     {month.status}
                                                 </span>
                                             </td>
-                                            <td>
+                                            <td style={{ padding: "6px 10px", fontSize: "11px", color: "#6b7280" }}>
                                                 {month.totalCompleted >= 25
                                                     ? "✅ Keep it up!"
-                                                    : `❌ ${25 - month.totalCompleted} Days is Missing`}
+                                                    : `❌ ${25 - month.totalCompleted} days missing`}
                                             </td>
                                         </tr>
                                     ))}
@@ -481,6 +435,132 @@ function Devotion() {
                     </div>
                 )}
             </div>
+
+            {/* RECORD DEVOTION MODAL */}
+            {showForm && (
+                <div
+                    className="modal-overlay"
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                        padding: "20px"
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowForm(false);
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            borderRadius: "12px",
+                            width: "100%",
+                            maxWidth: "480px",
+                            maxHeight: "90vh",
+                            overflow: "auto",
+                            position: "relative"
+                        }}
+                    >
+                        <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "14px 18px",
+                            borderBottom: "1px solid #e5e7eb",
+                            position: "sticky",
+                            top: 0,
+                            background: "#fff",
+                            zIndex: 10,
+                            borderRadius: "12px 12px 0 0"
+                        }}>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Record New Devotion</h2>
+                            <button
+                                onClick={() => setShowForm(false)}
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    fontSize: "18px",
+                                    cursor: "pointer",
+                                    color: "#6b7280",
+                                    padding: "4px",
+                                    lineHeight: 1
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: "14px 18px 18px" }}>
+                            <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                <div style={{ display: "flex", gap: "8px" }}>
+                                    <select
+                                        value={month}
+                                        onChange={(e) => setMonth(e.target.value)}
+                                        style={{ flex: 2, padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                    >
+                                        <option value="">Select Month</option>
+                                        <option value="January">January</option>
+                                        <option value="February">February</option>
+                                        <option value="March">March</option>
+                                        <option value="April">April</option>
+                                        <option value="May">May</option>
+                                        <option value="June">June</option>
+                                        <option value="July">July</option>
+                                        <option value="August">August</option>
+                                        <option value="September">September</option>
+                                        <option value="October">October</option>
+                                        <option value="November">November</option>
+                                        <option value="December">December</option>
+                                    </select>
+
+                                    <select
+                                        value={year}
+                                        onChange={(e) => setYear(e.target.value)}
+                                        style={{ flex: 1, padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                    >
+                                        <option value="">Year</option>
+                                        {yearOptions.map((yr) => (
+                                            <option key={yr} value={yr}>
+                                                {yr}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <input
+                                    type="number"
+                                    placeholder="Completed Days"
+                                    value={completedDays}
+                                    onChange={(e) => setCompletedDays(e.target.value)}
+                                    min="0"
+                                    max="31"
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <input
+                                    type="number"
+                                    placeholder="Total Days in Month"
+                                    value={totalDays}
+                                    onChange={(e) => setTotalDays(e.target.value)}
+                                    min="1"
+                                    max="31"
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <button type="submit" style={{ marginTop: "4px", padding: "8px", fontSize: "13px" }}>
+                                    {loading ? "Recording..." : "Record Devotion"}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -6,7 +6,7 @@ import { getCurrentUser } from "../utils/auth";
 function LifeGroup() {
     const user = getCurrentUser();
     const userRef = useRef(user);
-    
+
     useEffect(() => {
         userRef.current = user;
     }, [user?.id]);
@@ -20,6 +20,7 @@ function LifeGroup() {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
     const [filterMonth, setFilterMonth] = useState("ALL");
+    const [showForm, setShowForm] = useState(false);
 
     useEffect(() => {
         if (userRef.current) {
@@ -30,7 +31,7 @@ function LifeGroup() {
 
     const fetchRecords = async () => {
         if (!userRef.current) return;
-        
+
         setFetching(true);
         const { data, error } = await supabase
             .from("tblLifeGroup")
@@ -78,6 +79,7 @@ function LifeGroup() {
             setPlace("");
             setType("");
             setExhorter("");
+            setShowForm(false);
             const newRecord = {
                 id: Date.now(),
                 leader_id: userRef.current.id,
@@ -97,12 +99,12 @@ function LifeGroup() {
     // Group records by month and check consistency
     const getMonthlyStats = () => {
         const monthly = {};
-        
+
         records.forEach((record) => {
             const d = new Date(record.date);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
             const monthName = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-            
+
             if (!monthly[key]) {
                 monthly[key] = { monthName, count: 0, records: [] };
             }
@@ -166,44 +168,65 @@ function LifeGroup() {
         <div className="layout">
             <Sidebar />
             <div className="content">
-                <h1>Life Group Recording</h1>
-                <p style={{ opacity: 0.7, marginBottom: "20px" }}>
-                    Welcome, <strong>{user.firstname} {user.lastname}</strong> • {user.tribe}
-                </p>
+                {/* COMPACT HEADER */}
+                <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: "12px",
+                    padding: "12px 0",
+                    borderBottom: "1px solid #e5e7eb"
+                }}>
+                    <div>
+                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>Life Group Recording</h1>
+                        <p style={{ opacity: 0.7, margin: "2px 0 0 0", fontSize: "12px" }}>
+                            Welcome, <strong>{user.firstname} {user.lastname}</strong> • {user.tribe}
+                        </p>
+                    </div>
+                    <button
+                        className="btn-sm btn-primary"
+                        onClick={() => setShowForm(true)}
+                        style={{ padding: "6px 14px", fontSize: "13px" }}
+                    >
+                        + Record Life Group
+                    </button>
+                </div>
 
-                {/* MONTHLY CONSISTENCY STATS */}
+                {/* COMPACT STATS CARDS */}
                 <div
                     style={{
                         display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))",
-                        gap: "15px",
-                        marginBottom: "25px"
+                        gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
+                        gap: "8px",
+                        marginBottom: "15px"
                     }}
                 >
-                    {/* Current Month Card */}
                     <div
                         className="record-card"
                         style={{
-                            border: currentMonth ? `2px solid ${currentMonth.statusColor}` : "2px solid #e5e7eb"
+                            border: currentMonth ? `2px solid ${currentMonth.statusColor}` : "2px solid #e5e7eb",
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "#fff"
                         }}
                     >
-                        <h3>This Month ({now.toLocaleDateString("en-US", { month: "long" })})</h3>
-                        <h1 style={{ color: currentMonth ? currentMonth.statusColor : "#6b7280" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>
+                            This Month ({now.toLocaleDateString("en-US", { month: "long" })})
+                        </h3>
+                        <h1 style={{ color: currentMonth ? currentMonth.statusColor : "#6b7280", fontSize: "22px", margin: 0 }}>
                             {currentMonth ? currentMonth.count : 0}
                         </h1>
-                        <p style={{ fontSize: "13px", marginTop: "4px" }}>
-                            Target: 3 per month
-                        </p>
+                        <p style={{ fontSize: "10px", marginTop: "2px", margin: 0, color: "#9ca3af" }}>Target: 3 per month</p>
                         {currentMonth && (
                             <span
                                 style={{
                                     display: "inline-block",
-                                    marginTop: "8px",
-                                    padding: "4px 12px",
-                                    borderRadius: "20px",
+                                    marginTop: "4px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
                                     background: currentMonth.statusBg,
                                     color: currentMonth.statusColor,
-                                    fontSize: "12px",
+                                    fontSize: "10px",
                                     fontWeight: "700"
                                 }}
                             >
@@ -214,12 +237,12 @@ function LifeGroup() {
                             <span
                                 style={{
                                     display: "inline-block",
-                                    marginTop: "8px",
-                                    padding: "4px 12px",
-                                    borderRadius: "20px",
+                                    marginTop: "4px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
                                     background: "#f3f4f6",
                                     color: "#6b7280",
-                                    fontSize: "12px",
+                                    fontSize: "10px",
                                     fontWeight: "700"
                                 }}
                             >
@@ -228,225 +251,171 @@ function LifeGroup() {
                         )}
                     </div>
 
-                    {/* Total Records */}
-                    <div className="record-card">
-                        <h3>Total Records</h3>
-                        <h1>{records.length}</h1>
+                    <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#fff", border: "1px solid #e5e7eb" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Total Records</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#111827" }}>{records.length}</h1>
                     </div>
 
-                    {/* Consistent Months */}
-                    <div className="record-card" style={{ background: "#ecfdf5" }}>
-                        <h3>Consistent Months</h3>
-                        <h1 style={{ color: "#16a34a" }}>
+                    <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#ecfdf5", border: "1px solid #bbf7d0" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>Consistent Months</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>
                             {monthlyStats.filter(m => m.status === "CONSISTENT").length}
                         </h1>
                     </div>
 
-                    {/* Inconsistent Months */}
-                    <div className="record-card" style={{ background: "#fef2f2" }}>
-                        <h3>Inconsistent Months</h3>
-                        <h1 style={{ color: "#dc2626" }}>
+                    <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca" }}>
+                        <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#dc2626", fontWeight: 500 }}>Inconsistent Months</h3>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#dc2626" }}>
                             {monthlyStats.filter(m => m.status === "INCONSISTENT").length}
                         </h1>
                     </div>
                 </div>
 
-                <div
-                    style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "30px"
-                    }}
-                >
-                    {/* LEFT: FORM */}
-                    <div>
-                        <h2 style={{ marginBottom: "15px" }}>Record New Life Group</h2>
-                        <form className="leader-form" onSubmit={handleSubmit}>
-                            <input
-                                type="text"
-                                placeholder="Topic"
-                                value={topic}
-                                onChange={(e) => setTopic(e.target.value)}
-                            />
+                {/* COMPACT RECORDS SECTION */}
+                <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
+                            My Life Group Records
+                            <span
+                                style={{
+                                    marginLeft: "8px",
+                                    padding: "2px 8px",
+                                    borderRadius: "10px",
+                                    background: "#dbeafe",
+                                    color: "#1e40af",
+                                    fontSize: "11px",
+                                    fontWeight: 600
+                                }}
+                            >
+                                {filteredRecords.length} total
+                            </span>
+                        </h2>
 
-                            <input
-                                type="text"
-                                placeholder="Place"
-                                value={place}
-                                onChange={(e) => setPlace(e.target.value)}
-                            />
-
-                            <input
-                                type="text"
-                                placeholder="Type (e.g., 1on1, Community etc.)"
-                                value={type}
-                                onChange={(e) => setType(e.target.value)}
-                            />
-
-                            <input
-                                type="text"
-                                placeholder="Exhorter (Who shared/spoke)"
-                                value={exhorter}
-                                onChange={(e) => setExhorter(e.target.value)}
-                            />
-
-                            <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                            />
-
-                            <button type="submit">
-                                {loading ? "Recording..." : "Record Life Group"}
-                            </button>
-                        </form>
+                        <select
+                            value={filterMonth}
+                            onChange={(e) => setFilterMonth(e.target.value)}
+                            style={{
+                                padding: "4px 8px",
+                                borderRadius: "6px",
+                                border: "1px solid #e5e7eb",
+                                fontSize: "12px",
+                                cursor: "pointer"
+                            }}
+                        >
+                            <option value="ALL">All Months</option>
+                            {monthOptions.map((month) => (
+                                <option key={month.key} value={month.key}>
+                                    {month.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
 
-                    {/* RIGHT: RECORDS */}
-                    <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                            <h2 style={{ margin: 0 }}>
-                                My Life Group Records
-                                <span
+                    {fetching ? (
+                        <p style={{ fontSize: "13px", color: "#6b7280" }}>Loading records...</p>
+                    ) : filteredRecords.length === 0 ? (
+                        <p style={{ fontSize: "13px", color: "#6b7280" }}>No life group records yet.</p>
+                    ) : (
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                                gap: "8px"
+                            }}
+                        >
+                            {filteredRecords.map((record) => (
+                                <div
+                                    key={record.id}
                                     style={{
-                                        marginLeft: "10px",
-                                        padding: "4px 10px",
-                                        borderRadius: "12px",
-                                        background: "#dbeafe",
-                                        color: "#1e40af",
-                                        fontSize: "14px"
+                                        padding: "10px 12px",
+                                        borderRadius: "8px",
+                                        background: "#f9fafb",
+                                        border: "1px solid #e5e7eb"
                                     }}
                                 >
-                                    {filteredRecords.length} total
-                                </span>
-                            </h2>
-                            
-                            {/* MONTH FILTER */}
-                            <select
-                                value={filterMonth}
-                                onChange={(e) => setFilterMonth(e.target.value)}
-                                style={{
-                                    padding: "8px 12px",
-                                    borderRadius: "10px",
-                                    border: "1px solid #e5e7eb",
-                                    fontSize: "14px",
-                                    cursor: "pointer"
-                                }}
-                            >
-                                <option value="ALL">All Months</option>
-                                {monthOptions.map((month) => (
-                                    <option key={month.key} value={month.key}>
-                                        {month.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {fetching ? (
-                            <p>Loading records...</p>
-                        ) : filteredRecords.length === 0 ? (
-                            <p style={{ color: "#6b7280" }}>No life group records yet.</p>
-                        ) : (
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: "12px"
-                                }}
-                            >
-                                {filteredRecords.map((record) => (
                                     <div
-                                        key={record.id}
                                         style={{
-                                            padding: "16px 20px",
-                                            borderRadius: "14px",
-                                            background: "#f9fafb",
-                                            border: "1px solid #e5e7eb"
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            marginBottom: "4px"
                                         }}
                                     >
-                                        <div
+                                        <h3 style={{ margin: 0, fontSize: "13px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                                            {record.topic}
+                                        </h3>
+                                        <span
                                             style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                alignItems: "center",
-                                                marginBottom: "8px"
+                                                padding: "2px 8px",
+                                                borderRadius: "8px",
+                                                background: "#fef3c7",
+                                                color: "#92400e",
+                                                fontSize: "10px",
+                                                fontWeight: "600",
+                                                marginLeft: "6px",
+                                                flexShrink: 0
                                             }}
                                         >
-                                            <h3 style={{ margin: 0, fontSize: "16px" }}>
-                                                {record.topic}
-                                            </h3>
-                                            <span
-                                                style={{
-                                                    padding: "4px 10px",
-                                                    borderRadius: "10px",
-                                                    background: "#fef3c7",
-                                                    color: "#92400e",
-                                                    fontSize: "12px",
-                                                    fontWeight: "600"
-                                                }}
-                                            >
-                                                {record.type}
-                                            </span>
-                                        </div>
-                                        <p style={{ margin: "0 0 4px 0", color: "#6b7280", fontSize: "14px" }}>
-                                            📍 {record.place}
-                                        </p>
-                                        {record.exhorter && (
-                                            <p style={{ margin: "0 0 4px 0", color: "#16a34a", fontSize: "14px", fontWeight: 600 }}>
-                                                🎤 Exhorter: {record.exhorter}
-                                            </p>
-                                        )}
-                                        <p style={{ margin: 0, color: "#9ca3af", fontSize: "13px" }}>
-                                            📅 {new Date(record.date).toLocaleDateString("en-US", {
-                                                year: "numeric",
-                                                month: "long",
-                                                day: "numeric"
-                                            })}
-                                        </p>
+                                            {record.type}
+                                        </span>
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                                    <p style={{ margin: "0 0 2px 0", color: "#6b7280", fontSize: "11px" }}>
+                                        📍 {record.place}
+                                    </p>
+                                    {record.exhorter && (
+                                        <p style={{ margin: "0 0 2px 0", color: "#16a34a", fontSize: "11px", fontWeight: 600 }}>
+                                            🎤 {record.exhorter}
+                                        </p>
+                                    )}
+                                    <p style={{ margin: 0, color: "#9ca3af", fontSize: "10px" }}>
+                                        📅 {new Date(record.date).toLocaleDateString("en-US", {
+                                            year: "numeric",
+                                            month: "short",
+                                            day: "numeric"
+                                        })}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {/* MONTHLY BREAKDOWN TABLE */}
+                {/* COMPACT MONTHLY BREAKDOWN TABLE */}
                 {monthlyStats.length > 0 && (
-                    <div className="excel-card" style={{ marginTop: "30px" }}>
-                        <div className="excel-header">
-                            <h2>Monthly Consistency Report</h2>
+                    <div className="excel-card" style={{ marginTop: "20px", borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                        <div className="excel-header" style={{ padding: "10px 14px" }}>
+                            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>Monthly Consistency Report</h2>
                         </div>
                         <div className="excel-wrapper">
-                            <table className="excel-table">
+                            <table className="excel-table" style={{ fontSize: "12px" }}>
                                 <thead>
                                     <tr>
-                                        <th>Month</th>
-                                        <th>Records</th>
-                                        <th>Target</th>
-                                        <th>Status</th>
+                                        <th style={{ padding: "8px 10px" }}>Month</th>
+                                        <th style={{ padding: "8px 10px" }}>Records</th>
+                                        <th style={{ padding: "8px 10px" }}>Target</th>
+                                        <th style={{ padding: "8px 10px" }}>Status</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {monthlyStats.map((month) => (
                                         <tr key={month.key}>
-                                            <td style={{ fontWeight: 600 }}>{month.monthName}</td>
-                                            <td>{month.count}</td>
-                                            <td>3</td>
-                                            <td>
+                                            <td style={{ fontWeight: 600, padding: "6px 10px" }}>{month.monthName}</td>
+                                            <td style={{ padding: "6px 10px" }}>{month.count}</td>
+                                            <td style={{ padding: "6px 10px" }}>3</td>
+                                            <td style={{ padding: "6px 10px" }}>
                                                 <span
                                                     style={{
-                                                        padding: "6px 14px",
-                                                        borderRadius: "20px",
+                                                        padding: "2px 8px",
+                                                        borderRadius: "10px",
                                                         background: month.statusBg,
                                                         color: month.statusColor,
-                                                        fontSize: "13px",
+                                                        fontSize: "10px",
                                                         fontWeight: "700"
                                                     }}
                                                 >
                                                     {month.status}
                                                 </span>
                                             </td>
-                                           
                                         </tr>
                                     ))}
                                 </tbody>
@@ -455,6 +424,116 @@ function LifeGroup() {
                     </div>
                 )}
             </div>
+
+            {/* RECORD LIFE GROUP MODAL */}
+            {showForm && (
+                <div
+                    className="modal-overlay"
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(0,0,0,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                        padding: "20px"
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowForm(false);
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            borderRadius: "12px",
+                            width: "100%",
+                            maxWidth: "480px",
+                            maxHeight: "90vh",
+                            overflow: "auto",
+                            position: "relative"
+                        }}
+                    >
+                        <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "14px 18px",
+                            borderBottom: "1px solid #e5e7eb",
+                            position: "sticky",
+                            top: 0,
+                            background: "#fff",
+                            zIndex: 10,
+                            borderRadius: "12px 12px 0 0"
+                        }}>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Record New Life Group</h2>
+                            <button
+                                onClick={() => setShowForm(false)}
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    fontSize: "18px",
+                                    cursor: "pointer",
+                                    color: "#6b7280",
+                                    padding: "4px",
+                                    lineHeight: 1
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: "14px 18px 18px" }}>
+                            <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                <input
+                                    type="text"
+                                    placeholder="Topic"
+                                    value={topic}
+                                    onChange={(e) => setTopic(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <input
+                                    type="text"
+                                    placeholder="Place"
+                                    value={place}
+                                    onChange={(e) => setPlace(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <input
+                                    type="text"
+                                    placeholder="Type (e.g., 1on1, Community etc.)"
+                                    value={type}
+                                    onChange={(e) => setType(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <input
+                                    type="text"
+                                    placeholder="Exhorter (Who shared/spoke)"
+                                    value={exhorter}
+                                    onChange={(e) => setExhorter(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => setDate(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <button type="submit" style={{ marginTop: "4px", padding: "8px", fontSize: "13px" }}>
+                                    {loading ? "Recording..." : "Record Life Group"}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
