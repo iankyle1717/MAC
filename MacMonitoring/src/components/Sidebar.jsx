@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { getCurrentUser, getNewcomer, logout, getVisibleRoutes, isAdmin } from "../utils/auth";
+import { getCurrentUser, getNewcomer, logout, getVisibleRoutes, isAdmin, getUserMinistries } from "../utils/auth";
 import logo from "../assets/logo.png";
 
 function Sidebar() {
@@ -10,6 +10,7 @@ function Sidebar() {
     const user = getCurrentUser();
     const newcomer = getNewcomer();
     const visibleRoutes = getVisibleRoutes();
+    const userMinistries = getUserMinistries();
 
     useEffect(() => {
         const handleAuthChange = () => setAuthVersion(v => v + 1);
@@ -25,7 +26,7 @@ function Sidebar() {
 
     const getRouteIcon = (label) => {
         const icons = {
-           "Dashboard": "◉",
+            "Dashboard": "◉",
             "Leaders": "◌",
             "New Invites": "✦",
             "Attendance": "✓",
@@ -50,9 +51,9 @@ function Sidebar() {
                 borderRight: "1px solid rgba(201, 164, 92, 0.2)",
                 boxShadow: "4px 0 24px rgba(0, 0, 0, 0.3)",
                 overflow: "hidden"
-            }}s
+            }}
         >
-            {/* LOGO - Compact */}
+            {/* LOGO */}
             <div 
                 style={{
                     padding: "16px 12px 12px",
@@ -73,15 +74,14 @@ function Sidebar() {
                 />
                 <h2 style={{
                     fontSize: "12px",
-                     color: "#c9a45c",
+                    color: "#c9a45c",
                     fontWeight: "800",
-                      margin: "0 0 2px 0",
+                    margin: "0 0 2px 0",
                     letterSpacing: "1px"
                 }}>
                     MODERN ACTS CHURCH
                 </h2>
-            
-                  <p style={{
+                <p style={{
                     fontSize: "11px",
                     color: "#c9a45c",
                     textTransform: "uppercase",
@@ -93,7 +93,7 @@ function Sidebar() {
                 </p>
             </div>
 
-            {/* USER - Compact */}
+            {/* USER */}
             <div 
                 style={{
                     margin: "10px 10px 6px",
@@ -121,6 +121,34 @@ function Sidebar() {
                         }}>
                             {user.type} • {user.tribe}
                         </p>
+                        
+                        {/* Ministries Display */}
+                        {userMinistries.length > 0 && (
+                            <div style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "4px",
+                                justifyContent: "center",
+                                marginBottom: "4px"
+                            }}>
+                                {userMinistries.map(ministry => (
+                                    <span key={ministry} style={{
+                                        display: "inline-block",
+                                        padding: "2px 8px",
+                                        borderRadius: "10px",
+                                        background: "rgba(201, 164, 92, 0.2)",
+                                        color: "#c9a45c",
+                                        fontSize: "9px",
+                                        fontWeight: "700",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.5px"
+                                    }}>
+                                        {ministry}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
                         {isAdmin() && (
                             <span style={{
                                 display: "inline-block",
@@ -133,7 +161,7 @@ function Sidebar() {
                                 textTransform: "uppercase",
                                 letterSpacing: "1px"
                             }}>
-                                 Admin
+                                Admin
                             </span>
                         )}
                     </>
@@ -163,13 +191,13 @@ function Sidebar() {
                             fontSize: "9px",
                             fontWeight: "700"
                         }}>
-                             {newcomer.remarks}
+                            {newcomer.remarks}
                         </span>
                     </>
                 ) : null}
             </div>
 
-            {/* NAV LINKS - Compact, no scroll */}
+            {/* NAV LINKS */}
             <div style={{ 
                 flex: 1, 
                 padding: "4px 8px",
@@ -224,7 +252,7 @@ function Sidebar() {
                 })}
             </div>
 
-            {/* LOGOUT - Compact, bottom */}
+            {/* LOGOUT */}
             <div style={{ 
                 padding: "10px",
                 borderTop: "1px solid rgba(201, 164, 92, 0.15)"

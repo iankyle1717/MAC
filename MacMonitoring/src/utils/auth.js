@@ -59,26 +59,73 @@ export const logout = () => {
 };
 
 /* =========================
+   MINISTRY HELPERS
+========================= */
+export const getUserMinistries = () => {
+    const user = getCurrentUser();
+    if (!user) return [];
+    // Handle both array (new) and string (legacy)
+    if (user.ministries && Array.isArray(user.ministries)) {
+        return user.ministries;
+    }
+    if (user.ministry) {
+        return [user.ministry];
+    }
+    return [];
+};
+
+export const hasMinistry = (ministry) => {
+    const ministries = getUserMinistries();
+    return ministries.includes(ministry);
+};
+
+export const hasAnyMinistry = (ministriesList) => {
+    const userMinistries = getUserMinistries();
+    if (!ministriesList || !userMinistries.length) return false;
+    return ministriesList.some(m => userMinistries.includes(m));
+};
+
+/* =========================
    ROLE CHECKS
 ========================= */
 export const isAdmin = () => {
-    const user = getCurrentUser();
-    return user?.type === "ADMIN" || user?.ministry === "ADMIN";
+    return hasMinistry("ADMIN");
 };
 
 export const isFinance = () => {
-    const user = getCurrentUser();
-    return user?.ministry === "FINANCE";
+    return hasMinistry("FINANCE");
 };
 
 export const isUshering = () => {
-    const user = getCurrentUser();
-    return user?.ministry === "USHERING";
+    return hasMinistry("USHERING");
 };
 
 export const isDiscipleship = () => {
-    const user = getCurrentUser();
-    return user?.ministry === "DISCIPLESHIP JOURNEY";
+    return hasMinistry("DISCIPLESHIP JOURNEY");
+};
+
+export const isWorshipTeam = () => {
+    return hasMinistry("WORSHIP TEAM");
+};
+
+export const isMedia = () => {
+    return hasMinistry("MEDIA");
+};
+
+export const isMarshall = () => {
+    return hasMinistry("MARSHALL");
+};
+
+export const isHospitality = () => {
+    return hasMinistry("HOSPITALITY");
+};
+
+export const isDance = () => {
+    return hasMinistry("DANCE");
+};
+
+export const isEventOrganizer = () => {
+    return hasMinistry("EVENT ORGANIZER");
 };
 
 export const isLeader = () => {
@@ -89,6 +136,24 @@ export const isLeader = () => {
 export const isMember = () => {
     const user = getCurrentUser();
     return user?.type === "MEMBER";
+};
+
+/* =========================
+   DJ CHECKERS
+========================= */
+export const isDevotionChecker = () => {
+    const user = getCurrentUser();
+    return user?.dj_type === "Devotion Checker" && hasMinistry("DISCIPLESHIP JOURNEY");
+};
+
+export const isLifeGroupChecker = () => {
+    const user = getCurrentUser();
+    return user?.dj_type === "LifeGroup Checker" && hasMinistry("DISCIPLESHIP JOURNEY");
+};
+
+export const getAssignedTribe = () => {
+    const user = getCurrentUser();
+    return user?.assigned_tribe || null;
 };
 
 /* =========================
@@ -127,17 +192,12 @@ export const canViewNewcomerProfile = (targetNewcomerId) => {
 /* =========================
    ACTION PERMISSIONS
 ========================= */
-
-// Can EDIT own profile - ONLY ADMIN can edit profiles now
-// Regular members CANNOT edit their own profile
 export const canEditOwnProfile = () => {
     return isAdmin();
 };
 
-// Can EDIT any profile (Admin only)
 export const canEditAnyProfile = () => isAdmin();
 
-// Can DELETE profile - Admin only
 export const canDeleteProfile = (targetLeaderId) => {
     const user = getCurrentUser();
     if (!user) return false;
@@ -145,25 +205,49 @@ export const canDeleteProfile = (targetLeaderId) => {
     return false;
 };
 
-// Can ADD new member/leader - Admin and Discipleship only
 export const canAddMember = () => {
     const user = getCurrentUser();
     if (!user) return false;
     return isAdmin() || isDiscipleship();
 };
 
-// Can ADD devotion - Admin, Discipleship, and Leaders (including members for their own)
 export const canAddDevotion = () => {
     const user = getCurrentUser();
     if (!user) return false;
-    return true; // All authenticated users can add devotion
+    return true;
 };
 
-// Can ADD life group entry - All authenticated leaders/members
 export const canAddLifeGroup = () => {
     const user = getCurrentUser();
     if (!user) return false;
-    return true; // All authenticated users can add life group
+    return true;
+};
+
+export const canEditDevotionForTribe = (targetTribe) => {
+    const user = getCurrentUser();
+    if (!user) return false;
+    if (isAdmin()) return true;
+    if (isDevotionChecker()) {
+        return user.assigned_tribe === targetTribe;
+    }
+    // Users can edit their own devotion
+    if (user.tribe === targetTribe && !isDevotionChecker()) {
+        return true;
+    }
+    return false;
+};
+
+export const canViewDevotionForTribe = (targetTribe) => {
+    const user = getCurrentUser();
+    if (!user) return false;
+    if (isAdmin()) return true;
+    if (isDevotionChecker()) {
+        return user.assigned_tribe === targetTribe;
+    }
+    if (isDiscipleship()) return true;
+    // Users can view their own tribe
+    if (user.tribe === targetTribe) return true;
+    return false;
 };
 
 /* =========================
@@ -184,7 +268,7 @@ export const canAccessTithes = () => {
 export const canAccessDevotion = () => {
     const user = getCurrentUser();
     if (!user) return false;
-    return isAdmin() || isDiscipleship();
+    return isAdmin() || isDiscipleship() || isDevotionChecker();
 };
 
 export const canAccessAssimilation = () => {
@@ -205,7 +289,11 @@ export const canConvertNewcomer = () => {
 export const canAccessLifeGroup = () => {
     const user = getCurrentUser();
     if (!user) return false;
-    return isAdmin() || isLeader();
+    return isAdmin() || isLeader() || isLifeGroupChecker();
+};
+
+export const canEditGrossIncome = () => {
+    return isFinance() || isAdmin();
 };
 
 /* =========================
@@ -223,7 +311,7 @@ export const getVisibleRoutes = () => {
         ];
     }
 
-    // Regular MEMBER gets minimal routes only
+    // Regular MEMBER gets minimal routes
     if (isMember()) {
         return [
             { path: "/dashboard", label: "Dashboard" },
