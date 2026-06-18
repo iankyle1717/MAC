@@ -87,6 +87,7 @@ const activityIcons = {
 function LeaderProfile() {
     const { id } = useParams();
     const [leader, setLeader] = useState(null);
+    const [spouse, setSpouse] = useState(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [tithes, setTithes] = useState([]);
     const [attendance, setAttendance] = useState([]);
@@ -117,11 +118,36 @@ function LeaderProfile() {
         fetchLifeGroups();
     }, [id]);
 
+    // ── FETCH SPOUSE / PARTNER ───────────────────────────────────────────────
+    const fetchSpouse = async (leaderData) => {
+        if (!leaderData) return;
+        // Case 1: this leader has combined_with set
+        if (leaderData.combined_with) {
+            const { data } = await supabase
+                .from("tblMonitoring")
+                .select("id, firstname, lastname, image_url")
+                .eq("id", leaderData.combined_with)
+                .single();
+            if (data) setSpouse(data);
+            return;
+        }
+        // Case 2: another leader has combined_with pointing to this leader
+        const { data } = await supabase
+            .from("tblMonitoring")
+            .select("id, firstname, lastname, image_url")
+            .eq("combined_with", leaderData.id)
+            .single();
+        if (data) setSpouse(data);
+    };
+
     const fetchLeader = async () => {
         const { data } = await supabase
             .from("tblMonitoring").select("*").eq("id", id).single();
         setLeader(data);
-        if (data) fetchInvites(`${data.firstname} ${data.lastname}`);
+        if (data) {
+            fetchInvites(`${data.firstname} ${data.lastname}`);
+            fetchSpouse(data);
+        }
     };
 
     const fetchInvites = async (leaderName) => {
@@ -323,6 +349,35 @@ function LeaderProfile() {
                                             {leader.nickname}
                                         </p>
                                     )}
+                                    {/* ── MARRIED WITH BADGE ── */}
+                                    {spouse && (
+                                        <div style={{ marginBottom: "8px" }}>
+                                            <Link to={`/leader-profile/${spouse.id}`} style={{ textDecoration: "none" }}>
+                                                <span style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: "6px",
+                                                    padding: "4px 12px",
+                                                    borderRadius: "20px",
+                                                    background: "#fce4ec",
+                                                    color: "#c2185b",
+                                                    fontSize: "12px",
+                                                    fontWeight: 600,
+                                                    letterSpacing: "0.3px",
+                                                    transition: "all 0.2s",
+                                                    cursor: "pointer"
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = "#f8bbd9"; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = "#fce4ec"; }}
+                                                >
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                                                    </svg>
+                                                    Married with {spouse.firstname} {spouse.lastname}
+                                                </span>
+                                            </Link>
+                                        </div>
+                                    )}
                                     <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                                         <span style={{
                                             padding: "4px 12px",
@@ -479,6 +534,18 @@ function LeaderProfile() {
                                     <InfoRow icon="star" label="Leader Type" value={leader.type} />
                                     <InfoRow icon="heart" label="Ministries" value={leaderMinistries.join(", ") || "None"} />
                                     <InfoRow icon="heart" label="Civil Status" value={leader.civil_status || "Single"} />
+                                    {/* ── MARRIED WITH IN ABOUT CARD ── */}
+                                    {spouse && (
+                                        <InfoRow
+                                            icon="heart"
+                                            label="Married With"
+                                            value={
+                                                <Link to={`/leader-profile/${spouse.id}`} style={{ color: c.primary, textDecoration: "none", fontWeight: 700 }}>
+                                                    {spouse.firstname} {spouse.lastname}
+                                                </Link>
+                                            }
+                                        />
+                                    )}
                                     {leader.civil_status === "Married" && (
                                         <InfoRow icon="link" label="Tithing" value={leader.tithing_type || "Individual"} />
                                     )}
@@ -547,7 +614,7 @@ function LeaderProfile() {
                                     )}
                                 </div>
                             </Card>
-                          
+
                         </div>
                     )}
 

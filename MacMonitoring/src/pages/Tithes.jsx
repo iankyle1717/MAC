@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
@@ -84,11 +85,11 @@ function Tithes() {
         return leaders.find(l => l.id === leader.combined_with);
     };
 
+    // ── COMBINED NAME FORMAT: FIRSTNAME1 / FIRSTNAME2 (preserves original order) ──
     const getDisplayName = (leader) => {
         const partner = getCombinedPartner(leader);
         if (partner) {
-            return [`${leader.firstname} ${leader.lastname}`, `${partner.firstname} ${partner.lastname}`]
-                .sort().join(" / ");
+            return `${leader.firstname} / ${partner.firstname}`;
         }
         return `${leader.firstname} ${leader.lastname}`;
     };
@@ -119,7 +120,16 @@ function Tithes() {
         if (filterTribe !== "ALL") result = result.filter(l => l.tribe === filterTribe);
         if (search) {
             const term = search.toLowerCase();
-            result = result.filter(l => `${l.firstname} ${l.lastname}`.toLowerCase().includes(term));
+            result = result.filter(l => {
+                const fullName = `${l.firstname} ${l.lastname}`.toLowerCase();
+                const partner = getCombinedPartner(l);
+                if (partner) {
+                    const partnerName = `${partner.firstname} ${partner.lastname}`.toLowerCase();
+                    const combinedName = `${l.firstname} / ${partner.firstname}`.toLowerCase();
+                    return fullName.includes(term) || partnerName.includes(term) || combinedName.includes(term);
+                }
+                return fullName.includes(term);
+            });
         }
         result.sort((a, b) => {
             const na = `${a.firstname} ${a.lastname}`.toLowerCase();
