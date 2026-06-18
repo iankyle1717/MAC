@@ -283,7 +283,7 @@ function Login() {
                             }}>
                                 <div style={{ flex: 1 }}>
                                     <p style={{ fontSize: "14px", fontWeight: 700, color: "#ffffff", margin: "0 0 2px 0" }}>Youth GIG</p>
-                                    <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", margin: 0 }}>Every Friday &bull; Youth Night</p>
+                                    <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", margin: 0 }}>Every Friday &bull; 5:00 PM</p>
                                 </div>
                                 <span style={{
                                     fontSize: "10px",
