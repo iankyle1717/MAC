@@ -103,6 +103,14 @@ function EditLeader() {
 
         setLoading(true);
 
+        // ── FETCH OLD combined_with BEFORE UPDATE ──
+        const { data: oldLeaderData } = await supabase
+            .from("tblMonitoring")
+            .select("combined_with")
+            .eq("id", id)
+            .single();
+        const oldCombinedWith = oldLeaderData?.combined_with || null;
+
         let imageUrl = previewImage;
 
         if (imageFile) {
@@ -128,7 +136,6 @@ function EditLeader() {
             tribe,
             type,
             ministries: selectedMinistries,
-            // Keep legacy ministry field for backward compat
             ministry: selectedMinistries[0] || "NONE",
             image_url: imageUrl,
             gross_income: grossIncome !== "" ? parseFloat(grossIncome) : null,
@@ -147,6 +154,37 @@ function EditLeader() {
             .from("tblMonitoring")
             .update(updateData)
             .eq("id", id);
+
+        // ── BIDIRECTIONAL COMBINED LINKING ──
+        if (!error) {
+            const newCombinedWith = updateData.combined_with;
+
+            // CASE A: Removing combined link
+            if (!newCombinedWith || updateData.tithing_type !== "Combined") {
+                if (oldCombinedWith && oldCombinedWith !== parseInt(id)) {
+                    await supabase.from("tblMonitoring").update({
+                        combined_with: null,
+                        tithing_type: "Individual"
+                    }).eq("id", oldCombinedWith);
+                }
+            }
+            // CASE B: Setting or changing combined link
+            else if (newCombinedWith) {
+                // Clear old partner if different
+                if (oldCombinedWith && oldCombinedWith !== newCombinedWith) {
+                    await supabase.from("tblMonitoring").update({
+                        combined_with: null,
+                        tithing_type: "Individual"
+                    }).eq("id", oldCombinedWith);
+                }
+                // Link new partner back to this leader
+                await supabase.from("tblMonitoring").update({
+                    combined_with: parseInt(id),
+                    tithing_type: "Combined",
+                    civil_status: "Married"
+                }).eq("id", newCombinedWith);
+            }
+        }
 
         setLoading(false);
 
@@ -171,6 +209,19 @@ function EditLeader() {
         }
 
         setLoading(true);
+
+        // ── CLEAR PARTNER'S COMBINED LINK BEFORE DELETE ──
+        const { data: linkedPartner } = await supabase
+            .from("tblMonitoring")
+            .select("id")
+            .eq("combined_with", id)
+            .single();
+        if (linkedPartner) {
+            await supabase.from("tblMonitoring").update({
+                combined_with: null,
+                tithing_type: "Individual"
+            }).eq("id", linkedPartner.id);
+        }
 
         await supabase.from("tblTithes").delete().eq("leader_id", id);
         await supabase.from("tblAttendance").delete().eq("leader_id", id);

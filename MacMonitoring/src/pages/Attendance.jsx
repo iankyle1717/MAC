@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
+import { getNextStage, isReadyForConversion, getStageCategory } from "../constants/options";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx-js-style";
 
@@ -106,13 +107,6 @@ function AttendanceModal({
                                 <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151", marginBottom: "6px" }}>
                                     Service Type / Remarks *
                                 </label>
-                                {/*
-                                    FIX: The bug was caused by the Modal being defined INSIDE Attendance().
-                                    React recreated the entire Modal component on every state change
-                                    (including each keystroke), which unmounted/remounted the input
-                                    and stole focus. Moving Modal outside fixes this completely.
-                                    We use a plain onChange here — no issue now.
-                                */}
                                 <input
                                     type="text"
                                     value={serviceType}
@@ -201,6 +195,40 @@ const modalInputStyle = {
     transition: "border-color 0.2s"
 };
 
+// Stage badge color helpers (reused from Assimilation logic) ─────────────────
+const getStageColor = (stage) => {
+    const category = getStageCategory(stage);
+    switch (category) {
+        case "CONSO": return "#dbeafe";
+        case "SOUL WINNING": return "#dcfce7";
+        case "SOAKING": return "#fef3c7";
+        case "SCHOOLING": return "#fce7f3";
+        default: return "#f3f4f6";
+    }
+};
+const getStageTextColor = (stage) => {
+    const category = getStageCategory(stage);
+    switch (category) {
+        case "CONSO": return "#1e40af";
+        case "SOUL WINNING": return "#166534";
+        case "SOAKING": return "#92400e";
+        case "SCHOOLING": return "#9d174d";
+        default: return "#374151";
+    }
+};
+const getStageBorderColor = (stage) => {
+    const category = getStageCategory(stage);
+    switch (category) {
+        case "CONSO": return "#3b82f6";
+        case "SOUL WINNING": return "#22c55e";
+        case "SOAKING": return "#f59e0b";
+        case "SCHOOLING": return "#ec4899";
+        default: return "#9ca3af";
+    }
+};
+const getInitials = (first, last) =>
+    `${first?.charAt(0) || ""}${last?.charAt(0) || ""}`.toUpperCase();
+
 // ── Main component ────────────────────────────────────────────────────────────
 function Attendance() {
     const navigate = useNavigate();
@@ -218,11 +246,22 @@ function Attendance() {
     const [isRecording, setIsRecording] = useState(false);
     const [stats, setStats] = useState({ total: 0, present: 0, absent: 0 });
 
+    // ── NEW: recording-view tab + newcomer state ──────────────────────────────
+    const [recordTab, setRecordTab] = useState("leaders"); // "leaders" | "newcomers"
+    const [newcomers, setNewcomers] = useState([]);
+    const [newcomersLoading, setNewcomersLoading] = useState(false);
+    const [newcomerSearch, setNewcomerSearch] = useState("");
+
     useEffect(() => { fetchLeaders(); }, []);
 
     useEffect(() => {
         if (isRecording && date) fetchAttendance(date);
     }, [date, isRecording]);
+
+    useEffect(() => {
+        if (isRecording && recordTab === "newcomers") fetchNewcomers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRecording, recordTab]);
 
     useEffect(() => {
         const present = Object.values(attendanceMap).filter(s => s === "Present").length;
@@ -242,6 +281,43 @@ function Attendance() {
         const map = {};
         data?.forEach(item => { map[item.leader_id] = item.status; });
         setAttendanceMap(map);
+    };
+
+    // ── NEW: fetch all newcomers for the Newcomers tab ─────────────────────────
+    const fetchNewcomers = async () => {
+        setNewcomersLoading(true);
+        const { data, error } = await supabase
+            .from("tblNewMembers")
+            .select("*")
+            .order("firstname", { ascending: true });
+        if (error) {
+            console.log("Fetch Newcomers Error:", error);
+        } else {
+            setNewcomers(data || []);
+        }
+        setNewcomersLoading(false);
+    };
+
+    // ── NEW: advance a newcomer's stage (same behavior as Assimilation "Next") ─
+    const advanceNewcomerStage = async (id, currentRemark) => {
+        const nextRemark = getNextStage(currentRemark);
+
+        if (!nextRemark) {
+            Swal.fire({ icon: "info", title: "Already Complete", text: "This newcomer has completed all stages!", confirmButtonColor: "#c9a45c" });
+            return;
+        }
+
+        const { error } = await supabase
+            .from("tblNewMembers")
+            .update({ remarks: nextRemark })
+            .eq("id", id);
+
+        if (error) {
+            Swal.fire({ icon: "error", title: "Update Failed", text: error.message });
+            return;
+        }
+
+        setNewcomers(prev => prev.map(n => n.id === id ? { ...n, remarks: nextRemark } : n));
     };
 
     const getAutoServiceType = (d) => {
@@ -275,6 +351,7 @@ function Attendance() {
         }
         setIsRecording(true);
         setShowModal(false);
+        setRecordTab("leaders");
     };
 
     const toggleAttendance = (leaderId) => {
@@ -364,7 +441,6 @@ function Attendance() {
         const altRow  = { fill: { fgColor: { rgb: "F9FAFB" }, patternType: "solid" }, ...dataCell };
         const presentStyle = { font: { sz: 11, color: { rgb: "16A34A" }, bold: true }, alignment: { horizontal: "center" }, border: dataCell.border };
         const absentStyle  = { font: { sz: 11, color: { rgb: "DC2626" }, bold: true }, alignment: { horizontal: "center" }, border: dataCell.border };
-        const totalStyle   = { fill: { fgColor: { rgb: "ECFDF5" }, patternType: "solid" }, font: { bold: true, color: { rgb: "16A34A" }, sz: 12 }, border: { top: { style: "medium", color: { rgb: "16A34A" } }, bottom: { style: "medium", color: { rgb: "16A34A" } }, left: { style: "thin", color: { rgb: "E5E7EB" } }, right: { style: "thin", color: { rgb: "E5E7EB" } } } };
         const titleStyle   = { font: { bold: true, color: { rgb: "B8934A" }, sz: 18 }, alignment: { horizontal: "center" } };
 
         const sortedData = [...data].sort((a, b) => {
@@ -426,6 +502,13 @@ function Attendance() {
         sortOrder === "asc" ? a.firstname.localeCompare(b.firstname) : b.firstname.localeCompare(a.firstname)
     );
 
+    // Filtered newcomers (search only — "All newcomers regardless of stage")
+    const filteredNewcomers = newcomers.filter(n => {
+        if (!newcomerSearch) return true;
+        const fullName = `${n.firstname} ${n.lastname}`.toLowerCase();
+        return fullName.includes(newcomerSearch.toLowerCase());
+    });
+
     // ── Not recording: show modal ─────────────────────────────────────────────
     if (!isRecording) {
         return (
@@ -469,71 +552,193 @@ function Attendance() {
                             </span>
                         </div>
                     </div>
-                    <div className="attendance-stats">
-                        <div className="stat-pill"><span className="stat-num">{stats.present}</span> Present</div>
-                        <div className="stat-pill"><span className="stat-num">{stats.absent}</span> Absent</div>
-                        <div className="stat-pill"><span className="stat-num">{stats.total}</span> Total</div>
-                    </div>
+                    {recordTab === "leaders" && (
+                        <div className="attendance-stats">
+                            <div className="stat-pill"><span className="stat-num">{stats.present}</span> Present</div>
+                            <div className="stat-pill"><span className="stat-num">{stats.absent}</span> Absent</div>
+                            <div className="stat-pill"><span className="stat-num">{stats.total}</span> Total</div>
+                        </div>
+                    )}
+                    {recordTab === "newcomers" && (
+                        <div className="attendance-stats">
+                            <div className="stat-pill"><span className="stat-num">{filteredNewcomers.length}</span> Newcomers</div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Toolbar */}
-                <div className="attendance-toolbar">
-                    <div className="toolbar-group">
-                        <select className="input-sm" value={selectedTribe} onChange={e => setSelectedTribe(e.target.value)}>
-                            <option value="">All Tribes</option>
-                            {tribes.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <button className="btn-sm btn-outline" onClick={() => setSortOrder(o => o === "asc" ? "desc" : "asc")}>
-                            {sortOrder === "asc" ? "A–Z" : "Z–A"}
-                        </button>
-                    </div>
-                    <div className="toolbar-group">
-                        <button className="btn-sm btn-outline" onClick={handleBackToModal}>Change Service</button>
-                        <button className="btn-sm btn-primary" onClick={handleSave} disabled={loading}>
-                            {loading ? "Saving..." : "Save Attendance"}
-                        </button>
-                    </div>
+                {/* ── NEW: Leaders / Newcomers tab switch ───────────────────── */}
+                <div style={{ display: "flex", gap: "4px", marginBottom: "12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "4px", width: "fit-content" }}>
+                    <button
+                        onClick={() => setRecordTab("leaders")}
+                        style={{
+                            padding: "8px 18px", borderRadius: "6px", border: "none", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                            background: recordTab === "leaders" ? "#c9a45c" : "transparent",
+                            color: recordTab === "leaders" ? "#fff" : "#6b7280",
+                            transition: "all 0.2s"
+                        }}
+                    >
+                        Leaders
+                    </button>
+                    <button
+                        onClick={() => setRecordTab("newcomers")}
+                        style={{
+                            padding: "8px 18px", borderRadius: "6px", border: "none", fontSize: "13px", fontWeight: 700, cursor: "pointer",
+                            background: recordTab === "newcomers" ? "#c9a45c" : "transparent",
+                            color: recordTab === "newcomers" ? "#fff" : "#6b7280",
+                            transition: "all 0.2s"
+                        }}
+                    >
+                        Newcomers
+                    </button>
                 </div>
 
-                {/* Table */}
-                <div className="attendance-table-container">
-                    <div className="flex-table-header">
-                        <div className="flex-col flex-col-name">Name</div>
-                        <div className="flex-col flex-col-tribe">Tribe</div>
-                        <div className="flex-col flex-col-type">Type</div>
-                        <div className="flex-col flex-col-status">Status</div>
-                        <div className="flex-col flex-col-action">Action</div>
-                    </div>
-                    <div className="flex-table-body">
-                        {sorted.map(leader => {
-                            const status = attendanceMap[leader.id] || "Absent";
-                            return (
-                                <div className="flex-row" key={leader.id}>
-                                    <div className="flex-col flex-col-name">
-                                        <img src={leader.image_url || "https://placehold.co/32"} alt="" className="avatar-sm" />
-                                        <span className="name-text">{leader.firstname} {leader.lastname}</span>
-                                    </div>
-                                    <div className="flex-col flex-col-tribe">{leader.tribe}</div>
-                                    <div className="flex-col flex-col-type">
-                                        <span className="badge-sm">{leader.type}</span>
-                                    </div>
-                                    <div className="flex-col flex-col-status">
-                                        <span className={`dot ${status === "Present" ? "dot-present" : "dot-absent"}`}></span>
-                                        <span className="status-text">{status}</span>
-                                    </div>
-                                    <div className="flex-col flex-col-action">
-                                        <button
-                                            className={`toggle-sm ${status === "Present" ? "is-present" : "is-absent"}`}
-                                            onClick={() => toggleAttendance(leader.id)}
-                                        >
-                                            {status === "Present" ? "Absent" : "Present"}
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                {/* ════════════════════ LEADERS TAB ════════════════════ */}
+                {recordTab === "leaders" && (
+                    <>
+                        {/* Toolbar */}
+                        <div className="attendance-toolbar">
+                            <div className="toolbar-group">
+                                <select className="input-sm" value={selectedTribe} onChange={e => setSelectedTribe(e.target.value)}>
+                                    <option value="">All Tribes</option>
+                                    {tribes.map(t => <option key={t} value={t}>{t}</option>)}
+                                </select>
+                                <button className="btn-sm btn-outline" onClick={() => setSortOrder(o => o === "asc" ? "desc" : "asc")}>
+                                    {sortOrder === "asc" ? "A–Z" : "Z–A"}
+                                </button>
+                            </div>
+                            <div className="toolbar-group">
+                                <button className="btn-sm btn-outline" onClick={handleBackToModal}>Change Service</button>
+                                <button className="btn-sm btn-primary" onClick={handleSave} disabled={loading}>
+                                    {loading ? "Saving..." : "Save Attendance"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="attendance-table-container">
+                            <div className="flex-table-header">
+                                <div className="flex-col flex-col-name">Name</div>
+                                <div className="flex-col flex-col-tribe">Tribe</div>
+                                <div className="flex-col flex-col-type">Type</div>
+                                <div className="flex-col flex-col-status">Status</div>
+                                <div className="flex-col flex-col-action">Action</div>
+                            </div>
+                            <div className="flex-table-body">
+                                {sorted.map(leader => {
+                                    const status = attendanceMap[leader.id] || "Absent";
+                                    return (
+                                        <div className="flex-row" key={leader.id}>
+                                            <div className="flex-col flex-col-name">
+                                                <img src={leader.image_url || "https://placehold.co/32"} alt="" className="avatar-sm" />
+                                                <span className="name-text">{leader.firstname} {leader.lastname}</span>
+                                            </div>
+                                            <div className="flex-col flex-col-tribe">{leader.tribe}</div>
+                                            <div className="flex-col flex-col-type">
+                                                <span className="badge-sm">{leader.type}</span>
+                                            </div>
+                                            <div className="flex-col flex-col-status">
+                                                <span className={`dot ${status === "Present" ? "dot-present" : "dot-absent"}`}></span>
+                                                <span className="status-text">{status}</span>
+                                            </div>
+                                            <div className="flex-col flex-col-action">
+                                                <button
+                                                    className={`toggle-sm ${status === "Present" ? "is-present" : "is-absent"}`}
+                                                    onClick={() => toggleAttendance(leader.id)}
+                                                >
+                                                    {status === "Present" ? "Absent" : "Present"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {/* ════════════════════ NEWCOMERS TAB ════════════════════ */}
+                {recordTab === "newcomers" && (
+                    <>
+                        {/* Toolbar */}
+                        <div className="attendance-toolbar">
+                            <div className="toolbar-group" style={{ flex: 1 }}>
+                                <input
+                                    type="text"
+                                    className="input-sm"
+                                    placeholder="Search newcomer..."
+                                    value={newcomerSearch}
+                                    onChange={e => setNewcomerSearch(e.target.value)}
+                                    style={{ minWidth: "200px" }}
+                                />
+                            </div>
+                            <div className="toolbar-group">
+                                <button className="btn-sm btn-outline" onClick={handleBackToModal}>Change Service</button>
+                            </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="attendance-table-container">
+                            <div className="flex-table-header">
+                                <div className="flex-col flex-col-name">Name</div>
+                                <div className="flex-col flex-col-tribe">Tribe</div>
+                                <div className="flex-col" style={{ flex: "2 1 30%", minWidth: "120px" }}>Stage</div>
+                                <div className="flex-col flex-col-action" style={{ flex: "0 0 110px", minWidth: "100px" }}>Action</div>
+                            </div>
+                            <div className="flex-table-body">
+                                {newcomersLoading ? (
+                                    <div style={{ padding: "30px", textAlign: "center", color: "#9ca3af", fontSize: "13px" }}>Loading newcomers...</div>
+                                ) : filteredNewcomers.length === 0 ? (
+                                    <div style={{ padding: "30px", textAlign: "center", color: "#9ca3af", fontSize: "13px" }}>No newcomers found.</div>
+                                ) : (
+                                    filteredNewcomers.map(member => (
+                                        <div className="flex-row" key={member.id}>
+                                            <div className="flex-col flex-col-name">
+                                                <div style={{
+                                                    width: "28px", height: "28px", borderRadius: "50%",
+                                                    background: getStageColor(member.remarks),
+                                                    color: getStageTextColor(member.remarks),
+                                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                                    fontSize: "10px", fontWeight: 700, flexShrink: 0
+                                                }}>
+                                                    {getInitials(member.firstname, member.lastname)}
+                                                </div>
+                                                <span className="name-text">{member.firstname} {member.lastname}</span>
+                                            </div>
+                                            <div className="flex-col flex-col-tribe">{member.tribe}</div>
+                                            <div className="flex-col" style={{ flex: "2 1 30%", minWidth: "120px" }}>
+                                                <span style={{
+                                                    padding: "3px 10px", borderRadius: "10px",
+                                                    background: getStageColor(member.remarks),
+                                                    color: getStageTextColor(member.remarks),
+                                                    fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap"
+                                                }}>
+                                                    {member.remarks}
+                                                </span>
+                                            </div>
+                                            <div className="flex-col flex-col-action" style={{ flex: "0 0 110px", minWidth: "100px" }}>
+                                                {isReadyForConversion(member.remarks) ? (
+                                                    <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "11px" }}>Ready</span>
+                                                ) : (
+                                                    <button
+                                                        className="toggle-sm"
+                                                        onClick={() => advanceNewcomerStage(member.id, member.remarks)}
+                                                        style={{
+                                                            border: `1px solid ${getStageBorderColor(member.remarks)}`,
+                                                            background: getStageColor(member.remarks),
+                                                            color: getStageTextColor(member.remarks)
+                                                        }}
+                                                    >
+                                                        Next →
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

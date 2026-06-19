@@ -87,7 +87,7 @@ export const soakingStages = [
     "Pre Life Retreat",
     "Life Retreat",
     "Victorious Life Class",
-    "Project Peter"
+    "Project Andrew"
 ];
 
 export const schoolingStages = [
