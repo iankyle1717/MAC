@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import MultiSelect from "../components/MultiSelect";
 import { supabase } from "../lib/supabase";
 import { tribes, leaderTypes, ministries, civilStatusOptions, tithingTypes, djTypes } from "../constants/options";
+import { getCurrentUser, isAdmin } from "../utils/auth";
 import Swal from "sweetalert2";
 
 function EditLeader() {
@@ -34,13 +35,21 @@ function EditLeader() {
     // For combined partner dropdown
     const [availableLeaders, setAvailableLeaders] = useState([]);
 
+    // ── PERMISSION CHECK ──────────────────────────────────────────────────────
+    const currentUser = getCurrentUser();
+    const admin = isAdmin();
+    const isOwnProfile = currentUser?.id === Number(id);
+    // Admin editing anyone -> full access.
+    // Anyone editing their OWN profile (non-admin) -> limited fields only.
+    const fullAccess = admin;
+
     useEffect(() => { fetchLeader(); }, []);
 
     useEffect(() => {
-        if (civilStatus === "Married" && tithingType === "Combined") {
+        if (fullAccess && civilStatus === "Married" && tithingType === "Combined") {
             fetchMarriedLeaders();
         }
-    }, [civilStatus, tithingType]);
+    }, [civilStatus, tithingType, fullAccess]);
 
     const fetchLeader = async () => {
         setFetching(true);
@@ -96,20 +105,16 @@ function EditLeader() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!firstname || !lastname || !tribe || !type) {
+        if (!firstname || !lastname) {
+            Swal.fire({ icon: "warning", title: "Missing Fields", text: "Please fill in your first and last name.", confirmButtonColor: "#c9a45c" });
+            return;
+        }
+        if (fullAccess && (!tribe || !type)) {
             Swal.fire({ icon: "warning", title: "Missing Fields", text: "Please fill in all required fields.", confirmButtonColor: "#c9a45c" });
             return;
         }
 
         setLoading(true);
-
-        // ── FETCH OLD combined_with BEFORE UPDATE ──
-        const { data: oldLeaderData } = await supabase
-            .from("tblMonitoring")
-            .select("combined_with")
-            .eq("id", id)
-            .single();
-        const oldCombinedWith = oldLeaderData?.combined_with || null;
 
         let imageUrl = previewImage;
 
@@ -127,6 +132,47 @@ function EditLeader() {
                 imageUrl = data.publicUrl;
             }
         }
+
+        // ── LIMITED UPDATE (non-admin editing own profile) ──
+        if (!fullAccess) {
+            const limitedUpdate = {
+                firstname,
+                lastname,
+                nickname: nickname || null,
+                pin,
+                image_url: imageUrl,
+            };
+
+            const { error } = await supabase
+                .from("tblMonitoring")
+                .update(limitedUpdate)
+                .eq("id", id);
+
+            setLoading(false);
+
+            if (error) {
+                console.error(error);
+                Swal.fire({ icon: "error", title: "Update Failed", text: error.message, confirmButtonColor: "#c9a45c" });
+            } else {
+                Swal.fire({
+                    icon: "success",
+                    title: "Profile Updated",
+                    text: "Your profile has been updated.",
+                    timer: 1800,
+                    showConfirmButton: false,
+                }).then(() => navigate(`/leader/${id}`));
+            }
+            return;
+        }
+
+        // ── FULL UPDATE (admin) ──
+        // ── FETCH OLD combined_with BEFORE UPDATE ──
+        const { data: oldLeaderData } = await supabase
+            .from("tblMonitoring")
+            .select("combined_with")
+            .eq("id", id)
+            .single();
+        const oldCombinedWith = oldLeaderData?.combined_with || null;
 
         const updateData = {
             firstname,
@@ -271,9 +317,13 @@ function EditLeader() {
                     borderBottom: "1px solid #e5e7eb"
                 }}>
                     <div>
-                        <h1 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>Edit Profile</h1>
+                        <h1 style={{ fontSize: "20px", fontWeight: 700, margin: 0 }}>
+                            {fullAccess ? "Edit Profile" : "My Profile Settings"}
+                        </h1>
                         <p style={{ fontSize: "12px", color: "#6b7280", margin: "3px 0 0 0" }}>
-                            {firstname} {lastname} — update leader information
+                            {fullAccess
+                                ? `${firstname} ${lastname} — update leader information`
+                                : "Update your name, nickname, password, and photo"}
                         </p>
                     </div>
                     <button
@@ -295,7 +345,7 @@ function EditLeader() {
 
                 <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "720px" }}>
 
-                    {/* PROFILE IMAGE */}
+                    {/* PROFILE IMAGE — always visible/editable */}
                     <div style={{
                         background: "#fff",
                         border: "1px solid #e5e7eb",
@@ -329,7 +379,7 @@ function EditLeader() {
                         </div>
                     </div>
 
-                    {/* BASIC INFO */}
+                    {/* BASIC INFO — name/nickname/pin always visible/editable */}
                     <Section title="Basic Information">
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
                             <Field label="First Name *">
@@ -369,134 +419,142 @@ function EditLeader() {
                                 />
                             </Field>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginTop: "12px" }}>
-                            <Field label="Tribe *">
-                                <select value={tribe} onChange={e => setTribe(e.target.value)} style={inputStyle}>
-                                    <option value="">Select Tribe</option>
-                                    {tribes.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </Field>
-                            <Field label="Leader Type *">
-                                <select value={type} onChange={e => setType(e.target.value)} style={inputStyle}>
-                                    <option value="">Select Type</option>
-                                    {leaderTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </Field>
-                        </div>
+
+                        {/* Tribe / Leader Type — ADMIN ONLY */}
+                        {fullAccess && (
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginTop: "12px" }}>
+                                <Field label="Tribe *">
+                                    <select value={tribe} onChange={e => setTribe(e.target.value)} style={inputStyle}>
+                                        <option value="">Select Tribe</option>
+                                        {tribes.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Leader Type *">
+                                    <select value={type} onChange={e => setType(e.target.value)} style={inputStyle}>
+                                        <option value="">Select Type</option>
+                                        {leaderTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </Field>
+                            </div>
+                        )}
                     </Section>
 
-                    {/* MINISTRIES */}
-                    <Section title="Ministry Assignments">
-                        <MultiSelect
-                            label="Assigned Ministries"
-                            options={ministries}
-                            selected={selectedMinistries}
-                            onChange={setSelectedMinistries}
-                            placeholder="Select one or more ministries..."
-                        />
+                    {/* MINISTRIES — ADMIN ONLY */}
+                    {fullAccess && (
+                        <Section title="Ministry Assignments">
+                            <MultiSelect
+                                label="Assigned Ministries"
+                                options={ministries}
+                                selected={selectedMinistries}
+                                onChange={setSelectedMinistries}
+                                placeholder="Select one or more ministries..."
+                            />
 
-                        {/* DJ CONFIG */}
-                        {showDjOptions && (
-                            <div style={{
-                                marginTop: "14px",
-                                padding: "16px",
-                                background: "rgba(201, 164, 92, 0.06)",
-                                borderRadius: "10px",
-                                border: "1px solid rgba(201, 164, 92, 0.25)"
-                            }}>
-                                <p style={{ fontSize: "12px", fontWeight: 700, color: "#92400e", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                    Discipleship Journey Configuration
-                                </p>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-                                    <Field label="DJ Type">
-                                        <select value={djType} onChange={e => setDjType(e.target.value)} style={inputStyle}>
-                                            <option value="">Select DJ Type</option>
-                                            {djTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    </Field>
-                                    {djType === "Devotion Checker" && (
-                                        <Field label="Assigned Tribe">
-                                            <select value={assignedTribe} onChange={e => setAssignedTribe(e.target.value)} style={inputStyle}>
-                                                <option value="">Select Tribe</option>
-                                                {tribes.map(t => <option key={t} value={t}>{t}</option>)}
+                            {/* DJ CONFIG */}
+                            {showDjOptions && (
+                                <div style={{
+                                    marginTop: "14px",
+                                    padding: "16px",
+                                    background: "rgba(201, 164, 92, 0.06)",
+                                    borderRadius: "10px",
+                                    border: "1px solid rgba(201, 164, 92, 0.25)"
+                                }}>
+                                    <p style={{ fontSize: "12px", fontWeight: 700, color: "#92400e", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                        Discipleship Journey Configuration
+                                    </p>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                                        <Field label="DJ Type">
+                                            <select value={djType} onChange={e => setDjType(e.target.value)} style={inputStyle}>
+                                                <option value="">Select DJ Type</option>
+                                                {djTypes.map(t => <option key={t} value={t}>{t}</option>)}
                                             </select>
                                         </Field>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </Section>
-
-                    {/* FINANCIAL INFO */}
-                    <Section title="Financial Information">
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-                            <Field label="Civil Status">
-                                <select value={civilStatus} onChange={e => setCivilStatus(e.target.value)} style={inputStyle}>
-                                    {civilStatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </Field>
-                            <Field label="Gross Income (optional)">
-                                <input
-                                    type="number"
-                                    value={grossIncome}
-                                    onChange={e => setGrossIncome(e.target.value)}
-                                    placeholder="Monthly gross income"
-                                    min="0"
-                                    style={inputStyle}
-                                />
-                            </Field>
-                        </div>
-
-                        {/* TITHING CONFIG — only when Married */}
-                        {showTithingOptions && (
-                            <div style={{
-                                marginTop: "14px",
-                                padding: "16px",
-                                background: "rgba(22, 163, 74, 0.06)",
-                                borderRadius: "10px",
-                                border: "1px solid rgba(22, 163, 74, 0.2)"
-                            }}>
-                                <p style={{ fontSize: "12px", fontWeight: 700, color: "#166534", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                    Tithing Configuration
-                                </p>
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
-                                    <Field label="Tithing Type">
-                                        <select value={tithingType} onChange={e => setTithingType(e.target.value)} style={inputStyle}>
-                                            {tithingTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    </Field>
-
-                                    {tithingType === "Combined" && (
-                                        <Field label="Combined With">
-                                            {availableLeaders.length === 0 ? (
-                                                <p style={{ fontSize: "12px", color: "#9ca3af", padding: "10px 0" }}>
-                                                    Loading married leaders...
-                                                </p>
-                                            ) : (
-                                                <select
-                                                    value={combinedWith}
-                                                    onChange={e => setCombinedWith(e.target.value)}
-                                                    style={inputStyle}
-                                                >
-                                                    <option value="">— Select Spouse —</option>
-                                                    {availableLeaders.map(leader => (
-                                                        <option key={leader.id} value={String(leader.id)}>
-                                                            {leader.firstname} {leader.lastname}
-                                                        </option>
-                                                    ))}
+                                        {djType === "Devotion Checker" && (
+                                            <Field label="Assigned Tribe">
+                                                <select value={assignedTribe} onChange={e => setAssignedTribe(e.target.value)} style={inputStyle}>
+                                                    <option value="">Select Tribe</option>
+                                                    {tribes.map(t => <option key={t} value={t}>{t}</option>)}
                                                 </select>
-                                            )}
-                                            {combinedWith && (
-                                                <p style={{ fontSize: "11px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
-                                                    ✓ Combined with: {availableLeaders.find(l => String(l.id) === combinedWith)?.firstname} {availableLeaders.find(l => String(l.id) === combinedWith)?.lastname}
-                                                </p>
-                                            )}
-                                        </Field>
-                                    )}
+                                            </Field>
+                                        )}
+                                    </div>
                                 </div>
+                            )}
+                        </Section>
+                    )}
+
+                    {/* FINANCIAL INFO — ADMIN ONLY */}
+                    {fullAccess && (
+                        <Section title="Financial Information">
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                                <Field label="Civil Status">
+                                    <select value={civilStatus} onChange={e => setCivilStatus(e.target.value)} style={inputStyle}>
+                                        {civilStatusOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </Field>
+                                <Field label="Gross Income (optional)">
+                                    <input
+                                        type="number"
+                                        value={grossIncome}
+                                        onChange={e => setGrossIncome(e.target.value)}
+                                        placeholder="Monthly gross income"
+                                        min="0"
+                                        style={inputStyle}
+                                    />
+                                </Field>
                             </div>
-                        )}
-                    </Section>
+
+                            {/* TITHING CONFIG — only when Married */}
+                            {showTithingOptions && (
+                                <div style={{
+                                    marginTop: "14px",
+                                    padding: "16px",
+                                    background: "rgba(22, 163, 74, 0.06)",
+                                    borderRadius: "10px",
+                                    border: "1px solid rgba(22, 163, 74, 0.2)"
+                                }}>
+                                    <p style={{ fontSize: "12px", fontWeight: 700, color: "#166534", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                        Tithing Configuration
+                                    </p>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                                        <Field label="Tithing Type">
+                                            <select value={tithingType} onChange={e => setTithingType(e.target.value)} style={inputStyle}>
+                                                {tithingTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </Field>
+
+                                        {tithingType === "Combined" && (
+                                            <Field label="Combined With">
+                                                {availableLeaders.length === 0 ? (
+                                                    <p style={{ fontSize: "12px", color: "#9ca3af", padding: "10px 0" }}>
+                                                        Loading married leaders...
+                                                    </p>
+                                                ) : (
+                                                    <select
+                                                        value={combinedWith}
+                                                        onChange={e => setCombinedWith(e.target.value)}
+                                                        style={inputStyle}
+                                                    >
+                                                        <option value="">— Select Spouse —</option>
+                                                        {availableLeaders.map(leader => (
+                                                            <option key={leader.id} value={String(leader.id)}>
+                                                                {leader.firstname} {leader.lastname}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                                {combinedWith && (
+                                                    <p style={{ fontSize: "11px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>
+                                                        ✓ Combined with: {availableLeaders.find(l => String(l.id) === combinedWith)?.firstname} {availableLeaders.find(l => String(l.id) === combinedWith)?.lastname}
+                                                    </p>
+                                                )}
+                                            </Field>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </Section>
+                    )}
 
                     {/* SAVE BUTTON */}
                     <button
@@ -519,40 +577,42 @@ function EditLeader() {
                     </button>
                 </form>
 
-                {/* DANGER ZONE */}
-                <div style={{
-                    marginTop: "40px",
-                    maxWidth: "720px",
-                    padding: "20px",
-                    borderRadius: "12px",
-                    border: "1px solid rgba(220, 38, 38, 0.2)",
-                    background: "#fff"
-                }}>
-                    <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#dc2626", marginBottom: "6px" }}>Danger Zone</h3>
-                    <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "14px" }}>
-                        Permanently delete this account and all associated records. This cannot be undone.
-                    </p>
-                    <button
-                        type="button"
-                        onClick={() => setShowDeleteModal(true)}
-                        style={{
-                            padding: "8px 18px",
-                            borderRadius: "8px",
-                            border: "1px solid #dc2626",
-                            background: "#fef2f2",
-                            color: "#dc2626",
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            cursor: "pointer"
-                        }}
-                    >
-                        Delete Account
-                    </button>
-                </div>
+                {/* DANGER ZONE — ADMIN ONLY */}
+                {fullAccess && (
+                    <div style={{
+                        marginTop: "40px",
+                        maxWidth: "720px",
+                        padding: "20px",
+                        borderRadius: "12px",
+                        border: "1px solid rgba(220, 38, 38, 0.2)",
+                        background: "#fff"
+                    }}>
+                        <h3 style={{ fontSize: "14px", fontWeight: 700, color: "#dc2626", marginBottom: "6px" }}>Danger Zone</h3>
+                        <p style={{ fontSize: "12px", color: "#6b7280", marginBottom: "14px" }}>
+                            Permanently delete this account and all associated records. This cannot be undone.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteModal(true)}
+                            style={{
+                                padding: "8px 18px",
+                                borderRadius: "8px",
+                                border: "1px solid #dc2626",
+                                background: "#fef2f2",
+                                color: "#dc2626",
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                cursor: "pointer"
+                            }}
+                        >
+                            Delete Account
+                        </button>
+                    </div>
+                )}
             </div>
 
-            {/* DELETE MODAL */}
-            {showDeleteModal && (
+            {/* DELETE MODAL — only relevant when fullAccess, but guard anyway */}
+            {fullAccess && showDeleteModal && (
                 <div style={{
                     position: "fixed", inset: 0,
                     background: "rgba(0,0,0,0.5)",

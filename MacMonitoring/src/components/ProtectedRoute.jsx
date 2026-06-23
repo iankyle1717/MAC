@@ -94,9 +94,12 @@ function ProtectedRoute({
         return <AccessDenied />;
     }
 
+    // ── EDIT ACCESS ──────────────────────────────────────────────────────────
+    // Admin can edit anyone. Any logged-in user can reach their OWN edit page
+    // (EditLeader.js itself limits which fields a non-admin can actually change).
     if (requireEditAccess && targetId) {
-        // Only admin can edit profiles - members cannot edit their own
-        if (!admin) {
+        const isOwnProfile = user?.id === targetId;
+        if (!admin && !isOwnProfile) {
             return <AccessDenied />;
         }
     }

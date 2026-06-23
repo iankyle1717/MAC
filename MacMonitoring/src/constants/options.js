@@ -1,10 +1,9 @@
 export const tribes = [
     "DANALI",
     "REUBEN",
-    "ASHER",
+    "JOSIAH",
     "EPHRAIM",
     "MANASSEH",
-    "JOSEPH",
     "GAD",
     "EZRA"
 ];
