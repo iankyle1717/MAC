@@ -22,12 +22,54 @@ function LifeGroup() {
     const [filterMonth, setFilterMonth] = useState("ALL");
     const [showForm, setShowForm] = useState(false);
 
+    // ── NEW: LifeGroup Checker features ─────────────────────────────────────
+    const [isLifeGroupChecker, setIsLifeGroupChecker] = useState(false);
+    const [assignedTribe, setAssignedTribe] = useState("");
+    const [tribeLeaders, setTribeLeaders] = useState([]);
+    const [selectedLeaderId, setSelectedLeaderId] = useState("");
+    const [selectedLeaderName, setSelectedLeaderName] = useState("");
+    const [recordMode, setRecordMode] = useState("self"); // "self" or "tribe"
+    // ───────────────────────────────────────────────────────────────────────
+
     useEffect(() => {
         if (userRef.current) {
+            checkLifeGroupCheckerRole();
             fetchRecords();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Check if current user is a LifeGroup Checker
+    const checkLifeGroupCheckerRole = () => {
+        const currentUser = userRef.current;
+        if (!currentUser) return;
+
+        const hasDJMinistry = currentUser.ministries?.includes("DISCIPLESHIP JOURNEY") ||
+            currentUser.ministry === "DISCIPLESHIP JOURNEY";
+        const isLifeGroupCheckerType = currentUser.dj_type === "LifeGroup Checker";
+        const hasAssignedTribe = currentUser.assigned_tribe && currentUser.assigned_tribe !== "";
+
+        if (hasDJMinistry && isLifeGroupCheckerType && hasAssignedTribe) {
+            setIsLifeGroupChecker(true);
+            setAssignedTribe(currentUser.assigned_tribe);
+            fetchTribeLeaders(currentUser.assigned_tribe);
+        }
+    };
+
+    // Fetch all leaders in the assigned tribe
+    const fetchTribeLeaders = async (tribe) => {
+        const { data, error } = await supabase
+            .from("tblMonitoring")
+            .select("id, firstname, lastname, nickname")
+            .eq("tribe", tribe)
+            .order("firstname", { ascending: true });
+
+        if (error) {
+            console.error("Error fetching tribe leaders:", error);
+        } else {
+            setTribeLeaders(data || []);
+        }
+    };
 
     const fetchRecords = async () => {
         if (!userRef.current) return;
@@ -47,6 +89,23 @@ function LifeGroup() {
         setFetching(false);
     };
 
+    // Fetch records for a specific leader (for LifeGroup Checker view)
+    const fetchLeaderRecords = async (leaderId) => {
+        setFetching(true);
+        const { data, error } = await supabase
+            .from("tblLifeGroup")
+            .select("*")
+            .eq("leader_id", leaderId)
+            .order("date", { ascending: false });
+
+        if (error) {
+            console.log("Fetch Error:", error);
+        } else {
+            setRecords(data || []);
+        }
+        setFetching(false);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -55,10 +114,15 @@ function LifeGroup() {
             return;
         }
 
+        // Determine whose record we're saving
+        const targetLeaderId = recordMode === "tribe" && selectedLeaderId
+            ? parseInt(selectedLeaderId)
+            : userRef.current.id;
+
         setLoading(true);
 
         const insertData = {
-            leader_id: userRef.current.id,
+            leader_id: targetLeaderId,
             topic,
             place,
             type,
@@ -80,9 +144,10 @@ function LifeGroup() {
             setType("");
             setExhorter("");
             setShowForm(false);
+
             const newRecord = {
                 id: Date.now(),
-                leader_id: userRef.current.id,
+                leader_id: targetLeaderId,
                 topic,
                 place,
                 type,
@@ -94,6 +159,30 @@ function LifeGroup() {
         }
 
         setLoading(false);
+    };
+
+    // Handle leader selection change
+    const handleLeaderChange = (e) => {
+        const leaderId = e.target.value;
+        setSelectedLeaderId(leaderId);
+        if (leaderId) {
+            const leader = tribeLeaders.find(l => String(l.id) === leaderId);
+            setSelectedLeaderName(leader ? `${leader.firstname} ${leader.lastname}` : "");
+            fetchLeaderRecords(parseInt(leaderId));
+        } else {
+            setSelectedLeaderName("");
+            fetchRecords(); // Back to self
+        }
+    };
+
+    // Handle record mode change
+    const handleModeChange = (mode) => {
+        setRecordMode(mode);
+        if (mode === "self") {
+            setSelectedLeaderId("");
+            setSelectedLeaderName("");
+            fetchRecords();
+        }
     };
 
     // Group records by month and check consistency
@@ -140,8 +229,8 @@ function LifeGroup() {
     const monthOptions = getMonthOptions();
 
     // Filter records by selected month
-    const filteredRecords = filterMonth === "ALL" 
-        ? records 
+    const filteredRecords = filterMonth === "ALL"
+        ? records
         : records.filter((record) => {
             const d = new Date(record.date);
             const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -178,9 +267,18 @@ function LifeGroup() {
                     borderBottom: "1px solid #e5e7eb"
                 }}>
                     <div>
-                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>Life Group Recording</h1>
+                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>
+                            {isLifeGroupChecker && recordMode === "tribe" && selectedLeaderName
+                                ? `Life Group: ${selectedLeaderName}`
+                                : "Life Group Recording"}
+                        </h1>
                         <p style={{ opacity: 0.7, margin: "2px 0 0 0", fontSize: "12px" }}>
                             Welcome, <strong>{user.firstname} {user.lastname}</strong> • {user.tribe}
+                            {isLifeGroupChecker && (
+                                <span style={{ marginLeft: "8px", padding: "2px 8px", borderRadius: "10px", background: "#fef3c7", color: "#92400e", fontSize: "10px", fontWeight: 700 }}>
+                                    LG Checker — {assignedTribe}
+                                </span>
+                            )}
                         </p>
                     </div>
                     <button
@@ -191,6 +289,83 @@ function LifeGroup() {
                         + Record Life Group
                     </button>
                 </div>
+
+                {/* ── NEW: LifeGroup Checker Mode Selector ──────────────────── */}
+                {isLifeGroupChecker && (
+                    <div style={{
+                        marginBottom: "15px",
+                        padding: "12px 14px",
+                        background: "#fffbeb",
+                        border: "1px solid #fcd34d",
+                        borderRadius: "10px"
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#92400e" }}>
+                                📋 Record For:
+                            </span>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                                <button
+                                    onClick={() => handleModeChange("self")}
+                                    style={{
+                                        padding: "5px 14px",
+                                        borderRadius: "8px",
+                                        border: "1px solid",
+                                        borderColor: recordMode === "self" ? "#c9a45c" : "#d1d5db",
+                                        background: recordMode === "self" ? "#c9a45c" : "#fff",
+                                        color: recordMode === "self" ? "#fff" : "#374151",
+                                        fontSize: "12px",
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        transition: "all 0.2s"
+                                    }}
+                                >
+                                    Myself
+                                </button>
+                                <button
+                                    onClick={() => handleModeChange("tribe")}
+                                    style={{
+                                        padding: "5px 14px",
+                                        borderRadius: "8px",
+                                        border: "1px solid",
+                                        borderColor: recordMode === "tribe" ? "#c9a45c" : "#d1d5db",
+                                        background: recordMode === "tribe" ? "#c9a45c" : "#fff",
+                                        color: recordMode === "tribe" ? "#fff" : "#374151",
+                                        fontSize: "12px",
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        transition: "all 0.2s"
+                                    }}
+                                >
+                                    Someone in {assignedTribe}
+                                </button>
+                            </div>
+
+                            {recordMode === "tribe" && (
+                                <select
+                                    value={selectedLeaderId}
+                                    onChange={handleLeaderChange}
+                                    style={{
+                                        padding: "6px 10px",
+                                        fontSize: "13px",
+                                        borderRadius: "6px",
+                                        border: "1px solid #d1d5db",
+                                        minWidth: "200px",
+                                        background: "#fff"
+                                    }}
+                                >
+                                    <option value="">— Select Tribe Member —</option>
+                                    {tribeLeaders.map((leader) => (
+                                        <option key={leader.id} value={String(leader.id)}>
+                                            {leader.firstname} {leader.lastname}
+                                            {leader.nickname ? ` (${leader.nickname})` : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+                    </div>
+                )}
+                {/* ───────────────────────────────────────────────────────────── */}
 
                 {/* COMPACT STATS CARDS */}
                 <div
@@ -275,7 +450,9 @@ function LifeGroup() {
                 <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                         <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
-                            My Life Group Records
+                            {recordMode === "tribe" && selectedLeaderName
+                                ? `${selectedLeaderName}'s Life Group Records`
+                                : "My Life Group Records"}
                             <span
                                 style={{
                                     marginLeft: "8px",
@@ -314,7 +491,11 @@ function LifeGroup() {
                     {fetching ? (
                         <p style={{ fontSize: "13px", color: "#6b7280" }}>Loading records...</p>
                     ) : filteredRecords.length === 0 ? (
-                        <p style={{ fontSize: "13px", color: "#6b7280" }}>No life group records yet.</p>
+                        <p style={{ fontSize: "13px", color: "#6b7280" }}>
+                            {recordMode === "tribe" && selectedLeaderName
+                                ? `No life group records for ${selectedLeaderName} yet.`
+                                : "No life group records yet."}
+                        </p>
                     ) : (
                         <div
                             style={{
@@ -384,7 +565,11 @@ function LifeGroup() {
                 {monthlyStats.length > 0 && (
                     <div className="excel-card" style={{ marginTop: "20px", borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
                         <div className="excel-header" style={{ padding: "10px 14px" }}>
-                            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>Monthly Consistency Report</h2>
+                            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
+                                {recordMode === "tribe" && selectedLeaderName
+                                    ? `${selectedLeaderName}'s Monthly Consistency Report`
+                                    : "Monthly Consistency Report"}
+                            </h2>
                         </div>
                         <div className="excel-wrapper">
                             <table className="excel-table" style={{ fontSize: "12px" }}>
@@ -469,7 +654,11 @@ function LifeGroup() {
                             zIndex: 10,
                             borderRadius: "12px 12px 0 0"
                         }}>
-                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Record New Life Group</h2>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>
+                                {recordMode === "tribe" && selectedLeaderName
+                                    ? `Record Life Group for ${selectedLeaderName}`
+                                    : "Record New Life Group"}
+                            </h2>
                             <button
                                 onClick={() => setShowForm(false)}
                                 style={{
@@ -486,6 +675,36 @@ function LifeGroup() {
                             </button>
                         </div>
                         <div style={{ padding: "14px 18px 18px" }}>
+                            {/* ── Show who we're recording for ─────────────────── */}
+                            {isLifeGroupChecker && recordMode === "tribe" && selectedLeaderId && (
+                                <div style={{
+                                    padding: "8px 12px",
+                                    background: "#fef3c7",
+                                    borderRadius: "8px",
+                                    marginBottom: "12px",
+                                    border: "1px solid #fcd34d"
+                                }}>
+                                    <p style={{ margin: 0, fontSize: "12px", color: "#92400e", fontWeight: 600 }}>
+                                        📝 Recording for: {selectedLeaderName}
+                                    </p>
+                                </div>
+                            )}
+
+                            {isLifeGroupChecker && recordMode === "tribe" && !selectedLeaderId && (
+                                <div style={{
+                                    padding: "8px 12px",
+                                    background: "#fee2e2",
+                                    borderRadius: "8px",
+                                    marginBottom: "12px",
+                                    border: "1px solid #fecaca"
+                                }}>
+                                    <p style={{ margin: 0, fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>
+                                        ⚠️ Please select a tribe member above before recording.
+                                    </p>
+                                </div>
+                            )}
+                            {/* ─────────────────────────────────────────────────── */}
+
                             <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 <input
                                     type="text"
@@ -526,7 +745,17 @@ function LifeGroup() {
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                                 />
 
-                                <button type="submit" style={{ marginTop: "4px", padding: "8px", fontSize: "13px" }}>
+                                <button
+                                    type="submit"
+                                    disabled={isLifeGroupChecker && recordMode === "tribe" && !selectedLeaderId}
+                                    style={{
+                                        marginTop: "4px",
+                                        padding: "8px",
+                                        fontSize: "13px",
+                                        opacity: isLifeGroupChecker && recordMode === "tribe" && !selectedLeaderId ? 0.5 : 1,
+                                        cursor: isLifeGroupChecker && recordMode === "tribe" && !selectedLeaderId ? "not-allowed" : "pointer"
+                                    }}
+                                >
                                     {loading ? "Recording..." : "Record Life Group"}
                                 </button>
                             </form>

@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
@@ -26,6 +25,55 @@ const th = (extra = {}) => ({
     whiteSpace: "nowrap",
     ...extra,
 });
+
+// ── Controlled, per-slot input. Re-keyed by month in the parent so React
+//    always mounts a FRESH input when the month changes, instead of reusing
+//    the old DOM node (which is what was causing June's typed value to still
+//    visually appear after switching to July). ──────────────────────────────
+function WeekSlotInput({ tithe, leaderId, monthKey, onCommit }) {
+    const [value, setValue] = useState(tithe?.amount ?? "");
+
+    // Keep local state in sync if the underlying tithe record itself changes
+    // (e.g. after a save round-trip updates the id/amount).
+    useEffect(() => {
+        setValue(tithe?.amount ?? "");
+    }, [tithe?.id, tithe?.amount]);
+
+    const commit = () => {
+        if (tithe) {
+            if (String(value) !== String(tithe.amount)) onCommit(leaderId, monthKey, value, tithe.id);
+        } else if (value) {
+            onCommit(leaderId, monthKey, value, null);
+        }
+    };
+
+    return (
+        <input
+            type="number"
+            value={value}
+            placeholder=""
+            onChange={e => setValue(e.target.value)}
+            onBlur={commit}
+            onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+            style={{
+                width: "80px",
+                padding: "8px 6px",
+                fontSize: "13px",
+                fontWeight: 500,
+                borderRadius: "7px",
+                border: tithe ? "1.5px solid #d1d5db" : "1.5px dashed #e5e7eb",
+                textAlign: "center",
+                background: tithe ? "#fff" : "#fafafa",
+                outline: "none",
+                color: "#111827",
+                boxSizing: "border-box",
+                transition: "border-color 0.15s"
+            }}
+            onFocus={e => e.target.style.borderColor = "#b8934a"}
+            onBlurCapture={e => e.target.style.borderColor = tithe ? "#d1d5db" : "#e5e7eb"}
+        />
+    );
+}
 
 function Tithes() {
     const navigate = useNavigate();
@@ -369,38 +417,19 @@ function Tithes() {
                                                     )}
                                                 </td>
 
-                                                {/* WEEK SLOTS — editable inputs */}
+                                                {/* WEEK SLOTS — editable, controlled inputs.
+                                                    KEY now includes selectedMonth so React mounts a
+                                                    brand-new input (clean state) every time the month
+                                                    changes, instead of reusing the old DOM node and its
+                                                    leftover typed text from a previous month. */}
                                                 {slots.map((tithe, i) => (
-                                                    <td key={i} style={{ padding: "12px 10px", textAlign: "center", ...(i === SLOT_COUNT - 1 ? { borderRight: "1px solid #f3f4f6" } : {}) }}>
-                                                        <input
-                                                            type="number"
-                                                            defaultValue={tithe?.amount ?? ""}
-                                                            placeholder=""
-                                                            onBlur={e => {
-                                                                const val = e.target.value;
-                                                                if (tithe) {
-                                                                    if (val !== String(tithe.amount)) handleTitheEntry(leader.id, selectedMonth, val, tithe.id);
-                                                                } else if (val) {
-                                                                    handleTitheEntry(leader.id, selectedMonth, val, null);
-                                                                }
-                                                            }}
-                                                            onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
-                                                            style={{
-                                                                width: "80px",
-                                                                padding: "8px 6px",
-                                                                fontSize: "13px",
-                                                                fontWeight: 500,
-                                                                borderRadius: "7px",
-                                                                border: tithe ? "1.5px solid #d1d5db" : "1.5px dashed #e5e7eb",
-                                                                textAlign: "center",
-                                                                background: tithe ? "#fff" : "#fafafa",
-                                                                outline: "none",
-                                                                color: "#111827",
-                                                                boxSizing: "border-box",
-                                                                transition: "border-color 0.15s"
-                                                            }}
-                                                            onFocus={e => e.target.style.borderColor = "#b8934a"}
-                                                            onBlurCapture={e => e.target.style.borderColor = tithe ? "#d1d5db" : "#e5e7eb"}
+                                                    <td key={`${selectedMonth}-${i}`} style={{ padding: "12px 10px", textAlign: "center", ...(i === SLOT_COUNT - 1 ? { borderRight: "1px solid #f3f4f6" } : {}) }}>
+                                                        <WeekSlotInput
+                                                            key={`${selectedMonth}-${leader.id}-${i}-${tithe?.id ?? "empty"}`}
+                                                            tithe={tithe}
+                                                            leaderId={leader.id}
+                                                            monthKey={selectedMonth}
+                                                            onCommit={handleTitheEntry}
                                                         />
                                                     </td>
                                                 ))}

@@ -68,7 +68,6 @@ const getNewcomerStatusStyle = (status) => {
     return { bg: "#dcfce7", color: "#16a34a", border: "#86efac" };
 };
 
-// Determine display status for export: 1st/2nd/3rd Timer or Regular
 const getDisplayStatus = (isLeader, remarks) => {
     if (isLeader) return "Regular";
     if (consoStages.includes(remarks)) return remarks;
@@ -87,107 +86,68 @@ const modalInputStyle = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// NEW: Fetch default tribe goals from tblTribeGoalDefaults
-// These persist until manually changed by an admin
+// Detect which of the 3 fixed service categories a free-text service type
+// belongs to. Custom events (that don't start with one of the presets)
+// return null — meaning "no default lookup applies".
 // ═══════════════════════════════════════════════════════════════════════════
-const fetchDefaultTribeGoals = async () => {
+const detectServiceCategory = (serviceTypeText) => {
+    if (!serviceTypeText) return null;
+    const upper = serviceTypeText.toUpperCase();
+    const match = SERVICE_PRESETS.find(preset => upper.startsWith(preset));
+    return match || null;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Default tribe goals now live in a WIDE table: one row per tribe, with a
+// separate column per service category.
+// tblTribeGoalDefaults columns: tribe, prayer_works_goal, youth_gig_goal,
+// sunday_service_goal
+// ═══════════════════════════════════════════════════════════════════════════
+const CATEGORY_TO_COLUMN = {
+    "PRAYER WORKS": "prayer_works_goal",
+    "YOUTH GIG": "youth_gig_goal",
+    "SUNDAY SERVICE": "sunday_service_goal",
+};
+
+const fetchDefaultTribeGoals = async (serviceCategory) => {
+    if (!serviceCategory) return {};
+    const column = CATEGORY_TO_COLUMN[serviceCategory];
+    if (!column) return {};
+
     const { data, error } = await supabase
         .from("tblTribeGoalDefaults")
-        .select("tribe, goal_number")
-        .order("created_at", { ascending: false });
+        .select(`tribe, ${column}`);
 
     if (error) {
         console.error("Error fetching default tribe goals:", error);
         return {};
     }
 
-    // Take the most recent goal for each tribe
     const goals = {};
-    data?.forEach(row => {
-        if (goals[row.tribe] === undefined) {
-            goals[row.tribe] = row.goal_number;
-        }
-    });
+    data?.forEach(row => { goals[row.tribe] = row[column]; });
     return goals;
 };
 
-// Save default tribe goals — robust delete-then-insert approach
-const saveDefaultTribeGoals = async (goals) => {
-    const records = Object.entries(goals)
-        .filter(([_, goal]) => goal !== "" && goal !== undefined && goal !== null)
-        .map(([tribe, goal_number]) => ({
-            tribe,
-            goal_number: parseInt(goal_number) || 0,
-        }));
+const saveDefaultTribeGoals = async (goals, serviceCategory) => {
+    if (!serviceCategory) return { error: null }; // custom events: don't persist a default
+    const column = CATEGORY_TO_COLUMN[serviceCategory];
+    if (!column) return { error: null };
 
-    if (records.length === 0) return { error: null };
+    const entries = Object.entries(goals).filter(
+        ([_, goal]) => goal !== "" && goal !== undefined && goal !== null
+    );
+    if (entries.length === 0) return { error: null };
 
-    // Try upsert first (newer Supabase versions)
-    const { error: upsertError } = await supabase
-        .from("tblTribeGoalDefaults")
-        .upsert(records, { onConflict: "tribe" });
-
-    if (!upsertError) {
-        console.log("✅ Goals saved via upsert");
-        return { error: null };
+    // One row per tribe already exists (seeded ahead of time), so this is
+    // always an UPDATE on that tribe's row — no upsert/conflict handling needed.
+    for (const [tribe, goal] of entries) {
+        const { error } = await supabase
+            .from("tblTribeGoalDefaults")
+            .update({ [column]: parseInt(goal) || 0, updated_at: new Date().toISOString() })
+            .eq("tribe", tribe);
+        if (error) return { error };
     }
-
-    console.warn("Upsert failed, trying delete-then-insert fallback:", upsertError.message);
-
-    // Fallback: delete existing records for these tribes, then insert fresh
-    const tribesToUpdate = records.map(r => r.tribe);
-    const { error: deleteError } = await supabase
-        .from("tblTribeGoalDefaults")
-        .delete()
-        .in("tribe", tribesToUpdate);
-
-    if (deleteError) {
-        console.error("Delete failed:", deleteError.message);
-        return { error: deleteError };
-    }
-
-    const { error: insertError } = await supabase
-        .from("tblTribeGoalDefaults")
-        .insert(records);
-
-    if (insertError) {
-        console.error("Insert failed:", insertError.message);
-        return { error: insertError };
-    }
-
-    console.log("✅ Goals saved via delete-then-insert fallback");
     return { error: null };
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Get effective goals: use per-service goals if they exist, otherwise fall back
-// to default goals from tblTribeGoalDefaults
-// ═══════════════════════════════════════════════════════════════════════════
-const getEffectiveGoals = async (serviceDate, serviceType) => {
-    // First try to get per-service goals for this exact date+service
-    const { data: serviceGoals } = await supabase
-        .from("tblTribeTargets")
-        .select("tribe, target_number")
-        .eq("service_date", serviceDate)
-        .eq("service_type", serviceType);
-
-    const perService = {};
-    serviceGoals?.forEach(g => { perService[g.tribe] = g.target_number; });
-
-    // Check if ALL tribes have per-service goals
-    const allHaveServiceGoals = tribes.every(t => perService[t] !== undefined);
-
-    if (allHaveServiceGoals) {
-        return perService;
-    }
-
-    // Fall back to default goals for missing tribes
-    const defaults = await fetchDefaultTribeGoals();
-    const effective = {};
-    tribes.forEach(t => {
-        effective[t] = perService[t] !== undefined ? perService[t] : (defaults[t] || 0);
-    });
-    return effective;
 };
 
 // ── Attendance Modal (Record / Export) ────────────────────────────────────
@@ -195,7 +155,7 @@ function AttendanceModal({
     showModal, modalTab, setModalTab, date, serviceType, exportMonth, exportDate,
     tribeTargets, onDateChange, onServiceTypeChange, onServicePreset, onTargetChange,
     onStartRecording, onExport, onExportMonthChange, onExportDateChange, onClose,
-    defaultGoalsLoaded, // new prop
+    activeCategory,
 }) {
     if (!showModal) return null;
 
@@ -206,7 +166,6 @@ function AttendanceModal({
             display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 1000, backdropFilter: "blur(4px)", padding: "20px", overflowY: "auto"
         }}>
-            {/* MODAL MADE LARGER: maxWidth increased from 560px to 720px */}
             <div style={{
                 background: "#fff", borderRadius: "16px", width: "95%", maxWidth: "720px",
                 boxShadow: "0 25px 50px rgba(0,0,0,0.25)", overflow: "hidden", position: "relative",
@@ -289,18 +248,28 @@ function AttendanceModal({
                             </div>
 
                             <div>
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
                                     <label style={{ display: "block", fontSize: "13px", fontWeight: 600, color: "#374151" }}>
-                                        Tribe Targets {defaultGoalsLoaded && <span style={{ color: "#16a34a", fontSize: "11px" }}>(Default goals loaded)</span>}
+                                        Tribe Targets
+                                        {activeCategory ? (
+                                            <span style={{ color: "#16a34a", fontSize: "11px", fontWeight: 600, marginLeft: "6px" }}>
+                                                ({activeCategory} defaults)
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: "#d97706", fontSize: "11px", fontWeight: 600, marginLeft: "6px" }}>
+                                                (custom event — no saved default)
+                                            </span>
+                                        )}
                                     </label>
-                                    <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                                        These will be saved as default for future services
-                                    </span>
+                                    {activeCategory && (
+                                        <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                                            Saved as the {activeCategory} default
+                                        </span>
+                                    )}
                                 </div>
                                 <p style={{ fontSize: "12px", color: "#9ca3af", margin: "0 0 10px 0" }}>
-                                    Set the attendee goal for each tribe. Goals persist across services until you change them.
+                                    Each service type (Prayer Works, Youth Gig, Sunday Service) remembers its own goals per tribe.
                                 </p>
-                                {/* Wider grid for larger modal */}
                                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
                                     {tribes.map(tribe => (
                                         <div key={tribe} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -425,6 +394,95 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList }) {
     );
 }
 
+// ── Live Tribe Leaderboard (right-side panel while recording) ─────────────
+function TribeLeaderboard({ tribesList, leaders, attendanceMap, newcomers, newcomerAttendanceMap }) {
+    const counts = {};
+    tribesList.forEach(t => { counts[t] = 0; });
+
+    leaders.forEach(l => {
+        if (attendanceMap[l.id] === "Present" && counts[l.tribe] !== undefined) {
+            counts[l.tribe]++;
+        }
+    });
+    newcomers.forEach(n => {
+        if (newcomerAttendanceMap[n.id] === "Present" && counts[n.tribe] !== undefined) {
+            counts[n.tribe]++;
+        }
+    });
+
+    const ranked = tribesList
+        .map(t => ({ tribe: t, count: counts[t] }))
+        .sort((a, b) => b.count - a.count);
+
+    const totalPresent = ranked.reduce((s, r) => s + r.count, 0);
+    const topCount = ranked[0]?.count || 0;
+
+    return (
+        <div style={{
+            background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px",
+            padding: "16px", height: "fit-content", position: "sticky", top: "16px"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#1a202c" }}> Tribe Leaderboard</h3>
+            </div>
+         
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {ranked.map((row, i) => {
+                    const isLeading = i === 0 && row.count > 0;
+                    const pct = topCount > 0 ? Math.round((row.count / topCount) * 100) : 0;
+                    return (
+                        <div key={row.tribe} style={{
+                            display: "flex", alignItems: "center", gap: "10px",
+                            padding: isLeading ? "10px 12px" : "8px 12px",
+                            borderRadius: "10px",
+                            background: isLeading ? "linear-gradient(135deg, #fdf6e8, #fcefd4)" : "#f9fafb",
+                            border: isLeading ? "1.5px solid #c9a45c" : "1px solid #f1f5f9",
+                            transition: "all 0.25s ease"
+                        }}>
+                            <div style={{
+                                width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: "11px", fontWeight: 800,
+                                background: isLeading ? "#c9a45c" : "#e2e8f0",
+                                color: isLeading ? "#fff" : "#64748b"
+                            }}>
+                                {i + 1}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
+                                    <span style={{
+                                        fontSize: "12px", fontWeight: isLeading ? 800 : 600,
+                                        color: isLeading ? "#92400e" : "#374151",
+                                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                                    }}>
+                                        {row.tribe} {isLeading ? "" : ""}
+                                    </span>
+                                    <span style={{ fontSize: "13px", fontWeight: 800, color: isLeading ? "#b8934a" : "#374151" }}>
+                                        {row.count}
+                                    </span>
+                                </div>
+                                <div style={{ height: "5px", borderRadius: "3px", background: "#e9edf1", overflow: "hidden" }}>
+                                    <div style={{
+                                        width: `${pct}%`, height: "100%", borderRadius: "3px",
+                                        background: isLeading ? "linear-gradient(90deg, #c9a45c, #e0bc78)" : "#94a3b8",
+                                        transition: "width 0.3s ease"
+                                    }} />
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px dashed #e5e7eb", textAlign: "center" }}>
+                <span style={{ fontSize: "11px", color: "#9ca3af" }}>Total present: </span>
+                <span style={{ fontSize: "13px", fontWeight: 800, color: "#374151" }}>{totalPresent}</span>
+            </div>
+        </div>
+    );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 function Attendance() {
     const navigate = useNavigate();
@@ -442,7 +500,6 @@ function Attendance() {
     const [isRecording, setIsRecording] = useState(false);
     const [stats, setStats] = useState({ total: 0, present: 0, absent: 0 });
     const [tribeTargets, setTribeTargets] = useState({});
-    const [defaultGoalsLoaded, setDefaultGoalsLoaded] = useState(false);
 
     const [recordTab, setRecordTab] = useState("leaders");
     const [newcomers, setNewcomers] = useState([]);
@@ -451,30 +508,36 @@ function Attendance() {
     const [newcomerSearch, setNewcomerSearch] = useState("");
     const [showAddNewcomer, setShowAddNewcomer] = useState(false);
 
-    // ════════════════════════════════════════════════════════════════════════
-    // Load default tribe goals on mount + when modal opens
-    // ════════════════════════════════════════════════════════════════════════
-    useEffect(() => {
-        loadDefaultGoals();
-    }, []);
-
-    const loadDefaultGoals = async () => {
-        const defaults = await fetchDefaultTribeGoals();
-        if (Object.keys(defaults).length > 0) {
-            setTribeTargets(prev => {
-                const merged = { ...prev };
-                tribes.forEach(t => {
-                    if (defaults[t] !== undefined && merged[t] === undefined) {
-                        merged[t] = defaults[t];
-                    }
-                });
-                return merged;
-            });
-            setDefaultGoalsLoaded(true);
-        }
-    };
+    // The detected category (PRAYER WORKS / YOUTH GIG / SUNDAY SERVICE / null)
+    // for the currently typed serviceType.
+    const activeCategory = detectServiceCategory(serviceType);
 
     useEffect(() => { fetchLeaders(); }, []);
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Whenever the detected service category CHANGES, load that category's
+    // saved default goals and replace the current tribeTargets with them.
+    // Custom events (activeCategory === null) clear to blank instead.
+    // ════════════════════════════════════════════════════════════════════════
+    useEffect(() => {
+        if (isRecording) return; // only matters in the pre-recording modal
+        let cancelled = false;
+
+        (async () => {
+            if (!activeCategory) {
+                if (!cancelled) setTribeTargets({});
+                return;
+            }
+            const defaults = await fetchDefaultTribeGoals(activeCategory);
+            if (cancelled) return;
+            const next = {};
+            tribes.forEach(t => { next[t] = defaults[t] !== undefined ? defaults[t] : ""; });
+            setTribeTargets(next);
+        })();
+
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeCategory, isRecording]);
 
     useEffect(() => {
         if (isRecording && date) {
@@ -593,9 +656,6 @@ function Attendance() {
         setTribeTargets(prev => ({ ...prev, [tribe]: value === "" ? "" : Math.max(0, parseInt(value) || 0) }));
     }, []);
 
-    // ════════════════════════════════════════════════════════════════════════
-    // Start Recording: Save goals as defaults, then proceed
-    // ════════════════════════════════════════════════════════════════════════
     const startRecording = async () => {
         if (!date) {
             Swal.fire({ icon: "warning", title: "Date Required", text: "Please select a date.", confirmButtonColor: "#c9a45c" });
@@ -611,11 +671,10 @@ function Attendance() {
             return;
         }
 
-        // Save goals as defaults for future services
-        const { error: goalError } = await saveDefaultTribeGoals(tribeTargets);
+        // Save as the default for this service category (no-ops for custom events)
+        const { error: goalError } = await saveDefaultTribeGoals(tribeTargets, activeCategory);
         if (goalError) {
             console.error("⚠️ Could not save default goals:", goalError.message);
-            // Don't block the user - per-service goals are still saved in tblTribeTargets
         }
 
         setIsRecording(true);
@@ -628,9 +687,6 @@ function Attendance() {
         setAttendanceMap(prev => ({ ...prev, [leaderId]: current === "Present" ? "Absent" : "Present" }));
     };
 
-    // ════════════════════════════════════════════════════════════════════════
-    // SINGLE SAVE: Both leaders and newcomers saved together in ONE action
-    // ════════════════════════════════════════════════════════════════════════
     const handleSave = async () => {
         if (!serviceType.trim() || !date) {
             Swal.fire({ icon: "warning", title: "Missing Info", text: "Date and service type are required.", confirmButtonColor: "#c9a45c" });
@@ -639,11 +695,9 @@ function Attendance() {
 
         setLoading(true);
 
-        // ── 1. Delete old records for this date ──
         await supabase.from("tblAttendance").delete().eq("service_date", date);
         await supabase.from("tblNewcomerAttendance").delete().eq("service_date", date);
 
-        // ── 2. Build leader attendance records ──
         const leaderRecords = sorted.map(leader => ({
             leader_id: leader.id,
             service_date: date,
@@ -651,7 +705,6 @@ function Attendance() {
             remarks: serviceType,
         }));
 
-        // ── 3. Build newcomer attendance records + compute updates ──
         const newcomerAttendanceRecords = [];
         const newcomerUpdates = [];
 
@@ -702,7 +755,6 @@ function Attendance() {
             });
         }
 
-        // ── 4. Insert all records (leaders + newcomers) ──
         const { error: leaderError } = leaderRecords.length
             ? await supabase.from("tblAttendance").insert(leaderRecords)
             : { error: null };
@@ -711,7 +763,6 @@ function Attendance() {
             ? await supabase.from("tblNewcomerAttendance").insert(newcomerAttendanceRecords)
             : { error: null };
 
-        // ── 5. Update newcomer statuses/stages ──
         for (const update of newcomerUpdates) {
             await supabase.from("tblNewMembers").update({
                 attendance_count: update.attendance_count,
@@ -727,7 +778,7 @@ function Attendance() {
             return update ? { ...member, ...update } : member;
         }));
 
-        // ── 6. Save tribe targets for this service (per-service record) ──
+        // Per-service goal snapshot for this exact date+serviceType
         await supabase.from("tblTribeTargets").delete().eq("service_date", date).eq("service_type", serviceType);
         const targetRecords = tribes.map(tribe => ({
             service_date: date,
@@ -752,10 +803,6 @@ function Attendance() {
         }
     };
 
-    // ════════════════════════════════════════════════════════════════════════
-    // SINGLE SHEET EXPORT: One sheet with all attendees mixed together
-    // Uses default goals from tblTribeGoalDefaults as fallback
-    // ════════════════════════════════════════════════════════════════════════
     const handleExport = async () => {
         if (!exportMonth && !exportDate) {
             Swal.fire({ icon: "warning", title: "Select Period", text: "Please select a month or date to export.", confirmButtonColor: "#c9a45c" });
@@ -769,7 +816,6 @@ function Attendance() {
             return query.gte(col, `${exportMonth}-01`).lte(col, `${exportMonth}-${String(lastDay).padStart(2, "0")}`);
         };
 
-        // Fetch attendance data
         const { data: attendanceData } = await dateFilter(
             supabase.from("tblAttendance").select("*").order("service_date", { ascending: true }), "service_date"
         );
@@ -785,7 +831,6 @@ function Attendance() {
             return;
         }
 
-        // Fetch names
         const leaderIds = [...new Set((attendanceData || []).map(a => a.leader_id))];
         const { data: leadersData } = await supabase
             .from("tblMonitoring").select("id, firstname, lastname, tribe, type, ministry")
@@ -800,16 +845,19 @@ function Attendance() {
         const newcomerMap = {};
         newcomersData?.forEach(n => { newcomerMap[n.id] = n; });
 
-        // Fetch default goals as fallback
-        const defaultGoals = await fetchDefaultTribeGoals();
+        // Per-category default goals, used as fallback for any service_date
+        // in the export range that doesn't have its own tblTribeTargets row.
+        const defaultsByCategory = {};
+        for (const category of SERVICE_PRESETS) {
+            defaultsByCategory[category] = await fetchDefaultTribeGoals(category);
+        }
 
-        exportToExcel(attendanceData || [], newcomerAttendanceData || [], leaderMap, newcomerMap, targetsData || [], defaultGoals, exportDate, exportMonth);
+        exportToExcel(attendanceData || [], newcomerAttendanceData || [], leaderMap, newcomerMap, targetsData || [], defaultsByCategory, exportDate, exportMonth);
     };
 
-    const exportToExcel = (attendanceData, newcomerAttendanceData, leaderMap, newcomerMap, targetsData, defaultGoals, exportDateVal, exportMonthVal) => {
+    const exportToExcel = (attendanceData, newcomerAttendanceData, leaderMap, newcomerMap, targetsData, defaultsByCategory, exportDateVal, exportMonthVal) => {
         const wb = XLSX.utils.book_new();
 
-        // ── Styles ──
         const goldHeader = {
             fill: { fgColor: { rgb: "C9A45C" }, patternType: "solid" },
             font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
@@ -834,7 +882,6 @@ function Attendance() {
         const titleStyle = { font: { bold: true, color: { rgb: "B8934A" }, sz: 18 }, alignment: { horizontal: "center" } };
         const totalStyle = { font: { bold: true, color: { rgb: "374151" }, sz: 12 }, fill: { fgColor: { rgb: "F3F4F6" }, patternType: "solid" }, border: dataCell.border };
 
-        // ── Calculate tribe totals (leaders + newcomers combined) ──
         const tribeCounts = {};
         tribes.forEach(t => { tribeCounts[t] = 0; });
 
@@ -849,154 +896,151 @@ function Attendance() {
             if (newcomer?.tribe && tribeCounts[newcomer.tribe] !== undefined) tribeCounts[newcomer.tribe]++;
         });
 
-        // ═══════════════════════════════════════════════════════════════════
-        // FIX: Get goals using per-service first, then default fallback
-        // ═══════════════════════════════════════════════════════════════════
-        const targetByTribe = {};
-        tribes.forEach(t => {
-            // Try per-service goals first (average if multiple services in period)
-            const serviceEntries = targetsData.filter(tg => tg.tribe === t);
-            if (serviceEntries.length > 0) {
-                targetByTribe[t] = Math.round(serviceEntries.reduce((s, e) => s + (e.target_number || 0), 0) / serviceEntries.length);
-            } else {
-                // Fall back to default goals from tblTribeGoalDefaults
-                targetByTribe[t] = defaultGoals[t] || 0;
+        // ── Goal lookup, now resolved PER RECORD using that record's own
+        // service category, not one blended number for the whole period. ──
+        const getGoalFor = (tribe, serviceTypeText, serviceDate) => {
+            // 1. Exact per-service snapshot (date + service type) takes priority
+            const exact = targetsData.find(tg => tg.tribe === tribe && tg.service_date === serviceDate && tg.service_type === serviceTypeText);
+            if (exact) return exact.target_number || 0;
+
+            // 2. Fall back to the saved default for the detected category
+            const category = detectServiceCategory(serviceTypeText);
+            if (category && defaultsByCategory[category] && defaultsByCategory[category][tribe] !== undefined) {
+                return defaultsByCategory[category][tribe];
             }
+            return 0;
+        };
+
+        // ════════════ SHEET 1: TRIBE SUMMARY ════════════
+        // Goal shown is the most recent applicable goal per tribe across the
+        // exported period (since a period can span multiple service types/dates,
+        // we show one row per tribe using the latest record's goal for context,
+        // but the per-record sheet below has the exact goal next to each entry).
+        const latestGoalPerTribe = {};
+        [...attendanceData, ...newcomerAttendanceData]
+            .slice()
+            .sort((a, b) => new Date(a.service_date) - new Date(b.service_date))
+            .forEach(rec => {
+                const isLeaderRec = rec.leader_id !== undefined;
+                const entity = isLeaderRec ? leaderMap[rec.leader_id] : newcomerMap[rec.newcomer_id];
+                if (!entity?.tribe) return;
+                latestGoalPerTribe[entity.tribe] = getGoalFor(entity.tribe, rec.remarks, rec.service_date);
+            });
+
+        const summaryData = [
+            ["MAC TLDA CHURCH"], ["Tribe Target Summary"],
+            [`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`],
+            [`Period: ${exportDateVal || exportMonthVal || "All"}`], [],
+            ["TRIBE", "GOAL", "TOTAL ATTENDEES", "RESULT"]
+        ];
+        tribes.forEach(tribe => {
+            const goal = latestGoalPerTribe[tribe] || 0;
+            const total = tribeCounts[tribe];
+            const achieved = total >= goal && goal > 0;
+            summaryData.push([tribe, goal, total, goal === 0 ? "NO GOAL SET" : (achieved ? "GOAL ACHIEVED" : "GOAL NOT ACHIEVED")]);
         });
 
-        // ── Build unified records list (leaders + newcomers mixed) ──
+        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+        wsSummary["!cols"] = [{ wch: 22 }, { wch: 10 }, { wch: 18 }, { wch: 20 }];
+        for (let r = 0; r <= 3; r++) {
+            const cell = XLSX.utils.encode_cell({ r, c: 0 });
+            if (wsSummary[cell]) { wsSummary[cell].s = titleStyle; wsSummary["!merges"] = wsSummary["!merges"] || []; wsSummary["!merges"].push({ s: { r, c: 0 }, e: { r, c: 3 } }); }
+        }
+        for (let c = 0; c <= 3; c++) { const cell = XLSX.utils.encode_cell({ r: 5, c }); if (wsSummary[cell]) wsSummary[cell].s = goldHeader; }
+        tribes.forEach((tribe, i) => {
+            const r = 6 + i;
+            const goal = latestGoalPerTribe[tribe] || 0;
+            const total = tribeCounts[tribe];
+            const achieved = total >= goal && goal > 0;
+            for (let c = 0; c <= 3; c++) {
+                const cell = XLSX.utils.encode_cell({ r, c });
+                if (!wsSummary[cell]) return;
+                if (c === 3) wsSummary[cell].s = goal === 0 ? dataCell : (achieved ? metStyle : notMetStyle);
+                else wsSummary[cell].s = i % 2 === 1 ? altRow : dataCell;
+            }
+        });
+        XLSX.utils.book_append_sheet(wb, wsSummary, "Tribe Summary");
+
+        // ════════════ SHEET 2: COMBINED DETAILED RECORD ════════════
         const allRecords = [];
 
-        // Add leader records
         attendanceData.forEach(rec => {
             const leader = leaderMap[rec.leader_id];
             if (!leader) return;
             allRecords.push({
-                date: rec.service_date,
-                service: rec.remarks,
+                date: rec.service_date, service: rec.remarks,
                 name: `${leader.firstname || ""} ${leader.lastname || ""}`.trim(),
-                tribe: leader.tribe || "",
-                status: rec.status,
-                type: "Leader",
+                tribe: leader.tribe || "", status: rec.status,
                 displayStatus: "Regular",
-                isLeader: true,
+                goal: getGoalFor(leader.tribe, rec.remarks, rec.service_date),
             });
         });
 
-        // Add newcomer records
         newcomerAttendanceData.forEach(rec => {
             const nc = newcomerMap[rec.newcomer_id];
             if (!nc) return;
             allRecords.push({
-                date: rec.service_date,
-                service: rec.remarks,
+                date: rec.service_date, service: rec.remarks,
                 name: `${nc.firstname || ""} ${nc.lastname || ""}`.trim(),
-                tribe: nc.tribe || "",
-                status: rec.status,
-                type: "Newcomer",
+                tribe: nc.tribe || "", status: rec.status,
                 displayStatus: getDisplayStatus(false, nc.remarks),
-                isLeader: false,
+                goal: getGoalFor(nc.tribe, rec.remarks, rec.service_date),
             });
         });
 
-        // Sort by tribe, then name
         allRecords.sort((a, b) => {
             if (a.tribe !== b.tribe) return a.tribe.localeCompare(b.tribe);
             return a.name.localeCompare(b.name);
         });
 
-        // ── Build single sheet data ──
         const sheetData = [
-            ["MAC TLDA CHURCH"],
-            ["Combined Attendance Record"],
+            ["MAC TLDA CHURCH"], ["Combined Attendance Record"],
             [`Period: ${exportDateVal || exportMonthVal || "All"}`],
             [`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`],
             [],
             ["No.", "Date", "Service", "Name", "Tribe", "Member Type", "Status", "Goal", "Goal Status"]
         ];
 
-        let grandPresent = 0;
-        let grandAbsent = 0;
-
+        let grandPresent = 0, grandAbsent = 0;
         allRecords.forEach((rec, i) => {
-            const goal = targetByTribe[rec.tribe] || 0;
             const tribeTotal = tribeCounts[rec.tribe] || 0;
-            const achieved = goal > 0 && tribeTotal >= goal;
-
+            const achieved = rec.goal > 0 && tribeTotal >= rec.goal;
             sheetData.push([
-                i + 1,
-                rec.date,
-                rec.service,
-                rec.name,
-                rec.tribe,
-                rec.displayStatus,   // 1st Timer / 2nd Timer / 3rd Timer / Regular
-                rec.status,
-                goal,
-                goal === 0 ? "NO GOAL SET" : (achieved ? "ACHIEVED GOAL" : "GOAL NOT ACHIEVED")
+                i + 1, rec.date, rec.service, rec.name, rec.tribe,
+                rec.displayStatus, rec.status, rec.goal,
+                rec.goal === 0 ? "NO GOAL SET" : (achieved ? "ACHIEVED GOAL" : "GOAL NOT ACHIEVED")
             ]);
-
-            if (rec.status === "Present") grandPresent++;
-            else grandAbsent++;
+            if (rec.status === "Present") grandPresent++; else grandAbsent++;
         });
 
-        // Totals at bottom
         sheetData.push(
-            [],
-            ["", "", "", "", "", "", "TOTAL PRESENT", grandPresent, ""],
+            [], ["", "", "", "", "", "", "TOTAL PRESENT", grandPresent, ""],
             ["", "", "", "", "", "", "TOTAL ABSENT", grandAbsent, ""],
             ["", "", "", "", "", "", "GRAND TOTAL", grandPresent + grandAbsent, ""]
         );
 
         const ws = XLSX.utils.aoa_to_sheet(sheetData);
-        ws["!cols"] = [
-            { wch: 6 },   // No.
-            { wch: 14 },  // Date
-            { wch: 32 },  // Service
-            { wch: 26 },  // Name
-            { wch: 14 },  // Tribe
-            { wch: 14 },  // Member Type (Status column)
-            { wch: 12 },  // Status (Present/Absent)
-            { wch: 10 },  // Goal
-            { wch: 20 }   // Goal Status
-        ];
+        ws["!cols"] = [{ wch: 6 }, { wch: 14 }, { wch: 32 }, { wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 20 }];
 
-        // Title rows merge
         for (let r = 0; r <= 3; r++) {
             const cell = XLSX.utils.encode_cell({ r, c: 0 });
-            if (ws[cell]) {
-                ws[cell].s = titleStyle;
-                ws["!merges"] = ws["!merges"] || [];
-                ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: 8 } });
-            }
+            if (ws[cell]) { ws[cell].s = titleStyle; ws["!merges"] = ws["!merges"] || []; ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: 8 } }); }
         }
+        for (let c = 0; c <= 8; c++) { const cell = XLSX.utils.encode_cell({ r: 5, c }); if (ws[cell]) ws[cell].s = goldHeader; }
 
-        // Header row
-        for (let c = 0; c <= 8; c++) {
-            const cell = XLSX.utils.encode_cell({ r: 5, c });
-            if (ws[cell]) ws[cell].s = goldHeader;
-        }
-
-        // Data rows styling
         allRecords.forEach((rec, i) => {
             const r = 6 + i;
+            const tribeTotal = tribeCounts[rec.tribe] || 0;
+            const achieved = rec.goal > 0 && tribeTotal >= rec.goal;
             for (let c = 0; c <= 8; c++) {
                 const cell = XLSX.utils.encode_cell({ r, c });
                 if (!ws[cell]) return;
-
-                if (c === 6) { // Status column (Present/Absent)
-                    ws[cell].s = rec.status === "Present" ? presentStyle : absentStyle;
-                } else if (c === 8) { // Goal Status
-                    const goal = targetByTribe[rec.tribe] || 0;
-                    const tribeTotal = tribeCounts[rec.tribe] || 0;
-                    const achieved = goal > 0 && tribeTotal >= goal;
-                    ws[cell].s = goal === 0 ? dataCell : (achieved ? metStyle : notMetStyle);
-                } else {
-                    ws[cell].s = i % 2 === 1 ? altRow : dataCell;
-                }
+                if (c === 6) ws[cell].s = rec.status === "Present" ? presentStyle : absentStyle;
+                else if (c === 8) ws[cell].s = rec.goal === 0 ? dataCell : (achieved ? metStyle : notMetStyle);
+                else ws[cell].s = i % 2 === 1 ? altRow : dataCell;
             }
         });
 
-        // Total rows styling
         const totalStartRow = 6 + allRecords.length + 1;
         for (let r = totalStartRow; r <= totalStartRow + 2; r++) {
             for (let c = 0; c <= 8; c++) {
@@ -1012,22 +1056,15 @@ function Attendance() {
 
         Swal.fire({ icon: "success", title: "Excel Exported", confirmButtonColor: "#c9a45c" })
             .then(() => {
-                setShowModal(true);
-                setIsRecording(false);
-                setExportMonth("");
-                setExportDate("");
-                setAttendanceMap({});
-                setNewcomerAttendanceMap({});
-                setTribeTargets({});
+                setShowModal(true); setIsRecording(false);
+                setExportMonth(""); setExportDate("");
+                setAttendanceMap({}); setNewcomerAttendanceMap({});
             });
     };
 
     const handleCloseModal = () => navigate("/dashboard");
     const handleBackToModal = () => {
-        setIsRecording(false);
-        setAttendanceMap({});
-        setNewcomerAttendanceMap({});
-        setShowModal(true);
+        setIsRecording(false); setAttendanceMap({}); setNewcomerAttendanceMap({}); setShowModal(true);
     };
 
     const filtered = leaders.filter(l => selectedTribe ? l.tribe === selectedTribe : true);
@@ -1041,7 +1078,6 @@ function Attendance() {
         return fullName.includes(newcomerSearch.toLowerCase());
     });
 
-    // ── Not recording: show modal ──
     if (!isRecording) {
         return (
             <div className="attendance-layout">
@@ -1065,19 +1101,18 @@ function Attendance() {
                         onExportMonthChange={e => { setExportMonth(e.target.value); setExportDate(""); }}
                         onExportDateChange={e => { setExportDate(e.target.value); setExportMonth(""); }}
                         onClose={handleCloseModal}
-                        defaultGoalsLoaded={defaultGoalsLoaded}
+                        activeCategory={activeCategory}
                     />
                 </div>
             </div>
         );
     }
 
-    // ── Recording view ──
     return (
         <div className="attendance-layout">
             <Sidebar />
-            <div className="attendance-content">
-                {/* Recording Header */}
+            <div className="attendance-content" style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="attendance-topbar">
                     <div>
                         <h1 className="attendance-heading">Attendance</h1>
@@ -1095,23 +1130,19 @@ function Attendance() {
                     </div>
                 </div>
 
-                {/* Leaders / Newcomers tab switch */}
                 <div style={{ display: "flex", gap: "4px", marginBottom: "12px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "4px", width: "fit-content" }}>
                     <button onClick={() => setRecordTab("leaders")} style={{
                         padding: "8px 18px", borderRadius: "6px", border: "none", fontSize: "13px", fontWeight: 700, cursor: "pointer",
                         background: recordTab === "leaders" ? "#c9a45c" : "transparent",
-                        color: recordTab === "leaders" ? "#fff" : "#6b7280",
-                        transition: "all 0.2s"
+                        color: recordTab === "leaders" ? "#fff" : "#6b7280", transition: "all 0.2s"
                     }}>Leaders</button>
                     <button onClick={() => setRecordTab("newcomers")} style={{
                         padding: "8px 18px", borderRadius: "6px", border: "none", fontSize: "13px", fontWeight: 700, cursor: "pointer",
                         background: recordTab === "newcomers" ? "#c9a45c" : "transparent",
-                        color: recordTab === "newcomers" ? "#fff" : "#6b7280",
-                        transition: "all 0.2s"
+                        color: recordTab === "newcomers" ? "#fff" : "#6b7280", transition: "all 0.2s"
                     }}>Newcomers</button>
                 </div>
 
-                {/* ══ LEADERS TAB ══ */}
                 {recordTab === "leaders" && (
                     <>
                         <div className="attendance-toolbar">
@@ -1171,7 +1202,6 @@ function Attendance() {
                     </>
                 )}
 
-                {/* ══ NEWCOMERS TAB ══ */}
                 {recordTab === "newcomers" && (
                     <>
                         <div className="attendance-toolbar">
@@ -1270,6 +1300,17 @@ function Attendance() {
                         </div>
                     </>
                 )}
+                </div>
+
+                <div style={{ width: "260px", flexShrink: 0 }}>
+                    <TribeLeaderboard
+                        tribesList={tribes}
+                        leaders={leaders}
+                        attendanceMap={attendanceMap}
+                        newcomers={newcomers}
+                        newcomerAttendanceMap={newcomerAttendanceMap}
+                    />
+                </div>
             </div>
 
             <AddNewcomerModal
