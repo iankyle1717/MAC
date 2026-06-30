@@ -97,6 +97,11 @@ function LeaderProfile() {
     const [invites, setInvites] = useState([]);
     const currentUser = getCurrentUser();
 
+    // ── NEW: Pagination for tables ────────────────────────────────────────────
+    const [tablePage, setTablePage] = useState(1);
+    const ROWS_PER_PAGE = 10;
+    // ───────────────────────────────────────────────────────────────────────
+
     const admin = isAdmin();
     const finance = isFinance();
     const ushering = isUshering();
@@ -118,6 +123,11 @@ function LeaderProfile() {
         fetchDevotion();
         fetchLifeGroups();
     }, [id]);
+
+    // Reset pagination when tab changes
+    useEffect(() => {
+        setTablePage(1);
+    }, [activeTab]);
 
     const fetchSpouse = async (leaderData) => {
         if (!leaderData) return;
@@ -212,6 +222,62 @@ function LeaderProfile() {
 
     const stats = getStats();
     const leaderMinistries = getLeaderMinistries(leader);
+
+    // ── NEW: Pagination helper ────────────────────────────────────────────
+    const getPaginatedData = (data, page) => {
+        const totalPages = Math.ceil(data.length / ROWS_PER_PAGE) || 1;
+        const start = (page - 1) * ROWS_PER_PAGE;
+        return {
+            items: data.slice(start, start + ROWS_PER_PAGE),
+            totalPages,
+            startIndex: start
+        };
+    };
+
+    const PaginationControls = ({ totalPages, dataLength }) => (
+        dataLength > ROWS_PER_PAGE && (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", padding: "10px", borderTop: "1px solid " + c.borderLight }}>
+                <button
+                    onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                    disabled={tablePage === 1}
+                    style={{
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid " + c.border,
+                        background: tablePage === 1 ? c.borderLight : c.card,
+                        color: tablePage === 1 ? c.textMuted : c.text,
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: tablePage === 1 ? "not-allowed" : "pointer",
+                        transition: "all 0.2s"
+                    }}
+                >
+                    ← Prev
+                </button>
+                <span style={{ fontSize: "11px", color: c.textMuted, fontWeight: 500, minWidth: "80px", textAlign: "center" }}>
+                    Page {tablePage} of {totalPages}
+                </span>
+                <button
+                    onClick={() => setTablePage(p => Math.min(totalPages, p + 1))}
+                    disabled={tablePage === totalPages}
+                    style={{
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "1px solid " + c.border,
+                        background: tablePage === totalPages ? c.borderLight : c.card,
+                        color: tablePage === totalPages ? c.textMuted : c.text,
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        cursor: tablePage === totalPages ? "not-allowed" : "pointer",
+                        transition: "all 0.2s"
+                    }}
+                >
+                    Next →
+                </button>
+            </div>
+        )
+    );
+    // ───────────────────────────────────────────────────────────────────────
 
     if (!leader) return (
         <div className="layout">
@@ -504,11 +570,13 @@ function LeaderProfile() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {attendance.map((record, idx) => (
+                                            {(() => {
+                                                const { items, totalPages, startIndex } = getPaginatedData(attendance, tablePage);
+                                                return items.map((record, idx) => (
                                                 <tr key={record.id} style={tableStyles.trHover}
                                                     onMouseEnter={e => e.currentTarget.style.background = c.bg}
                                                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{idx + 1}</td>
+                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
                                                     <td style={tableStyles.td}>{formatDate(record.service_date)}</td>
                                                     <td style={tableStyles.td}>
                                                         <span style={tableStyles.badge(record.status === "Present" ? "#e8f5e9" : "#ffebee", record.status === "Present" ? c.success : c.danger)}>
@@ -517,9 +585,10 @@ function LeaderProfile() {
                                                     </td>
                                                     <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{record.remarks || "—"}</td>
                                                 </tr>
-                                            ))}
+                                            ));})()}
                                         </tbody>
                                     </table>
+                                    <PaginationControls totalPages={Math.ceil(attendance.length / ROWS_PER_PAGE) || 1} dataLength={attendance.length} />
                                 </div>
                             )}
                         </Card>
@@ -542,20 +611,23 @@ function LeaderProfile() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {tithes.map((tithe, idx) => (
+                                            {(() => {
+                                                const { items, totalPages, startIndex } = getPaginatedData(tithes, tablePage);
+                                                return items.map((tithe, idx) => (
                                                 <tr key={tithe.id} style={tableStyles.trHover}
                                                     onMouseEnter={e => e.currentTarget.style.background = c.bg}
                                                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{idx + 1}</td>
+                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
                                                     <td style={tableStyles.td}>{formatDate(tithe.date)}</td>
                                                     <td style={{ ...tableStyles.td, ...tableStyles.rightAlign, fontWeight: 700, color: c.success }}>
                                                         ₱{Number(tithe.amount).toLocaleString()}
                                                     </td>
                                                     <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{tithe.remarks || "—"}</td>
                                                 </tr>
-                                            ))}
+                                            ));})()}
                                         </tbody>
                                     </table>
+                                    <PaginationControls totalPages={Math.ceil(tithes.length / ROWS_PER_PAGE) || 1} dataLength={tithes.length} />
                                 </div>
                             )}
                         </Card>
@@ -580,14 +652,16 @@ function LeaderProfile() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {devotion.map((dev, idx) => {
+                                            {(() => {
+                                                const { items, totalPages, startIndex } = getPaginatedData(devotion, tablePage);
+                                                return items.map((dev, idx) => {
                                                 const progress = Math.round((dev.completed_days / dev.total_days) * 100);
                                                 const consistent = dev.completed_days >= 25;
                                                 return (
                                                     <tr key={dev.id} style={tableStyles.trHover}
                                                         onMouseEnter={e => e.currentTarget.style.background = c.bg}
                                                         onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{idx + 1}</td>
+                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
                                                         <td style={{ ...tableStyles.td, fontWeight: 600 }}>{dev.month}</td>
                                                         <td style={{ ...tableStyles.td, ...tableStyles.centerAlign, fontWeight: 700 }}>{dev.completed_days}</td>
                                                         <td style={{ ...tableStyles.td, ...tableStyles.centerAlign, ...tableStyles.textMuted }}>{dev.total_days}</td>
@@ -606,9 +680,10 @@ function LeaderProfile() {
                                                         </td>
                                                     </tr>
                                                 );
-                                            })}
+                                            });})()}
                                         </tbody>
                                     </table>
+                                    <PaginationControls totalPages={Math.ceil(devotion.length / ROWS_PER_PAGE) || 1} dataLength={devotion.length} />
                                 </div>
                             )}
                         </Card>
@@ -632,11 +707,13 @@ function LeaderProfile() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {lifeGroups.map((group, idx) => (
+                                            {(() => {
+                                                const { items, totalPages, startIndex } = getPaginatedData(lifeGroups, tablePage);
+                                                return items.map((group, idx) => (
                                                 <tr key={group.id} style={tableStyles.trHover}
                                                     onMouseEnter={e => e.currentTarget.style.background = c.bg}
                                                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{idx + 1}</td>
+                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
                                                     <td style={tableStyles.td}>{formatDate(group.date)}</td>
                                                     <td style={{ ...tableStyles.td, fontWeight: 600 }}>{group.topic}</td>
                                                     <td style={tableStyles.td}>
@@ -644,9 +721,10 @@ function LeaderProfile() {
                                                     </td>
                                                     <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{group.place}</td>
                                                 </tr>
-                                            ))}
+                                            ));})()}
                                         </tbody>
                                     </table>
+                                    <PaginationControls totalPages={Math.ceil(lifeGroups.length / ROWS_PER_PAGE) || 1} dataLength={lifeGroups.length} />
                                 </div>
                             )}
                         </Card>
@@ -670,14 +748,16 @@ function LeaderProfile() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {invites.map((invite, idx) => {
+                                            {(() => {
+                                                const { items, totalPages, startIndex } = getPaginatedData(invites, tablePage);
+                                                return items.map((invite, idx) => {
                                                 const category = getStageCategory(invite.remarks);
                                                 const catColors = getCategoryColor(category);
                                                 return (
                                                     <tr key={invite.id} style={tableStyles.trHover}
                                                         onMouseEnter={e => e.currentTarget.style.background = c.bg}
                                                         onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{idx + 1}</td>
+                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
                                                         <td style={{ ...tableStyles.td, fontWeight: 600 }}>{invite.firstname} {invite.lastname}</td>
                                                         <td style={tableStyles.td}>{invite.tribe || "—"}</td>
                                                         <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{invite.remarks || "Newcomer"}</td>
@@ -686,9 +766,10 @@ function LeaderProfile() {
                                                         </td>
                                                     </tr>
                                                 );
-                                            })}
+                                            });})()}
                                         </tbody>
                                     </table>
+                                    <PaginationControls totalPages={Math.ceil(invites.length / ROWS_PER_PAGE) || 1} dataLength={invites.length} />
                                 </div>
                             )}
                         </Card>

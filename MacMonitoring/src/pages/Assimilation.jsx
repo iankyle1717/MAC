@@ -197,7 +197,7 @@ function Assimilation() {
                     borderBottom: "1px solid #e5e7eb"
                 }}>
                     <div>
-                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>Assimilation</h1>
+                        <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>Invites</h1>
                         <p style={{ opacity: 0.7, margin: "2px 0 0 0", fontSize: "12px" }}>
                             Monitor visitors, invites, and newcomers.
                         </p>
