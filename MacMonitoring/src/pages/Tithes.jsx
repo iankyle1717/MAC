@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
-import { getCurrentUser, isAdmin, isFinance, canEditGrossIncome } from "../utils/auth";
+import { getCurrentUser, isAdmin, isFinance } from "../utils/auth";
 import { tribes } from "../constants/options";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx-js-style";
@@ -27,14 +27,10 @@ const th = (extra = {}) => ({
 });
 
 // ── Controlled, per-slot input. Re-keyed by month in the parent so React
-//    always mounts a FRESH input when the month changes, instead of reusing
-//    the old DOM node (which is what was causing June's typed value to still
-//    visually appear after switching to July). ──────────────────────────────
+//    always mounts a FRESH input when the month changes. ─────────────────────
 function WeekSlotInput({ tithe, leaderId, monthKey, onCommit }) {
     const [value, setValue] = useState(tithe?.amount ?? "");
 
-    // Keep local state in sync if the underlying tithe record itself changes
-    // (e.g. after a save round-trip updates the id/amount).
     useEffect(() => {
         setValue(tithe?.amount ?? "");
     }, [tithe?.id, tithe?.amount]);
@@ -75,6 +71,59 @@ function WeekSlotInput({ tithe, leaderId, monthKey, onCommit }) {
     );
 }
 
+// ── NEW: Monthly Gross Input for the Gross Manager tab ─────────────────────
+function GrossInput({ leaderId, monthKey, defaultGross, monthlyGrossMap, onCommit }) {
+    const override = monthlyGrossMap[`${leaderId}-${monthKey}`];
+    const [value, setValue] = useState(override ?? "");
+    const [hasOverride, setHasOverride] = useState(override !== undefined && override !== null);
+
+    // Sync when month changes
+    useEffect(() => {
+        const ov = monthlyGrossMap[`${leaderId}-${monthKey}`];
+        setValue(ov ?? "");
+        setHasOverride(ov !== undefined && ov !== null);
+    }, [monthKey, monthlyGrossMap, leaderId]);
+
+    const commit = () => {
+        const num = value === "" ? null : parseFloat(value);
+        onCommit(leaderId, monthKey, num);
+        setHasOverride(num !== null);
+    };
+
+    return (
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <input
+                type="number"
+                value={value}
+                placeholder={defaultGross ? String(defaultGross) : "—"}
+                onChange={e => setValue(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+                style={{
+                    width: "110px",
+                    padding: "8px 10px",
+                    fontSize: "13px",
+                    fontWeight: hasOverride ? 700 : 500,
+                    borderRadius: "7px",
+                    border: hasOverride ? "1.5px solid #b8934a" : "1.5px solid #d1d5db",
+                    textAlign: "right",
+                    background: hasOverride ? "#fffbeb" : "#fff",
+                    outline: "none",
+                    color: "#111827",
+                    transition: "all 0.15s"
+                }}
+            />
+            {hasOverride && (
+                <span title="Override active — click to clear" 
+                    onClick={() => { onCommit(leaderId, monthKey, null); setValue(""); setHasOverride(false); }}
+                    style={{ cursor: "pointer", fontSize: "12px", color: "#b8934a", fontWeight: 700 }}>
+                    ✕
+                </span>
+            )}
+        </div>
+    );
+}
+
 function Tithes() {
     const navigate = useNavigate();
     const user = getCurrentUser();
@@ -93,6 +142,10 @@ function Tithes() {
     });
     const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
 
+    // ── NEW: Map for quick gross lookup ─────────────────────────────────────
+    // Key: "leaderId-monthKey" → gross_income value (or undefined if using default)
+    const [monthlyGrossMap, setMonthlyGrossMap] = useState({});
+
     useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
@@ -108,7 +161,27 @@ function Tithes() {
 
         setLeaders(leadersData || []);
         setTithes(tithesData || []);
+        buildMonthlyGrossMap(tithesData || []);
         setLoading(false);
+    };
+
+    // ── NEW: Build map of monthly gross overrides ───────────────────────────
+    const buildMonthlyGrossMap = (tithesData) => {
+        const map = {};
+        tithesData.forEach(t => {
+            if (t.gross_income != null && t.date) {
+                const mk = t.date.substring(0, 7); // "2026-06"
+                map[`${t.leader_id}-${mk}`] = t.gross_income;
+            }
+        });
+        setMonthlyGrossMap(map);
+    };
+
+    // ── NEW: Get effective gross for a leader+month ─────────────────────────
+    const getEffectiveGross = (leader, monthKey) => {
+        const override = monthlyGrossMap[`${leader.id}-${monthKey}`];
+        if (override !== undefined && override !== null) return override;
+        return leader.gross_income || 0;
     };
 
     const getMonthlyTithes = (leaderId, monthKey) =>
@@ -123,9 +196,11 @@ function Tithes() {
             return { monthKey, total: getMonthlyTotal(leaderId, monthKey) };
         });
 
-    const isConsistent = (leader, monthTotal) => {
-        if (!leader.gross_income || leader.gross_income <= 0) return false;
-        return monthTotal >= leader.gross_income * 0.1;
+    // ── UPDATED: Consistency now uses effective gross ───────────────────────
+    const isConsistent = (leader, monthTotal, monthKey) => {
+        const gross = getEffectiveGross(leader, monthKey);
+        if (!gross || gross <= 0) return false;
+        return monthTotal >= gross * 0.1;
     };
 
     const getCombinedPartner = (leader) => {
@@ -133,7 +208,6 @@ function Tithes() {
         return leaders.find(l => l.id === leader.combined_with);
     };
 
-    // ── COMBINED NAME FORMAT: FIRSTNAME1 / FIRSTNAME2 (preserves original order) ──
     const getDisplayName = (leader) => {
         const partner = getCombinedPartner(leader);
         if (partner) {
@@ -163,6 +237,44 @@ function Tithes() {
         }
     };
 
+    // ── NEW: Handle monthly gross override save ─────────────────────────────
+    const handleGrossOverride = async (leaderId, monthKey, grossValue) => {
+        const date = `${monthKey}-01`;
+        const { data: existing } = await supabase
+            .from("tblTithes")
+            .select("id, amount")
+            .eq("leader_id", leaderId)
+            .eq("date", date)
+            .maybeSingle();
+
+        if (existing) {
+            // Update existing row's gross_income
+            const { error } = await supabase
+                .from("tblTithes")
+                .update({ gross_income: grossValue })
+                .eq("id", existing.id);
+            if (!error) {
+                setTithes(prev => prev.map(t => t.id === existing.id ? { ...t, gross_income: grossValue } : t));
+                setMonthlyGrossMap(prev => {
+                    const next = { ...prev };
+                    if (grossValue === null) delete next[`${leaderId}-${monthKey}`];
+                    else next[`${leaderId}-${monthKey}`] = grossValue;
+                    return next;
+                });
+            }
+        } else if (grossValue !== null) {
+            // Insert a gross-only row (amount 0, will be hidden from week slots)
+            const { data, error } = await supabase
+                .from("tblTithes")
+                .insert([{ leader_id: leaderId, amount: 0, date, gross_income: grossValue }])
+                .select();
+            if (!error && data) {
+                setTithes(prev => [...prev, data[0]]);
+                setMonthlyGrossMap(prev => ({ ...prev, [`${leaderId}-${monthKey}`]: grossValue }));
+            }
+        }
+    };
+
     const filteredLeaders = useMemo(() => {
         let result = [...leaders];
         if (filterTribe !== "ALL") result = result.filter(l => l.tribe === filterTribe);
@@ -180,13 +292,14 @@ function Tithes() {
             });
         }
         result.sort((a, b) => {
-            const na = `${a.firstname} ${a.lastname}`.toLowerCase();
+            const na = `${a.firstname} ${b.lastname}`.toLowerCase();
             const nb = `${b.firstname} ${b.lastname}`.toLowerCase();
             return sortOrder === "asc" ? na.localeCompare(nb) : nb.localeCompare(na);
         });
         return result;
     }, [leaders, filterTribe, search, sortOrder]);
 
+    // ── UPDATED: Stats now use effective gross ──────────────────────────────
     const stats = useMemo(() => {
         const consistent = [], inconsistent = [];
         filteredLeaders.forEach(leader => {
@@ -194,10 +307,10 @@ function Tithes() {
             if (partner && leader.combined_with < leader.id) return;
             let total = getMonthlyTotal(leader.id, selectedMonth);
             if (partner) total += getMonthlyTotal(partner.id, selectedMonth);
-            (isConsistent(leader, total) ? consistent : inconsistent).push({ ...leader, displayTotal: total });
+            (isConsistent(leader, total, selectedMonth) ? consistent : inconsistent).push({ ...leader, displayTotal: total });
         });
         return { consistent, inconsistent };
-    }, [filteredLeaders, tithes, selectedMonth]);
+    }, [filteredLeaders, tithes, selectedMonth, monthlyGrossMap]);
 
     const handleExport = () => {
         const wb = XLSX.utils.book_new();
@@ -215,14 +328,15 @@ function Tithes() {
                 const monthlyTithes = getMonthlyTithes(leader.id, selectedMonth);
                 let total = getMonthlyTotal(leader.id, selectedMonth);
                 if (partner) total += getMonthlyTotal(partner.id, selectedMonth);
-                wsData.push([getDisplayName(leader), leader.gross_income || 0,
-                    monthlyTithes.map(t => t.amount).join(", "), total,
-                    isConsistent(leader, total) ? "Consistent" : "Inconsistent"]);
+                const gross = getEffectiveGross(leader, selectedMonth);
+                wsData.push([getDisplayName(leader), gross || 0,
+                    monthlyTithes.filter(t => t.amount > 0).map(t => t.amount).join(", "), total,
+                    isConsistent(leader, total, selectedMonth) ? "Consistent" : "Inconsistent"]);
             });
             const ws = XLSX.utils.aoa_to_sheet(wsData);
-            ws["!cols"] = [{ wch: 20 }, { wch: 10 }, { wch: 18 }, { wch: 10 }, { wch: 12 }];
+            ws["!cols"] = [{ wch: 20 }, { wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 12 }];
             XLSX.utils.book_append_sheet(wb, ws, "Monthly Tithes");
-        } else {
+        } else if (activeTab === "year") {
             const wsData = [
                 ["MAC TLDA CHURCH - Yearly Tithes Report"],
                 [`Year: ${selectedYear}`], [],
@@ -239,17 +353,45 @@ function Tithes() {
                 const total = monthTotals.reduce((a, b) => a + b, 0);
                 const cm = monthTotals.filter((t, i) => {
                     const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
-                    return isConsistent(leader, t);
+                    return isConsistent(leader, t, mk);
                 }).length;
                 wsData.push([getDisplayName(leader), ...monthTotals, total, `${cm}/12`]);
             });
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             ws["!cols"] = [{ wch: 18 }, ...Array(12).fill({ wch: 7 }), { wch: 9 }, { wch: 12 }];
             XLSX.utils.book_append_sheet(wb, ws, "Yearly Tithes");
+        } else {
+            // Export for Gross tab
+            const wsData = [
+                ["MAC TLDA CHURCH - Monthly Gross Income"],
+                [`Period: ${selectedMonth}`],
+                [`Generated: ${new Date().toLocaleDateString()}`],
+                [],
+                ["Name", "Default Gross", "Monthly Override", "Effective Gross", "Source"]
+            ];
+            filteredLeaders.forEach(leader => {
+                const partner = getCombinedPartner(leader);
+                if (partner && leader.combined_with < leader.id) return;
+                const def = leader.gross_income || 0;
+                const eff = getEffectiveGross(leader, selectedMonth);
+                const hasOv = monthlyGrossMap[`${leader.id}-${selectedMonth}`] !== undefined;
+                wsData.push([
+                    getDisplayName(leader),
+                    def || "—",
+                    hasOv ? (monthlyGrossMap[`${leader.id}-${selectedMonth}`] || 0) : "—",
+                    eff || "—",
+                    hasOv ? "Override" : "Default"
+                ]);
+            });
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws["!cols"] = [{ wch: 20 }, { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 12 }];
+            XLSX.utils.book_append_sheet(wb, ws, "Monthly Gross");
         }
         XLSX.writeFile(wb, activeTab === "month"
             ? `Tithes_Monthly_${selectedMonth}.xlsx`
-            : `Tithes_Yearly_${selectedYear}.xlsx`);
+            : activeTab === "year"
+                ? `Tithes_Yearly_${selectedYear}.xlsx`
+                : `Tithes_Gross_${selectedMonth}.xlsx`);
         Swal.fire({ icon: "success", title: "Exported", text: "Excel file downloaded successfully", timer: 1500, showConfirmButton: false });
     };
 
@@ -285,7 +427,7 @@ function Tithes() {
 
                 {/* ── TABS ─────────────────────────────────────────────────── */}
                 <div style={{ display: "flex", gap: "4px", marginBottom: "16px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", width: "fit-content" }}>
-                    {["month", "year"].map(tab => (
+                    {["month", "year", "gross"].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)} style={{
                             padding: "8px 22px", borderRadius: "8px", border: "none", fontSize: "13px", cursor: "pointer",
                             fontWeight: activeTab === tab ? 700 : 500,
@@ -294,7 +436,7 @@ function Tithes() {
                             boxShadow: activeTab === tab ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
                             transition: "all 0.2s"
                         }}>
-                            {tab === "month" ? "Whole Month" : "Whole Year"}
+                            {tab === "month" ? "Whole Month" : tab === "year" ? "Whole Year" : "Monthly Gross"}
                         </button>
                     ))}
                 </div>
@@ -352,7 +494,6 @@ function Tithes() {
                         <div style={{ overflowX: "auto" }}>
                             <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse", minWidth: "780px" }}>
                                 <thead>
-                                    {/* Row 1: NAME | JANUARY (colspan weeks) | TOTAL | GROSS | STATUS */}
                                     <tr>
                                         <th rowSpan={2} style={{ ...th({ textAlign: "left", width: "160px", borderRight: "1px solid #e5e7eb", verticalAlign: "middle" }) }}>
                                             NAME
@@ -370,7 +511,6 @@ function Tithes() {
                                             STATUS
                                         </th>
                                     </tr>
-                                    {/* Row 2: WEEK 1 … WEEK 4 */}
                                     <tr>
                                         {Array.from({ length: SLOT_COUNT }).map((_, i) => (
                                             <th key={i} style={{
@@ -396,9 +536,9 @@ function Tithes() {
                                         const monthlyTithes = getMonthlyTithes(leader.id, selectedMonth);
                                         let displayTotal = getMonthlyTotal(leader.id, selectedMonth);
                                         if (partner) displayTotal += getMonthlyTotal(partner.id, selectedMonth);
-                                        const consistent = isConsistent(leader, displayTotal);
+                                        const effectiveGross = getEffectiveGross(leader, selectedMonth);
+                                        const consistent = isConsistent(leader, displayTotal, selectedMonth);
 
-                                        // Pad or trim to exactly SLOT_COUNT entries
                                         const slots = Array.from({ length: SLOT_COUNT }, (_, i) => monthlyTithes[i] ?? null);
 
                                         return (
@@ -407,7 +547,6 @@ function Tithes() {
                                                 onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
                                                 onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
 
-                                                {/* NAME */}
                                                 <td style={{ padding: "16px 16px", fontWeight: 600, color: "#111827", borderRight: "1px solid #f3f4f6" }}>
                                                     {getDisplayName(leader)}
                                                     {partner && (
@@ -417,11 +556,6 @@ function Tithes() {
                                                     )}
                                                 </td>
 
-                                                {/* WEEK SLOTS — editable, controlled inputs.
-                                                    KEY now includes selectedMonth so React mounts a
-                                                    brand-new input (clean state) every time the month
-                                                    changes, instead of reusing the old DOM node and its
-                                                    leftover typed text from a previous month. */}
                                                 {slots.map((tithe, i) => (
                                                     <td key={`${selectedMonth}-${i}`} style={{ padding: "12px 10px", textAlign: "center", ...(i === SLOT_COUNT - 1 ? { borderRight: "1px solid #f3f4f6" } : {}) }}>
                                                         <WeekSlotInput
@@ -434,20 +568,20 @@ function Tithes() {
                                                     </td>
                                                 ))}
 
-                                                {/* TOTAL */}
                                                 <td style={{ padding: "16px 14px", textAlign: "center", fontWeight: 800, color: "#111827", fontSize: "14px", borderRight: "1px solid #f3f4f6" }}>
                                                     {displayTotal > 0 ? displayTotal.toLocaleString() : "—"}
                                                 </td>
 
-                                                {/* GROSS */}
                                                 <td style={{ padding: "16px 14px", textAlign: "center", borderRight: "1px solid #f3f4f6" }}
-                                                    title={leader.gross_income ? `10% minimum: ${(Number(leader.gross_income) * 0.1).toLocaleString()}` : ""}>
+                                                    title={effectiveGross ? `10% minimum: ${(effectiveGross * 0.1).toLocaleString()}` : ""}>
                                                     <span style={{ fontWeight: 600, color: "#374151", fontSize: "13px" }}>
-                                                        {leader.gross_income ? Number(leader.gross_income).toLocaleString() : "—"}
+                                                        {effectiveGross ? Number(effectiveGross).toLocaleString() : "—"}
                                                     </span>
+                                                    {monthlyGrossMap[`${leader.id}-${selectedMonth}`] !== undefined && (
+                                                        <span style={{ display: "block", fontSize: "9px", color: "#b8934a", fontWeight: 700, marginTop: "2px" }}>OVERRIDE</span>
+                                                    )}
                                                 </td>
 
-                                                {/* STATUS */}
                                                 <td style={{ padding: "16px 14px", textAlign: "center" }}>
                                                     <span style={{
                                                         display: "inline-block",
@@ -472,12 +606,11 @@ function Tithes() {
                 )}
 
                 {/* ════════════════════════════════════════════════════════════
-                    WHOLE YEAR TAB  (read-only, same design language)
+                    WHOLE YEAR TAB
                 ════════════════════════════════════════════════════════════ */}
                 {activeTab === "year" && (
                     <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", background: "#fff" }}>
 
-                        {/* Year picker header */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #e5e7eb" }}>
                             <div>
                                 <div style={{ fontWeight: 800, fontSize: "18px", letterSpacing: "-0.3px", color: "#111827" }}>WHOLE YEAR</div>
@@ -518,7 +651,7 @@ function Tithes() {
                                         const monthTotals = yearly.map((y, i) => {
                                             const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
                                             const t = y.total + (partner ? getMonthlyTotal(partner.id, mk) : 0);
-                                            if (isConsistent(leader, t)) consistentMonths++;
+                                            if (isConsistent(leader, t, mk)) consistentMonths++;
                                             return t;
                                         });
                                         const yearTotal = monthTotals.reduce((a, b) => a + b, 0);
@@ -535,7 +668,7 @@ function Tithes() {
 
                                                 {monthTotals.map((total, i) => {
                                                     const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
-                                                    const mc = isConsistent(leader, total);
+                                                    const mc = isConsistent(leader, total, mk);
                                                     return (
                                                         <td key={i} style={{
                                                             padding: "13px 8px",
@@ -573,6 +706,134 @@ function Tithes() {
                                     })}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* ════════════════════════════════════════════════════════════
+                    MONTHLY GROSS TAB  ← NEW!
+                ════════════════════════════════════════════════════════════ */}
+                {activeTab === "gross" && (
+                    <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", background: "#fff" }}>
+
+                        {/* Month picker header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#fff" }}>
+                            <div>
+                                <div style={{ fontWeight: 800, fontSize: "18px", letterSpacing: "-0.3px", color: "#111827" }}>
+                                    MONTHLY GROSS INCOME
+                                </div>
+                                <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>
+                                    Set or override gross income for each leader per month. Blank = uses default from profile.
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                                <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#9ca3af" }}>Month Picker</span>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderRadius: "8px", border: "1px solid #d1d5db", background: "#fff" }}>
+                                    <span style={{ fontSize: "15px" }}>📅</span>
+                                    <input
+                                        type="month"
+                                        value={selectedMonth}
+                                        onChange={e => setSelectedMonth(e.target.value)}
+                                        style={{ border: "none", outline: "none", fontSize: "14px", fontWeight: 600, color: "#111827", background: "transparent", cursor: "pointer" }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", fontSize: "13px", borderCollapse: "collapse", minWidth: "700px" }}>
+                                <thead>
+                                    <tr>
+                                        <th style={{ ...th({ textAlign: "left", width: "200px", borderRight: "1px solid #e5e7eb" }) }}>NAME</th>
+                                        <th style={{ ...th({ textAlign: "center", width: "140px", borderRight: "1px solid #e5e7eb" }) }}>DEFAULT GROSS</th>
+                                        <th style={{ ...th({ textAlign: "center", width: "160px", borderRight: "1px solid #e5e7eb" }) }}>
+                                            {monthLabel} OVERRIDE
+                                        </th>
+                                        <th style={{ ...th({ textAlign: "center", width: "140px", borderRight: "1px solid #e5e7eb" }) }}>EFFECTIVE GROSS</th>
+                                        <th style={{ ...th({ textAlign: "center", width: "100px" }) }}>SOURCE</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading ? (
+                                        <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af" }}>Loading…</td></tr>
+                                    ) : filteredLeaders.length === 0 ? (
+                                        <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af" }}>No members found.</td></tr>
+                                    ) : filteredLeaders.map(leader => {
+                                        const partner = getCombinedPartner(leader);
+                                        if (partner && leader.combined_with < leader.id) return null;
+
+                                        const defaultGross = leader.gross_income || 0;
+                                        const effectiveGross = getEffectiveGross(leader, selectedMonth);
+                                        const hasOverride = monthlyGrossMap[`${leader.id}-${selectedMonth}`] !== undefined;
+
+                                        return (
+                                            <tr key={leader.id}
+                                                style={{ borderBottom: "1px solid #f3f4f6", transition: "background 0.15s" }}
+                                                onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+                                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+
+                                                <td style={{ padding: "14px 16px", fontWeight: 600, color: "#111827", borderRight: "1px solid #f3f4f6" }}>
+                                                    {getDisplayName(leader)}
+                                                    {partner && (
+                                                        <span style={{ display: "block", fontSize: "10px", color: "#9ca3af", fontWeight: 400, marginTop: "2px" }}>
+                                                            Combined tithing
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                <td style={{ padding: "14px 16px", textAlign: "center", borderRight: "1px solid #f3f4f6" }}>
+                                                    <span style={{ fontWeight: 600, color: "#6b7280", fontSize: "13px" }}>
+                                                        {defaultGross ? defaultGross.toLocaleString() : "—"}
+                                                    </span>
+                                                </td>
+
+                                                <td style={{ padding: "10px 14px", textAlign: "center", borderRight: "1px solid #f3f4f6" }}>
+                                                    <GrossInput
+                                                        leaderId={leader.id}
+                                                        monthKey={selectedMonth}
+                                                        defaultGross={defaultGross}
+                                                        monthlyGrossMap={monthlyGrossMap}
+                                                        onCommit={handleGrossOverride}
+                                                    />
+                                                </td>
+
+                                                <td style={{ padding: "14px 16px", textAlign: "center", borderRight: "1px solid #f3f4f6" }}>
+                                                    <span style={{ 
+                                                        fontWeight: 800, 
+                                                        fontSize: "14px", 
+                                                        color: hasOverride ? "#b8934a" : "#374151" 
+                                                    }}>
+                                                        {effectiveGross ? effectiveGross.toLocaleString() : "—"}
+                                                    </span>
+                                                </td>
+
+                                                <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                                                    <span style={{
+                                                        display: "inline-block",
+                                                        padding: "4px 12px",
+                                                        borderRadius: "20px",
+                                                        fontSize: "11px",
+                                                        fontWeight: 700,
+                                                        background: hasOverride ? "#fef3c7" : "#f3f4f6",
+                                                        color: hasOverride ? "#92400e" : "#6b7280"
+                                                    }}>
+                                                        {hasOverride ? "Override" : "Default"}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Legend */}
+                        <div style={{ padding: "12px 20px", background: "#f9fafb", borderTop: "1px solid #e5e7eb", fontSize: "11px", color: "#6b7280" }}>
+                            <strong style={{ color: "#374151" }}>How it works:</strong> The "Default Gross" comes from the leader's profile. 
+                            If their salary changes for a specific month, enter the new amount in the override column. 
+                            The system will use the override for consistency checks and reports. 
+                            Leave blank or click ✕ to revert to the default. 
+                            <strong style={{ color: "#b8934a" }}> Combined tithing partners share the same gross.</strong>
                         </div>
                     </div>
                 )}

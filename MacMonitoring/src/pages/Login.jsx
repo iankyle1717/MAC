@@ -187,8 +187,11 @@ function FilterButton({ val, lbl, active, onClick }) {
 function Login() {
     const navigate = useNavigate();
     const [mode, setMode] = useState("leader");
-    const [leaderFirstname, setLeaderFirstname] = useState("");
-    const [pin, setPin] = useState("");
+
+    // NEW: username + password instead of firstname + pin
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+
     const [newcomerFirstname, setNewcomerFirstname] = useState("");
     const [newcomerLastname, setNewcomerLastname] = useState("");
     const [loading, setLoading] = useState(false);
@@ -203,9 +206,7 @@ function Login() {
     const goldDark = "#a8883d";
     const goldLight = "#e0c88a";
 
-    useEffect(() => {
-        fetchContent();
-    }, []);
+    useEffect(() => { fetchContent(); }, []);
 
     const fetchContent = async () => {
         setContentLoading(true);
@@ -221,27 +222,64 @@ function Login() {
         ? content
         : content.filter(p => p.type === filterType);
 
+    // ── NEW: Username + Password Login ─────────────────────────────────────
     const handleLeaderLogin = async (e) => {
         e.preventDefault();
         setError("");
-        if (!leaderFirstname || !pin) { setError("Please enter your first name and PIN."); return; }
+
+        if (!username || !password) {
+            setError("Please enter your username and password.");
+            return;
+        }
+
+        // Auto-append @modernacts.com if user forgot
+        let fullUsername = username.trim().toLowerCase();
+        if (!fullUsername.includes("@")) {
+            fullUsername += "@modernacts.com";
+        }
+
         setLoading(true);
-        const { data, error } = await supabase.from("tblMonitoring").select("*").ilike("firstname", leaderFirstname).eq("pin", pin).single();
+        const { data, error } = await supabase
+            .from("tblMonitoring")
+            .select("*")
+            .eq("username", fullUsername)
+            .eq("pin", password)
+            .single();
+
         setLoading(false);
-        if (error || !data) { setError("Invalid credentials. Please check your first name and PIN."); return; }
+
+        if (error || !data) {
+            setError("Invalid username or password. Please try again.");
+            return;
+        }
+
         setCurrentUser(data);
-        if (data.type === "ADMIN" || data.ministry === "ADMIN") { navigate("/dashboard"); }
-        else { navigate(`/leader/${data.id}`); }
+        if (data.type === "ADMIN" || data.ministry === "ADMIN") {
+            navigate("/dashboard");
+        } else {
+            navigate(`/leader/${data.id}`);
+        }
     };
 
     const handleNewcomerLogin = async (e) => {
         e.preventDefault();
         setError("");
-        if (!newcomerFirstname || !newcomerLastname) { setError("Please enter your first and last name."); return; }
+        if (!newcomerFirstname || !newcomerLastname) {
+            setError("Please enter your first and last name.");
+            return;
+        }
         setLoading(true);
-        const { data, error } = await supabase.from("tblNewMembers").select("*").ilike("firstname", newcomerFirstname).ilike("lastname", newcomerLastname).single();
+        const { data, error } = await supabase
+            .from("tblNewMembers")
+            .select("*")
+            .ilike("firstname", newcomerFirstname)
+            .ilike("lastname", newcomerLastname)
+            .single();
         setLoading(false);
-        if (error || !data) { setError("No record found. Please check your name or contact your leader."); return; }
+        if (error || !data) {
+            setError("No record found. Please check your name or contact your leader.");
+            return;
+        }
         setNewcomer(data);
         navigate(`/newcomer/${data.id}`);
     };
@@ -279,7 +317,7 @@ function Login() {
                 height: "100vh",
                 minWidth: 0
             }}>
-                {/* Background Image (fixed behind everything) */}
+                {/* Background Image */}
                 <div style={{
                     position: "absolute",
                     top: 0, left: 0, right: 0, bottom: 0,
@@ -288,14 +326,12 @@ function Login() {
                     backgroundPosition: "center",
                     zIndex: 0
                 }} />
-                {/* Dark Overlay */}
                 <div style={{
                     position: "absolute",
                     top: 0, left: 0, right: 0, bottom: 0,
                     background: "linear-gradient(160deg, rgba(12,12,16,0.92) 0%, rgba(20,16,10,0.88) 50%, rgba(10,8,6,0.95) 100%)",
                     zIndex: 1
                 }} />
-                {/* Subtle gold glow */}
                 <div style={{
                     position: "absolute",
                     top: "-10%",
@@ -307,7 +343,6 @@ function Login() {
                     pointerEvents: "none"
                 }} />
 
-                {/* Scrollable Content */}
                 <div style={{
                     position: "relative",
                     zIndex: 2,
@@ -318,7 +353,6 @@ function Login() {
                     scrollbarColor: "rgba(201,164,92,0.3) transparent"
                 }}>
                     <div style={{ maxWidth: "900px" }}>
-                        {/* TOP LABEL */}
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px" }}>
                             <div style={{ width: "32px", height: "2px", background: gold }} />
                             <span style={{ fontSize: "12px", fontWeight: 700, color: gold, textTransform: "uppercase", letterSpacing: "3px" }}>
@@ -326,7 +360,6 @@ function Login() {
                             </span>
                         </div>
 
-                        {/* MAIN HEADLINE */}
                         <h1 style={{ fontSize: "48px", fontWeight: 900, color: "#fff", lineHeight: 1.1, margin: "0 0 10px 0", letterSpacing: "-0.5px" }}>
                             You Belong <span style={{ color: gold }}>Here</span>
                         </h1>
@@ -337,7 +370,6 @@ function Login() {
                             We are disciple equipping servants of God, influencing people through faith and purpose that transforms communities, campuses, families and lives for the glory of God.
                         </p>
 
-                        {/* THREE PILLARS */}
                         <div style={{
                             display: "flex",
                             gap: "0",
@@ -370,7 +402,6 @@ function Login() {
                             ))}
                         </div>
 
-                        {/* SCRIPTURE QUOTE */}
                         <div style={{ marginBottom: "24px", position: "relative", paddingLeft: "16px" }}>
                             <div style={{ position: "absolute", left: 0, top: "4px", bottom: "4px", width: "2px", background: `linear-gradient(to bottom, ${gold}, ${goldDark})`, borderRadius: "2px" }} />
                             <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.55)", fontStyle: "italic", lineHeight: 1.6, margin: 0, fontFamily: "Georgia, serif" }}>
@@ -381,7 +412,6 @@ function Login() {
                             </p>
                         </div>
 
-                        {/* WEEKLY GATHERINGS */}
                         <div style={{ marginBottom: "24px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
                                 <div style={{ width: "20px", height: "1px", background: gold }} />
@@ -418,7 +448,6 @@ function Login() {
                             </div>
                         </div>
 
-                        {/* BOTTOM PILLARS */}
                         <div style={{
                             display: "flex",
                             gap: "0",
@@ -455,7 +484,6 @@ function Login() {
                             ))}
                         </div>
 
-                        {/* LOCATION */}
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                             <span style={{ color: "rgba(201,164,92,0.5)" }}>{svgIcon(iconMapPin, 11)}</span>
                             <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.25)", margin: 0, letterSpacing: "0.3px" }}>
@@ -482,14 +510,12 @@ function Login() {
                                 <div style={{ flex: 1, height: "1px", background: "rgba(201,164,92,0.15)", marginLeft: "10px" }} />
                             </div>
 
-                            {/* Filter Pills */}
                             <div style={{ display: "flex", gap: "6px", marginBottom: "16px", flexWrap: "wrap" }}>
-                                {[ ["ALL", "All"], ["EVENT", "Events"], ["UPDATE", "Updates"], ["ANNOUNCEMENT", "Announcements"] ].map(([val, lbl]) => (
+                                {[["ALL", "All"], ["EVENT", "Events"], ["UPDATE", "Updates"], ["ANNOUNCEMENT", "Announcements"]].map(([val, lbl]) => (
                                     <FilterButton key={val} val={val} lbl={lbl} active={filterType === val} onClick={setFilterType} />
                                 ))}
                             </div>
 
-                            {/* Posts */}
                             {contentLoading ? (
                                 <div style={{ textAlign: "center", padding: "30px 20px" }}>
                                     <div style={{
@@ -525,7 +551,7 @@ function Login() {
                 </div>
             </div>
 
-            {/* RIGHT SIDE — LOGIN FORM ONLY */}
+            {/* RIGHT SIDE — LOGIN FORM */}
             <div style={{
                 width: "420px",
                 minWidth: "420px",
@@ -540,7 +566,6 @@ function Login() {
                 height: "100vh",
                 overflowY: "auto"
             }}>
-                {/* Church Logo & Name */}
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "32px" }}>
                     <img src={logo} alt="MAC" style={{ borderRadius: "30%", width: "52px", height: "52px", objectFit: "contain" }} />
                     <div>
@@ -552,11 +577,10 @@ function Login() {
                 <div style={{ marginBottom: "24px" }}>
                     <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#111827", margin: "0 0 6px 0" }}>Welcome Back</h2>
                     <p style={{ fontSize: "13px", color: "#6b7280", margin: 0, lineHeight: 1.6 }}>
-                        Sign in to access your discipleship records and ministry dashboard.
+                        Sign in with your MAC username and password.
                     </p>
                 </div>
 
-                {/* Mode Toggle */}
                 <div style={{ display: "flex", gap: "4px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", marginBottom: "22px" }}>
                     <button onClick={() => { setMode("leader"); setError(""); }}
                         style={{
@@ -593,22 +617,43 @@ function Login() {
                     <form onSubmit={handleLeaderLogin} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                         <div>
                             <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#374151", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                First Name
+                                Username
                             </label>
-                            <input type="text" placeholder="Enter your first name" value={leaderFirstname} onChange={(e) => setLeaderFirstname(e.target.value)}
-                                style={{
-                                    width: "100%", padding: "12px 14px", borderRadius: "8px", border: "2px solid #e5e7eb",
-                                    fontSize: "14px", transition: "all 0.2s", outline: "none", boxSizing: "border-box", background: "#fafafa"
-                                }}
-                                onFocus={(e) => { e.target.style.borderColor = gold; e.target.style.boxShadow = `0 0 0 3px rgba(201,164,92,0.1)`; e.target.style.background = "#fff"; }}
-                                onBlur={(e) => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; e.target.style.background = "#fafafa"; }}
-                            />
+                            <div style={{ position: "relative" }}>
+                                <input
+                                    type="text"
+                                    placeholder="iankyle.felix"
+                                    value={username}
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    style={{
+                                        width: "100%", padding: "12px 14px", borderRadius: "8px", border: "2px solid #e5e7eb",
+                                        fontSize: "14px", transition: "all 0.2s", outline: "none", boxSizing: "border-box",
+                                        background: "#fafafa", paddingRight: "140px"
+                                    }}
+                                    onFocus={(e) => { e.target.style.borderColor = gold; e.target.style.boxShadow = `0 0 0 3px rgba(201,164,92,0.1)`; e.target.style.background = "#fff"; }}
+                                    onBlur={(e) => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; e.target.style.background = "#fafafa"; }}
+                                />
+                                <span style={{
+                                    position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)",
+                                    fontSize: "11px", color: "#9ca3af", fontWeight: 600, pointerEvents: "none"
+                                }}>
+                                    @modernacts.com
+                                </span>
+                            </div>
+                            <p style={{ fontSize: "10px", color: "#9ca3af", marginTop: "4px" }}>
+                                Type your username. "@modernacts.com" is auto-added.
+                            </p>
                         </div>
+
                         <div>
                             <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#374151", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                Password (PIN)
+                                Password
                             </label>
-                            <input type="password" placeholder="Enter your PIN" value={pin} onChange={(e) => setPin(e.target.value)}
+                            <input
+                                type="password"
+                                placeholder="Enter your password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
                                 style={{
                                     width: "100%", padding: "12px 14px", borderRadius: "8px", border: "2px solid #e5e7eb",
                                     fontSize: "14px", transition: "all 0.2s", outline: "none", boxSizing: "border-box", background: "#fafafa"
@@ -617,6 +662,7 @@ function Login() {
                                 onBlur={(e) => { e.target.style.borderColor = "#e5e7eb"; e.target.style.boxShadow = "none"; e.target.style.background = "#fafafa"; }}
                             />
                         </div>
+
                         <button type="submit" disabled={loading}
                             style={{
                                 width: "100%", padding: "13px", borderRadius: "8px", border: "none", background: gold,
@@ -627,7 +673,7 @@ function Login() {
                             onMouseEnter={(e) => { if (!loading) { e.target.style.background = goldDark; e.target.style.boxShadow = "0 6px 20px rgba(201,164,92,0.4)"; } }}
                             onMouseLeave={(e) => { e.target.style.background = gold; e.target.style.boxShadow = "0 4px 14px rgba(201,164,92,0.3)"; }}
                         >
-                            {loading ? "Logging in..." : "Sign In as Leader"}
+                            {loading ? "Signing in..." : "Sign In"}
                         </button>
                     </form>
                 ) : (
@@ -681,11 +727,8 @@ function Login() {
                 </div>
             </div>
 
-            {/* Animations */}
             <style>{`
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
+                @keyframes spin { to { transform: rotate(360deg); } }
                 @media (max-width: 900px) {
                     .login-page { flex-direction: column-reverse !important; overflow-y: auto !important; height: auto !important; position: relative !important; }
                     .login-page > div:first-child { height: auto !important; min-height: 100vh !important; }

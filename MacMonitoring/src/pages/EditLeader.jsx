@@ -28,6 +28,7 @@ function EditLeader() {
     const [firstname, setFirstname] = useState("");
     const [lastname, setLastname] = useState("");
     const [nickname, setNickname] = useState("");
+    const [username, setUsername] = useState("");
     const [pin, setPin] = useState("");
     const [tribe, setTribe] = useState("");
     const [type, setType] = useState("");
@@ -53,6 +54,12 @@ function EditLeader() {
         }
     }, [civilStatus, tithingType, fullAccess]);
 
+    // ── USERNAME GENERATOR ─────────────────────────────────────────────────
+    const generateUsername = (fname, lname) => {
+        const clean = (str) => str.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return `${clean(fname)}.${clean(lname)}@modernacts.com`;
+    };
+
     const fetchLeader = async () => {
         setFetching(true);
         const { data } = await supabase
@@ -65,6 +72,7 @@ function EditLeader() {
             setFirstname(data.firstname || "");
             setLastname(data.lastname || "");
             setNickname(data.nickname || "");
+            setUsername(data.username || "");
             setPin(data.pin || "");
             setTribe(data.tribe || "");
             setType(data.type || "");
@@ -253,10 +261,27 @@ function EditLeader() {
             }
         }
 
+        // ── Auto-generate username if missing ─────────────────────────────
+        let finalUsername = username;
+        if (!finalUsername && firstname && lastname) {
+            finalUsername = generateUsername(firstname, lastname);
+            // Check uniqueness
+            const { data: existing } = await supabase
+                .from("tblMonitoring")
+                .select("id")
+                .eq("username", finalUsername)
+                .neq("id", Number(id))
+                .maybeSingle();
+            if (existing) {
+                finalUsername = `${generateUsername(firstname, lastname).replace('@modernacts.com', '')}${Math.floor(Math.random() * 100)}@modernacts.com`;
+            }
+        }
+
         if (!fullAccess) {
             const limitedUpdate = {
                 firstname, lastname,
                 nickname: nickname || null,
+                username: finalUsername,
                 pin,
                 image_url: imageUrl,
             };
@@ -281,6 +306,7 @@ function EditLeader() {
         const updateData = {
             firstname, lastname,
             nickname: nickname || null,
+            username: finalUsername,
             pin,
             tribe, type,
             ministries: selectedMinistries,
@@ -358,6 +384,11 @@ function EditLeader() {
     const showDjOptions = selectedMinistries.includes("DISCIPLESHIP JOURNEY");
     const showTithingOptions = civilStatus === "Married";
 
+    // Live preview of username
+    const previewUsername = firstname && lastname
+        ? generateUsername(firstname, lastname)
+        : "";
+
     if (fetching) {
         return (
             <div className="layout">
@@ -406,8 +437,58 @@ function EditLeader() {
                             <Field label="First Name *"><input type="text" value={firstname} onChange={e => setFirstname(e.target.value)} placeholder="First Name" style={inputStyle} /></Field>
                             <Field label="Last Name *"><input type="text" value={lastname} onChange={e => setLastname(e.target.value)} placeholder="Last Name" style={inputStyle} /></Field>
                             <Field label="Nickname"><input type="text" value={nickname} onChange={e => setNickname(e.target.value)} placeholder="Nickname (optional)" style={inputStyle} /></Field>
-                            <Field label="Change PIN"><input type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="Enter new PIN" style={inputStyle} /></Field>
+                            <Field label="Change Password"><input type="password" value={pin} onChange={e => setPin(e.target.value)} placeholder="Enter new password" style={inputStyle} /></Field>
                         </div>
+
+                        {/* Username Display */}
+                        <div style={{
+                            marginTop: "12px",
+                            padding: "12px 16px",
+                            background: "rgba(201,164,92,0.06)",
+                            borderRadius: "10px",
+                            border: "1px solid rgba(201,164,92,0.2)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px"
+                        }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#b8934a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ margin: 0, fontSize: "11px", color: "#9ca3af", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                    MAC Username
+                                </p>
+                                <p style={{
+                                    margin: "3px 0 0 0",
+                                    fontSize: "14px",
+                                    fontWeight: 700,
+                                    color: "#92400e",
+                                    fontFamily: "'SF Mono', 'Courier New', monospace",
+                                    letterSpacing: "0.3px"
+                                }}>
+                                    {username || previewUsername || "Will be auto-generated on save"}
+                                </p>
+                            </div>
+                            {username && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(username);
+                                        Swal.fire({ icon: "success", title: "Copied!", text: "Username copied to clipboard", timer: 1200, showConfirmButton: false, toast: true, position: "top-end" });
+                                    }}
+                                    style={{
+                                        background: "none", border: "1px solid #c9a45c", borderRadius: "6px",
+                                        padding: "4px 10px", fontSize: "11px", color: "#c9a45c", fontWeight: 700,
+                                        cursor: "pointer", display: "flex", alignItems: "center", gap: "4px"
+                                    }}
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                    Copy
+                                </button>
+                            )}
+                        </div>
+
                         {fullAccess && (
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginTop: "12px" }}>
                                 <Field label="Tribe *">
