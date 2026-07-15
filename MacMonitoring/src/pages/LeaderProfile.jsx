@@ -392,13 +392,13 @@ function LeaderProfile() {
                         <div style={{ paddingBottom: "4px", flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
                                 <div style={{ minWidth: 0 }}>
-                                    <h1 style={{ fontSize: "16px", fontWeight: 700, color: c.text, margin: "0 0 2px 0", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
+                                    <h1 style={{ fontSize: "10px", fontWeight: 600, color: c.text, margin: "0 0 2px 0", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
                                         {leader.firstname} {leader.lastname}
                                     </h1>
                                     {/* {leader.nickname && (
                                         <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: c.textMuted, fontStyle: "italic" }}>{leader.nickname}</p>
                                     )} */}
-                                    <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
+                                    {/* <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
                                         <span style={{ padding: "2px 8px", borderRadius: "12px", background: c.borderLight, color: c.textSecondary, fontSize: "10px", fontWeight: 600, letterSpacing: "0.3px" }}>
                                             {leader.tribe}
                                         </span>
@@ -410,7 +410,7 @@ function LeaderProfile() {
                                                 {m}
                                             </span>
                                         ))}
-                                    </div>
+                                    </div> */}
                                 </div>
 
                                 {canEditProfile && (
