@@ -3413,3 +3413,440 @@ button:hover {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+
+
+
+
+
+/* =========================================
+   BASE MOBILE FIXES (applies to all pages)
+========================================= */
+
+/* Hide mobile menu button on desktop */
+.mobile-menu-btn {
+    display: none !important;
+}
+
+/* Desktop sidebar */
+.sidebar {
+    width: 270px;
+    min-width: 270px;
+    position: relative;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* =========================================
+   TABLET & MOBILE: max-width 768px
+========================================= */
+@media (max-width: 768px) {
+
+    /* ── Sidebar Mobile Menu ── */
+    .mobile-menu-btn {
+        display: flex !important;
+    }
+
+    .layout {
+        flex-direction: column !important;
+    }
+
+    .sidebar {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        width: 280px !important;
+        min-width: 280px !important;
+        height: 100vh !important;
+        min-height: 100vh !important;
+        z-index: 999 !important;
+        transform: translateX(-100%);
+        border-right: 1px solid rgba(201, 164, 92, 0.3);
+        box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0) !important;
+    }
+
+    /* ── Content Area ── */
+    .content {
+        padding: 60px 16px 20px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* ── ALL GRID LAYOUTS → Single Column ── */
+    /* Target any element with gridTemplateColumns inline style */
+    [style*="gridTemplateColumns"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Specific grid overrides for known patterns */
+    .content [style*="repeat(3"],
+    .content [style*="repeat(4"],
+    .content [style*="repeat(2"],
+    .content [style*="repeat(5"],
+    .content [style*="repeat(6"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Dashboard content grid */
+    .content > div > div[style*="gridTemplateColumns"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── FLEX ROW LAYOUTS → Column on mobile ── */
+    .content > div > div[style*="display: flex"] {
+        flex-wrap: wrap !important;
+    }
+
+    /* ── TABLES → Horizontal scroll ── */
+    .content table,
+    .content [style*="borderCollapse: collapse"] {
+        min-width: 600px !important;
+    }
+
+    .content [style*="overflow: hidden"] > table,
+    .content [style*="borderRadius: 10px"] > table {
+        min-width: 600px !important;
+    }
+
+    /* Make table containers scrollable */
+    .content > div > div > div[style*="overflow: hidden"],
+    .content > div > div[style*="borderRadius: 10px"],
+    .content [style*="border: 1px solid"] {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-width: 100% !important;
+    }
+
+    /* ── PROFILE PAGE SPECIFIC ── */
+    /* Cover photo height */
+    .content [style*="height: 250px"] {
+        height: 160px !important;
+    }
+
+    /* Profile header area */
+    .content [style*="marginTop: -36px"] {
+        margin-top: -20px !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        text-align: center !important;
+        padding: 0 16px 12px !important;
+    }
+
+    /* Profile avatar */
+    .content img[alt="Leader"] {
+        width: 80px !important;
+        height: 80px !important;
+    }
+
+    /* Profile name */
+    .content h1[style*="fontSize: 16px"] {
+        font-size: 18px !important;
+    }
+
+    /* Profile badges row */
+    .content [style*="flexWrap: wrap"] {
+        justify-content: center !important;
+    }
+
+    /* Edit button */
+    .content a[href*="edit-leader"] button {
+        width: 100% !important;
+        margin-top: 10px !important;
+    }
+
+    /* Quick stats row */
+    .content [style*="gridTemplateColumns: repeat(3"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Tab navigation */
+    .content [style*="borderBottom: 1px solid"] {
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 0 12px !important;
+    }
+
+    .content [style*="borderBottom: 1px solid"]::-webkit-scrollbar {
+        display: none;
+    }
+
+    .content [style*="borderBottom: 1px solid"] button {
+        flex-shrink: 0 !important;
+        padding: 10px 14px !important;
+        font-size: 12px !important;
+    }
+
+    /* Tab content padding */
+    .content [style*="padding: 12px 20px"] {
+        padding: 12px 14px !important;
+    }
+
+    /* About section grid */
+    .content [style*="gridTemplateColumns: repeat(4"] {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+
+    /* Activity rows */
+    .content [style*="borderBottom: 1px solid"] {
+        padding: 10px 0 !important;
+    }
+
+    /* ── DASHBOARD SPECIFIC ── */
+    /* Stats row */
+    .content [style*="display: flex"] [style*="flex: 1 1 160px"] {
+        flex: 1 1 100% !important;
+        min-width: 100% !important;
+    }
+
+    /* Content feed grid */
+    .content [style*="gridTemplateColumns: repeat(auto-fill"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Filter buttons */
+    .content [style*="flexWrap: wrap"] button {
+        font-size: 11px !important;
+        padding: 6px 12px !important;
+    }
+
+    /* ── NEWSFEED SPECIFIC ── */
+    /* Moment cards */
+    .content [style*="maxHeight: 400px"] img {
+        max-height: 250px !important;
+    }
+
+    /* Comment input */
+    .content form[style*="display: flex"] input {
+        font-size: 16px !important; /* Prevents iOS zoom */
+    }
+
+    /* Reaction bar */
+    .content [style*="flexWrap: wrap"] {
+        gap: 6px !important;
+    }
+
+    /* ── LOGIN PAGE SPECIFIC ── */
+    .login-page {
+        flex-direction: column-reverse !important;
+        height: auto !important;
+        position: relative !important;
+        overflow-y: auto !important;
+    }
+
+    .login-page > div:first-child {
+        height: auto !important;
+        min-height: 50vh !important;
+        padding: 24px 20px !important;
+    }
+
+    .login-page > div:first-child h1 {
+        font-size: 32px !important;
+    }
+
+    .login-page > div:first-child p {
+        font-size: 14px !important;
+    }
+
+    .login-page > div:last-child {
+        width: 100% !important;
+        min-width: auto !important;
+        height: auto !important;
+        padding: 32px 24px !important;
+        box-shadow: none !important;
+    }
+
+    /* Login MAC Updates grid */
+    .login-page [style*="gridTemplateColumns: repeat(3"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── GENERAL TEXT SIZING ── */
+    .content h1 {
+        font-size: 22px !important;
+    }
+
+    .content h2 {
+        font-size: 18px !important;
+    }
+
+    .content h3 {
+        font-size: 15px !important;
+    }
+
+    .content p {
+        font-size: 13px !important;
+        line-height: 1.6 !important;
+    }
+
+    /* ── BUTTONS & INPUTS ── */
+    .content button,
+    .content input,
+    .content select,
+    .content textarea {
+        font-size: 16px !important; /* Prevents iOS zoom on focus */
+    }
+
+    /* ── MODALS ── */
+    .content [style*="position: fixed"] > div[style*="maxWidth: 520px"],
+    .content [style*="position: fixed"] > div[style*="maxWidth: 480px"] {
+        width: 92% !important;
+        max-width: 92% !important;
+        margin: 0 auto !important;
+    }
+
+    /* ── CARDS & CONTAINERS ── */
+    .content [style*="borderRadius: 16px"],
+    .content [style*="borderRadius: 14px"],
+    .content [style*="borderRadius: 12px"] {
+        padding: 14px !important;
+    }
+
+    /* ── PAGINATION ── */
+    .content [style*="justifyContent: center"] {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+}
+
+/* =========================================
+   SMALL PHONES: max-width 480px
+========================================= */
+@media (max-width: 480px) {
+
+    .content {
+        padding: 56px 12px 16px !important;
+    }
+
+    /* Even tighter spacing */
+    .content [style*="padding: 28px"] {
+        padding: 16px 12px !important;
+    }
+
+    .content [style*="padding: 24px"] {
+        padding: 14px 10px !important;
+    }
+
+    .content [style*="padding: 20px"] {
+        padding: 12px 10px !important;
+    }
+
+    /* Profile cover even smaller */
+    .content [style*="height: 250px"] {
+        height: 120px !important;
+    }
+
+    .content img[alt="Leader"] {
+        width: 64px !important;
+        height: 64px !important;
+    }
+
+    /* Tab buttons even smaller */
+    .content [style*="borderBottom: 1px solid"] button {
+        padding: 8px 10px !important;
+        font-size: 11px !important;
+    }
+
+    /* Stats cards */
+    .content [style*="fontSize: 18px"] {
+        font-size: 24px !important;
+    }
+
+    /* Table cells */
+    .content td,
+    .content th {
+        padding: 8px 10px !important;
+        font-size: 11px !important;
+    }
+
+    /* Login page */
+    .login-page > div:first-child h1 {
+        font-size: 26px !important;
+    }
+
+    .login-page > div:first-child {
+        padding: 20px 16px !important;
+    }
+
+    .login-page > div:last-child {
+        padding: 24px 16px !important;
+    }
+
+    /* Newsfeed moment header */
+    .content [style*="width: 42px"] {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 12px !important;
+    }
+
+    /* Reaction buttons */
+    .content [style*="borderRadius: 16px"] button {
+        padding: 3px 8px !important;
+        font-size: 12px !important;
+    }
+
+    /* Comment section */
+    .content [style*="width: 28px"] {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 9px !important;
+    }
+
+    .content [style*="width: 32px"] {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 10px !important;
+    }
+}
+
+/* =========================================
+   SAFARI / iOS SPECIFIC FIXES
+========================================= */
+@supports (-webkit-touch-callout: none) {
+    body.menu-open {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+    }
+
+    /* Prevent iOS zoom on inputs */
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+
+    /* Smooth scrolling */
+    .content, .login-page > div:first-child {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* =========================================
+   TOUCH DEVICE OPTIMIZATIONS
+========================================= */
+@media (hover: none) and (pointer: coarse) {
+    /* Remove hover effects on touch devices */
+    /* Inline event handlers (onMouseEnter/onMouseLeave) are React props,
+       not CSS — they can't be targeted or removed via CSS selectors.
+       Transition effects are already handled by the global reset above. */
+
+    /* Larger touch targets */
+    .content button,
+    .content a,
+    .content [role="button"] {
+        min-height: 40px !important;
+        min-width: 40px !important;
+    }
+
+    /* Tab buttons bigger for touch */
+    .content [style*="borderBottom: 1px solid"] button {
+        min-height: 40px !important;
+    }
+}

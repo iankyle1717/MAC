@@ -622,9 +622,35 @@ function Login() {
                             <div style={{ position: "relative" }}>
                                 <input
                                     type="text"
-                                    placeholder="iankyle.felix"
                                     value={username}
-                                    onChange={(e) => setUsername(e.target.value)}
+                                    onChange={(e) => {
+                                        let val = e.target.value;
+                                        // Auto-complete: typing "@" instantly appends "modernacts.com"
+                                        if (val.endsWith("@") && !val.includes("@modernacts.com")) {
+                                            val = val + "modernacts.com";
+                                            setUsername(val);
+                                            // Place cursor at the END so they can just press Enter
+                                            setTimeout(() => {
+                                                e.target.setSelectionRange(val.length, val.length);
+                                            }, 0);
+                                            return;
+                                        }
+                                        setUsername(val);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        // Smart Backspace: if cursor is in the domain part, 
+                                        // jump back to before @ for faster editing
+                                        if (e.key === "Backspace") {
+                                            const atIndex = username.lastIndexOf("@modernacts.com");
+                                            if (atIndex !== -1 && e.target.selectionStart > atIndex) {
+                                                setUsername(username.slice(0, atIndex));
+                                                e.preventDefault();
+                                                setTimeout(() => {
+                                                    e.target.setSelectionRange(atIndex, atIndex);
+                                                }, 0);
+                                            }
+                                        }
+                                    }}
                                     style={{
                                         width: "100%", padding: "12px 14px", borderRadius: "8px", border: "2px solid #e5e7eb",
                                         fontSize: "14px", transition: "all 0.2s", outline: "none", boxSizing: "border-box",
@@ -640,9 +666,7 @@ function Login() {
                                     @modernacts.com
                                 </span>
                             </div>
-                            <p style={{ fontSize: "10px", color: "#9ca3af", marginTop: "4px" }}>
-                                Type your username. "@modernacts.com" is auto-added.
-                            </p>
+                       
                         </div>
 
                         <div>

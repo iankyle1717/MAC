@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
-import { getCurrentUser, isAdmin, isFinance, isUshering, isDiscipleship } from "../utils/auth";
+import { getCurrentUser, isAdmin } from "../utils/auth";
 import backround from "../assets/mac-cover.png";
 
 // Stage definitions
@@ -95,25 +95,22 @@ function LeaderProfile() {
     const [devotion, setDevotion] = useState([]);
     const [lifeGroups, setLifeGroups] = useState([]);
     const [invites, setInvites] = useState([]);
+    const [moments, setMoments] = useState([]);
     const currentUser = getCurrentUser();
 
-    // ── NEW: Pagination for tables ────────────────────────────────────────────
+    // ── Pagination for tables ────────────────────────────────────────────
     const [tablePage, setTablePage] = useState(1);
     const ROWS_PER_PAGE = 10;
     // ───────────────────────────────────────────────────────────────────────
 
     const admin = isAdmin();
-    const finance = isFinance();
-    const ushering = isUshering();
-    const discipleship = isDiscipleship();
-
     const isOwnProfile = currentUser?.id === Number(id);
-
-    const canAccessProfile = isOwnProfile || admin || finance || ushering || discipleship;
-    const canViewAttendance = isOwnProfile || admin || ushering;
-    const canViewTithes = isOwnProfile || admin || finance;
-    const canViewDevotion = isOwnProfile || admin || discipleship;
     const canEditProfile = isOwnProfile || admin;
+
+    // ── CHANGED: Everyone can view any profile ────────────────────────────
+    // Only Admin can view TLDA tabs (Attendance, Tithes, Devotion)
+    const canViewTLDA = admin; // Only admin sees Attendance, Tithes, Devotion
+    // ───────────────────────────────────────────────────────────────────────
 
     useEffect(() => {
         if (!currentUser) { window.location.href = "/login"; return; }
@@ -122,6 +119,7 @@ function LeaderProfile() {
         fetchAttendance();
         fetchDevotion();
         fetchLifeGroups();
+        fetchMoments();
     }, [id]);
 
     // Reset pagination when tab changes
@@ -187,6 +185,18 @@ function LeaderProfile() {
         setDevotion(data || []);
     };
 
+
+
+    const fetchMoments = async () => {
+        const { data } = await supabase
+            .from("tblMoments")
+            .select("*")
+            .eq("user_id", id)
+            .gt("expires_at", new Date().toISOString())
+            .order("created_at", { ascending: false });
+        setMoments(data || []);
+    };
+
     const fetchLifeGroups = async () => {
         const { data } = await supabase
             .from("tblLifeGroup").select("*").eq("leader_id", id)
@@ -223,7 +233,7 @@ function LeaderProfile() {
     const stats = getStats();
     const leaderMinistries = getLeaderMinistries(leader);
 
-    // ── NEW: Pagination helper ────────────────────────────────────────────
+    // ── Pagination helper ────────────────────────────────────────────
     const getPaginatedData = (data, page) => {
         const totalPages = Math.ceil(data.length / ROWS_PER_PAGE) || 1;
         const start = (page - 1) * ROWS_PER_PAGE;
@@ -288,24 +298,16 @@ function LeaderProfile() {
         </div>
     );
 
-    if (!canAccessProfile) {
-        return (
-            <div className="layout">
-                <Sidebar />
-                <div className="content" style={{ textAlign: "center", paddingTop: "80px" }}>
-                    <h2 style={{ color: theme.danger, fontSize: "16px", fontWeight: 600 }}>Access Denied</h2>
-                    <p style={{ color: theme.textMuted, fontSize: "13px" }}>You are not allowed to view this profile.</p>
-                </div>
-            </div>
-        );
-    }
+    // ── CHANGED: Removed access denied check — everyone can view profiles ──
+    // Only hide TLDA tabs from non-admins
 
     const tabs = [
         { key: "overview", label: "Overview", always: true },
-        { key: "attendance", label: "Attendance", show: canViewAttendance },
-        { key: "tithes", label: "Tithes", show: canViewTithes },
-        { key: "devotion", label: "Devotion", show: canViewDevotion },
+        { key: "attendance", label: "Attendance", show: canViewTLDA },      // Admin only
+        { key: "tithes", label: "Tithes", show: canViewTLDA },              // Admin only
+        { key: "devotion", label: "Devotion", show: canViewTLDA },          // Admin only
         { key: "lifegroup", label: "Life Group", always: true },
+        { key: "moments", label: "Moments", always: true },
         { key: "invites", label: "Invites", always: true },
     ].filter(t => t.always || t.show);
 
@@ -393,9 +395,9 @@ function LeaderProfile() {
                                     <h1 style={{ fontSize: "16px", fontWeight: 700, color: c.text, margin: "0 0 2px 0", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
                                         {leader.firstname} {leader.lastname}
                                     </h1>
-                                    {leader.nickname && (
+                                    {/* {leader.nickname && (
                                         <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: c.textMuted, fontStyle: "italic" }}>{leader.nickname}</p>
-                                    )}
+                                    )} */}
                                     <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
                                         <span style={{ padding: "2px 8px", borderRadius: "12px", background: c.borderLight, color: c.textSecondary, fontSize: "10px", fontWeight: 600, letterSpacing: "0.3px" }}>
                                             {leader.tribe}
@@ -553,8 +555,8 @@ function LeaderProfile() {
                         </div>
                     )}
 
-                    {/* ATTENDANCE TAB */}
-                    {activeTab === "attendance" && canViewAttendance && (
+                    {/* ATTENDANCE TAB — Admin only */}
+                    {activeTab === "attendance" && canViewTLDA && (
                         <Card title="Attendance Records" badge={`${attendance.length} records`}>
                             {attendance.length === 0 ? (
                                 <EmptyState text="No attendance records yet." />
@@ -594,8 +596,8 @@ function LeaderProfile() {
                         </Card>
                     )}
 
-                    {/* TITHES TAB */}
-                    {activeTab === "tithes" && canViewTithes && (
+                    {/* TITHES TAB — Admin only */}
+                    {activeTab === "tithes" && canViewTLDA && (
                         <Card title="Tithes Records" rightText={`Total: ₱${stats.totalTithes.toLocaleString()}`} rightColor={c.success}>
                             {tithes.length === 0 ? (
                                 <EmptyState text="No tithes records yet." />
@@ -633,8 +635,8 @@ function LeaderProfile() {
                         </Card>
                     )}
 
-                    {/* DEVOTION TAB */}
-                    {activeTab === "devotion" && canViewDevotion && (
+                    {/* DEVOTION TAB — Admin only */}
+                    {activeTab === "devotion" && canViewTLDA && (
                         <Card title="Devotion Consistency" badge={`${devotion.length} entries`}>
                             {devotion.length === 0 ? (
                                 <EmptyState text="No devotion records yet." />
@@ -689,7 +691,7 @@ function LeaderProfile() {
                         </Card>
                     )}
 
-                    {/* LIFEGROUP TAB */}
+                    {/* LIFEGROUP TAB — Everyone */}
                     {activeTab === "lifegroup" && (
                         <Card title="Life Group Participation" badge={`${lifeGroups.length} records`}>
                             {lifeGroups.length === 0 ? (
@@ -730,7 +732,51 @@ function LeaderProfile() {
                         </Card>
                     )}
 
-                    {/* INVITES TAB */}
+                    {/* MOMENTS TAB — Everyone */}
+                    {activeTab === "moments" && (
+                        <Card title="My Moments" badge={`${moments.length} posts`}>
+                            {moments.length === 0 ? (
+                                <EmptyState text="No moments posted yet." />
+                            ) : (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                    {moments.map(moment => (
+                                        <div key={moment.id} style={{
+                                            background: "#faf9f7", borderRadius: "10px",
+                                            border: "1px solid " + c.border, overflow: "hidden",
+                                            padding: "12px 14px"
+                                        }}>
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                                <span style={{ fontSize: "11px", color: c.textMuted, fontWeight: 500 }}>
+                                                    {new Date(moment.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                                </span>
+                                                <span style={{
+                                                    fontSize: "10px", fontWeight: 700, padding: "2px 8px",
+                                                    borderRadius: "8px", background: "rgba(201,164,92,0.12)",
+                                                    color: "#c9a45c", border: "1px solid rgba(201,164,92,0.3)",
+                                                    textTransform: "uppercase", letterSpacing: "0.5px"
+                                                }}>
+                                                    {Math.ceil((new Date(moment.expires_at) - Date.now()) / 3600000)}h left
+                                                </span>
+                                            </div>
+                                            {moment.caption && (
+                                                <p style={{ margin: "0 0 10px 0", fontSize: "13px", color: c.text, lineHeight: 1.6 }}>
+                                                    {moment.caption}
+                                                </p>
+                                            )}
+                                            {moment.image_url && (
+                                                <img src={moment.image_url} alt="Moment" style={{
+                                                    width: "100%", maxHeight: "200px", objectFit: "cover",
+                                                    borderRadius: "8px", display: "block"
+                                                }} />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </Card>
+                    )}
+
+                    {/* INVITES TAB — Everyone */}
                     {activeTab === "invites" && (
                         <Card title="Invites & Newcomers" badge={`${invites.length} total`}>
                             {invites.length === 0 ? (

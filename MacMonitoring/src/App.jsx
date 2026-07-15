@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Leaders from "./pages/Leaders";
@@ -13,8 +14,10 @@ import Assimilation from "./pages/Assimilation";
 import AddLeader from "./pages/AddLeader";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getCurrentUser, getNewcomer } from "./utils/auth";
+import { startHeartbeat, stopHeartbeat } from "./utils/heartbeat";
 import "./styles/global.css";
 import "./styles/login.css";
+import Newsfeed from "./pages/Newsfeed";
 
 const RoleBasedRedirect = () => {
     const user = getCurrentUser();
@@ -26,11 +29,28 @@ const RoleBasedRedirect = () => {
 };
 
 function App() {
+    // Heartbeat: track online status
+    useEffect(() => {
+        const user = getCurrentUser();
+        if (user) startHeartbeat();
+
+        const handleAuth = () => {
+            getCurrentUser() ? startHeartbeat() : stopHeartbeat();
+        };
+        window.addEventListener("ems-auth-change", handleAuth);
+
+        return () => {
+            stopHeartbeat();
+            window.removeEventListener("ems-auth-change", handleAuth);
+        };
+    }, []);
+
     return (
         <BrowserRouter>
             <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/" element={<RoleBasedRedirect />} />
+                <Route path="/newsfeed" element={<Newsfeed />} />
 
                 <Route
                     path="/dashboard"

@@ -1,7 +1,26 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { getNewcomer, getCurrentUser, logout, canViewNewcomerProfile } from "../utils/auth";
+
+// ── Color Theme ──────────────────────────────────────────────────────────────
+const THEME = {
+    black: "#0a0a0a",
+    blackLight: "#111111",
+    blackCard: "#141414",
+    blackElevated: "#1a1a1a",
+    gold: "#c9a45c",
+    goldLight: "#d4b76a",
+    goldDark: "#a88b4a",
+    goldMuted: "rgba(201, 164, 92, 0.15)",
+    textPrimary: "#f5f5f5",
+    textSecondary: "#a3a3a3",
+    textMuted: "#737373",
+    border: "rgba(255, 255, 255, 0.08)",
+    borderGold: "rgba(201, 164, 92, 0.3)",
+    gradientGold: "linear-gradient(135deg, #c9a45c 0%, #a88b4a 100%)",
+    shadowGold: "0 4px 24px rgba(201, 164, 92, 0.15)",
+};
 
 function NewcomerProfile() {
     const { id } = useParams();
@@ -131,11 +150,107 @@ function NewcomerProfile() {
             </div>
 
             <div className="newcomer-content">
+                {/* Community Navigation Cards */}
+                {isOwnProfile && (
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                        gap: "16px",
+                        marginBottom: "24px"
+                    }}>
+                        {/* Dashboard Card */}
+                        <Link to="/dashboard" style={{ textDecoration: "none" }}>
+                            <div style={{
+                                background: THEME.blackCard,
+                                borderRadius: "16px",
+                                border: `1px solid ${THEME.border}`,
+                                padding: "20px",
+                                cursor: "pointer",
+                                transition: "all 0.3s ease",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "16px"
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = THEME.gold;
+                                e.currentTarget.style.transform = "translateY(-2px)";
+                                e.currentTarget.style.boxShadow = THEME.shadowGold;
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = THEME.border;
+                                e.currentTarget.style.transform = "translateY(0)";
+                                e.currentTarget.style.boxShadow = "none";
+                            }}>
+                                <div style={{
+                                    width: "48px", height: "48px", borderRadius: "12px",
+                                    background: THEME.goldMuted,
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: "24px"
+                                }}>
+                                    📋
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: THEME.textPrimary }}>
+                                        MAC Dashboard
+                                    </h4>
+                                    <p style={{ margin: 0, fontSize: "12px", color: THEME.textMuted }}>
+                                        View events, announcements & updates
+                                    </p>
+                                </div>
+                                <span style={{ marginLeft: "auto", fontSize: "20px", color: THEME.gold }}>→</span>
+                            </div>
+                        </Link>
+
+                        {/* Newsfeed Card */}
+                        <Link to="/newsfeed" style={{ textDecoration: "none" }}>
+                            <div style={{
+                                background: THEME.blackCard,
+                                borderRadius: "16px",
+                                border: `1px solid ${THEME.border}`,
+                                padding: "20px",
+                                cursor: "pointer",
+                                transition: "all 0.3s ease",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "16px"
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = THEME.gold;
+                                e.currentTarget.style.transform = "translateY(-2px)";
+                                e.currentTarget.style.boxShadow = THEME.shadowGold;
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = THEME.border;
+                                e.currentTarget.style.transform = "translateY(0)";
+                                e.currentTarget.style.boxShadow = "none";
+                            }}>
+                                <div style={{
+                                    width: "48px", height: "48px", borderRadius: "12px",
+                                    background: "rgba(96, 165, 250, 0.12)",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontSize: "24px"
+                                }}>
+                                    💬
+                                </div>
+                                <div>
+                                    <h4 style={{ margin: "0 0 4px 0", fontSize: "15px", fontWeight: 700, color: THEME.textPrimary }}>
+                                        Community Newsfeed
+                                    </h4>
+                                    <p style={{ margin: 0, fontSize: "12px", color: THEME.textMuted }}>
+                                        React & comment on community moments
+                                    </p>
+                                </div>
+                                <span style={{ marginLeft: "auto", fontSize: "20px", color: THEME.gold }}>→</span>
+                            </div>
+                        </Link>
+                    </div>
+                )}
+
                 {/* Welcome Message */}
                 {isOwnProfile && (
                     <div className="welcome-card">
                         <h2>Welcome back, {newcomer.firstname}! 👋</h2>
-                        <p>Here's your discipleship journey progress.</p>
+                        <p>You are a cherished member of the MAC family. Here&apos;s your discipleship journey progress.</p>
                     </div>
                 )}
 
@@ -232,7 +347,12 @@ function NewcomerProfile() {
                 {/* Encouragement Message */}
                 <div className="encouragement-card">
                     <h4>Keep Going! 🙏</h4>
-                    
+                    <p style={{ margin: "8px 0 0 0", fontSize: "14px", color: "#737373", lineHeight: 1.6 }}>
+                        &ldquo;Therefore go and make disciples of all nations...&rdquo; — Matthew 28:19
+                    </p>
+                    <p style={{ margin: "12px 0 0 0", fontSize: "13px", color: "#a3a3a3" }}>
+                        You belong here. We&apos;re walking this journey with you! 💛
+                    </p>
                 </div>
             </div>
         </div>
