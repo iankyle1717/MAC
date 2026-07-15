@@ -392,7 +392,7 @@ function LeaderProfile() {
                         <div style={{ paddingBottom: "4px", flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: "12px" }}>
                                 <div style={{ minWidth: 0 }}>
-                                    <h1 style={{ fontSize: "10px", fontWeight: 600, color: c.text, margin: "0 0 2px 0", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
+                                    <h1 style={{ fontSize: "16px", fontWeight: 700, color: c.text, margin: "0 0 2px 0", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
                                         {leader.firstname} {leader.lastname}
                                     </h1>
                                     {/* {leader.nickname && (

@@ -3850,3 +3850,138 @@ button:hover {
         min-height: 40px !important;
     }
 }
+
+
+
+/* =========================================
+   DEVOTION & LIFEGROUP MOBILE FIXES
+   Add this to your global CSS file
+========================================= */
+
+/* Mobile tab switcher for Devotion & LifeGroup */
+.mobile-tabs {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-tabs {
+        display: flex !important;
+        gap: 0;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #e5e7eb;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .mobile-tabs button {
+        padding: 10px 16px;
+        border: none;
+        background: none;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+        color: #6b7280;
+        transition: all 0.2s;
+    }
+
+    .mobile-tabs button.active {
+        color: #c9a45c;
+        border-bottom-color: #c9a45c;
+    }
+
+    /* Stack columns vertically on mobile */
+    .devotion-columns,
+    .lifegroup-columns {
+        flex-direction: column !important;
+        gap: 20px !important;
+    }
+
+    .devotion-columns .column-left,
+    .devotion-columns .column-right,
+    .lifegroup-columns .column-left,
+    .lifegroup-columns .column-right {
+        flex: 1 1 100% !important;
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Make tables horizontally scrollable with visible scrollbar hint */
+    .excel-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        position: relative;
+    }
+
+    /* Add a subtle scroll hint shadow on the right */
+    .excel-wrapper::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 30px;
+        background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .excel-wrapper:hover::after {
+        opacity: 1;
+    }
+
+    /* Ensure tables don't break layout */
+    .excel-table {
+        min-width: 600px !important;
+    }
+
+    /* Stats cards full width on mobile */
+    .record-card {
+        min-width: 0 !important;
+    }
+
+    /* Mode selector buttons wrap better */
+    .mobile-tabs + div[style*="display: flex"] {
+        flex-wrap: wrap !important;
+    }
+
+    /* Form inputs in modal stack */
+    form[style*="display: flex"] > div[style*="display: flex"] {
+        flex-direction: column !important;
+    }
+
+    form[style*="display: flex"] > div[style*="display: flex"] > select,
+    form[style*="display: flex"] > div[style*="display: flex"] > input {
+        width: 100% !important;
+        flex: none !important;
+    }
+}
+
+/* =========================================
+   TABLE SCROLL INDICATOR
+   Shows users they can swipe
+========================================= */
+
+.scroll-hint {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .scroll-hint {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        background: #f3f4f6;
+        border-radius: 6px;
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 8px;
+    }
+
+    .scroll-hint::before {
+        content: "👆";
+    }
+}

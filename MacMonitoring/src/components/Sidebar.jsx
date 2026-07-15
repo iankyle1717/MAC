@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getCurrentUser, getNewcomer, logout, getVisibleRoutes, isAdmin, getUserMinistries } from "../utils/auth";
@@ -91,6 +90,7 @@ function Sidebar() {
         const icons = {
             "Dashboard": "◉",
             "Newsfeed": "✎",
+            "MAC-MESSAGE": "✉",
             "Leaders": "◌",
             "New Invites": "✦",
             "Attendance": "✓",
@@ -111,12 +111,14 @@ function Sidebar() {
         navLinks.push(route);
         if (route.label === "Dashboard" && !newsfeedAdded) {
             navLinks.push({ path: "/newsfeed", label: "Newsfeed" });
+            navLinks.push({ path: "/messages", label: "MAC-MESSAGE" });
             newsfeedAdded = true;
         }
     }
 
     if (!newsfeedAdded) {
         navLinks.unshift({ path: "/newsfeed", label: "Newsfeed" });
+        navLinks.splice(1, 0, { path: "/messages", label: "MAC-MESSAGE" });
     }
 
     const sidebarContent = (
@@ -126,7 +128,8 @@ function Sidebar() {
                 style={{
                     padding: "16px 12px 12px",
                     textAlign: "center",
-                    borderBottom: "1px solid rgba(201, 164, 92, 0.15)"
+                    borderBottom: "1px solid rgba(201, 164, 92, 0.15)",
+                    flexShrink: 0
                 }}
             >
                 <img 
@@ -175,7 +178,8 @@ function Sidebar() {
                         display: "flex",
                         alignItems: "center",
                         gap: "10px",
-                        transition: "all 0.2s ease"
+                        transition: "all 0.2s ease",
+                        flexShrink: 0
                     }}
                     onMouseEnter={e => {
                         e.currentTarget.style.background = "rgba(34, 197, 94, 0.18)";
@@ -227,7 +231,8 @@ function Sidebar() {
                     borderRadius: "10px",
                     background: "rgba(201, 164, 92, 0.08)",
                     border: "1px solid rgba(201, 164, 92, 0.15)",
-                    textAlign: "center"
+                    textAlign: "center",
+                    flexShrink: 0
                 }}
             >
                 {user ? (
@@ -328,7 +333,10 @@ function Sidebar() {
                 padding: "4px 8px",
                 display: "flex",
                 flexDirection: "column",
-                justifyContent: "flex-start"
+                justifyContent: "flex-start",
+                overflowY: "auto",
+                overflowX: "hidden",
+                minHeight: 0
             }}>
                 {navLinks.map((route, index) => {
                     const active = isActive(route.path);
@@ -357,7 +365,8 @@ function Sidebar() {
                                         : "transparent",
                                 transition: "all 0.2s ease",
                                 boxShadow: active ? "0 2px 8px rgba(201, 164, 92, 0.3)" : "none",
-                                whiteSpace: "nowrap"
+                                whiteSpace: "nowrap",
+                                flexShrink: 0
                             }}
                         >
                             <span style={{ fontSize: "14px" }}>
@@ -381,7 +390,8 @@ function Sidebar() {
             {/* LOGOUT */}
             <div style={{ 
                 padding: "10px",
-                borderTop: "1px solid rgba(201, 164, 92, 0.15)"
+                borderTop: "1px solid rgba(201, 164, 92, 0.15)",
+                flexShrink: 0
             }}>
                 <button 
                     onClick={handleLogout}
@@ -675,22 +685,30 @@ function Sidebar() {
                 </div>
             )}
 
-            {/* Sidebar */}
+            {/* Sidebar - FIXED POSITION */}
             <div 
                 className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}
                 key={authVersion}
                 style={{
-                    display: "flex",
-                    flexDirection: "column",
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "270px",
                     height: "100vh",
                     background: "linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
                     borderRight: "1px solid rgba(201, 164, 92, 0.2)",
                     boxShadow: "4px 0 24px rgba(0, 0, 0, 0.3)",
-                    overflow: "hidden"
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    zIndex: 999
                 }}
             >
                 {sidebarContent}
             </div>
+
+            {/* Spacer div to push content right of fixed sidebar */}
+            <div style={{ width: "270px", flexShrink: 0 }} />
 
             <style>{`
                 @keyframes fadeIn {

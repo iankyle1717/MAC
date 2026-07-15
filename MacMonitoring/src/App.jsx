@@ -18,6 +18,7 @@ import { startHeartbeat, stopHeartbeat } from "./utils/heartbeat";
 import "./styles/global.css";
 import "./styles/login.css";
 import Newsfeed from "./pages/Newsfeed";
+import Messages from "./pages/Messages";
 
 const RoleBasedRedirect = () => {
     const user = getCurrentUser();
@@ -57,6 +58,14 @@ function App() {
                     element={
                         <ProtectedRoute>
                             <Dashboard />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/messages"
+                    element={
+                        <ProtectedRoute>
+                            <Messages />
                         </ProtectedRoute>
                     }
                 />

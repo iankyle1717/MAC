@@ -3,7 +3,6 @@ import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
 import { getCurrentUser } from "../utils/auth";
 
-// Generate year options outside component
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
@@ -25,46 +24,39 @@ function Devotion() {
     const [filterMonth, setFilterMonth] = useState("ALL");
     const [showForm, setShowForm] = useState(false);
 
-    // ── NEW: Devotion Checker features ──────────────────────────────────────
     const [isDevotionChecker, setIsDevotionChecker] = useState(false);
     const [assignedTribe, setAssignedTribe] = useState("");
     const [tribeLeaders, setTribeLeaders] = useState([]);
     const [selectedLeaderId, setSelectedLeaderId] = useState("");
     const [selectedLeaderName, setSelectedLeaderName] = useState("");
-    const [recordMode, setRecordMode] = useState("self"); // "self", "tribe", or "whole_tribe"
+    const [recordMode, setRecordMode] = useState("self");
 
-    // ── NEW: Whole Tribe summary data ───────────────────────────────────────
     const [wholeTribeRecords, setWholeTribeRecords] = useState([]);
     const [wholeTribeStats, setWholeTribeStats] = useState([]);
 
-    // ── NEW: Pagination for record cards ────────────────────────────────────
     const [cardPage, setCardPage] = useState(1);
     const CARDS_PER_PAGE = 10;
-    // ───────────────────────────────────────────────────────────────────────
+
+    const [activeTab, setActiveTab] = useState("records"); // "records" | "monthly"
 
     useEffect(() => {
         if (userRef.current) {
             checkDevotionCheckerRole();
             fetchRecords();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Reset page when records or filter change
     useEffect(() => {
         setCardPage(1);
     }, [filterMonth, records.length, recordMode, selectedLeaderId]);
 
-    // Check if current user is a Devotion Checker
     const checkDevotionCheckerRole = () => {
         const currentUser = userRef.current;
         if (!currentUser) return;
-
         const hasDJMinistry = currentUser.ministries?.includes("DISCIPLESHIP JOURNEY") ||
             currentUser.ministry === "DISCIPLESHIP JOURNEY";
         const isDevotionCheckerType = currentUser.dj_type === "Devotion Checker";
         const hasAssignedTribe = currentUser.assigned_tribe && currentUser.assigned_tribe !== "";
-
         if (hasDJMinistry && isDevotionCheckerType && hasAssignedTribe) {
             setIsDevotionChecker(true);
             setAssignedTribe(currentUser.assigned_tribe);
@@ -72,40 +64,29 @@ function Devotion() {
         }
     };
 
-    // Fetch all leaders in the assigned tribe
     const fetchTribeLeaders = async (tribe) => {
         const { data, error } = await supabase
             .from("tblMonitoring")
             .select("id, firstname, lastname, nickname")
             .eq("tribe", tribe)
             .order("firstname", { ascending: true });
-
-        if (error) {
-            console.error("Error fetching tribe leaders:", error);
-        } else {
-            setTribeLeaders(data || []);
-        }
+        if (error) console.error("Error fetching tribe leaders:", error);
+        else setTribeLeaders(data || []);
     };
 
     const fetchRecords = async () => {
         if (!userRef.current) return;
-
         setFetching(true);
         const { data, error } = await supabase
             .from("tblDevotion")
             .select("*")
             .eq("leader_id", userRef.current.id)
             .order("month", { ascending: false });
-
-        if (error) {
-            console.log("Fetch Error:", error);
-        } else {
-            setRecords(data || []);
-        }
+        if (error) console.log("Fetch Error:", error);
+        else setRecords(data || []);
         setFetching(false);
     };
 
-    // Fetch records for a specific leader (for Devotion Checker view)
     const fetchLeaderRecords = async (leaderId) => {
         setFetching(true);
         const { data, error } = await supabase
@@ -113,28 +94,20 @@ function Devotion() {
             .select("*")
             .eq("leader_id", leaderId)
             .order("month", { ascending: false });
-
-        if (error) {
-            console.log("Fetch Error:", error);
-        } else {
-            setRecords(data || []);
-        }
+        if (error) console.log("Fetch Error:", error);
+        else setRecords(data || []);
         setFetching(false);
     };
 
-    // ── NEW: Fetch all records for the whole tribe (one query) ──────────────
     const fetchWholeTribeRecords = async () => {
         if (!assignedTribe || tribeLeaders.length === 0) return;
-
         setFetching(true);
         const leaderIds = tribeLeaders.map(l => l.id);
-
         const { data, error } = await supabase
             .from("tblDevotion")
             .select("*")
             .in("leader_id", leaderIds)
             .order("month", { ascending: false });
-
         if (error) {
             console.error("Whole Tribe Fetch Error:", error);
             setWholeTribeRecords([]);
@@ -146,24 +119,14 @@ function Devotion() {
         setFetching(false);
     };
 
-    // ── NEW: Compute per-member stats for the whole tribe view ──────────────
     const computeWholeTribeStats = (allRecords) => {
         const now = new Date();
         const currentMonthName = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
         const stats = tribeLeaders.map(leader => {
             const leaderRecords = allRecords.filter(r => r.leader_id === leader.id);
-
-            // Find current month records
             const thisMonthRecords = leaderRecords.filter(r => r.month === currentMonthName);
-
-            // Calculate total completed days for current month
             const thisMonthTotal = thisMonthRecords.reduce((sum, r) => sum + (r.completed_days || 0), 0);
-
-            // Count total entries
             const totalEntries = leaderRecords.length;
-
-            // Compute consistent months (total_completed >= 25 per month)
             const monthly = {};
             leaderRecords.forEach((record) => {
                 const key = record.month;
@@ -171,13 +134,10 @@ function Devotion() {
                 monthly[key].totalCompleted += record.completed_days;
                 monthly[key].count++;
             });
-
             const consistentMonths = Object.values(monthly).filter(m => m.totalCompleted >= 25).length;
             const inconsistentMonths = Object.values(monthly).filter(m => m.totalCompleted < 25).length;
             const monthCount = Object.keys(monthly).length;
-
             const isConsistent = thisMonthTotal >= 25;
-
             return {
                 leaderId: leader.id,
                 name: `${leader.firstname} ${leader.lastname}${leader.nickname ? ` (${leader.nickname})` : ""}`,
@@ -196,41 +156,28 @@ function Devotion() {
                 statusBg: isConsistent ? "#dcfce7" : "#fee2e2"
             };
         });
-
-        // Sort by name
         stats.sort((a, b) => a.name.localeCompare(b.name));
         setWholeTribeStats(stats);
     };
-    // ───────────────────────────────────────────────────────────────────────
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
         if (!month || !year || !completedDays || !totalDays) {
             alert("Complete all fields.");
             return;
         }
-
-        // Determine whose record we're saving
         const targetLeaderId = recordMode === "tribe" && selectedLeaderId
             ? parseInt(selectedLeaderId)
             : userRef.current.id;
-
         const monthYear = `${month} ${year}`;
-
         setLoading(true);
-
         const insertData = {
             leader_id: targetLeaderId,
             month: monthYear,
             completed_days: parseInt(completedDays),
             total_days: parseInt(totalDays)
         };
-
-        const { error } = await supabase
-            .from("tblDevotion")
-            .insert([insertData]);
-
+        const { error } = await supabase.from("tblDevotion").insert([insertData]);
         if (error) {
             console.error("Insert Error:", error);
             alert(`Failed to record devotion.\n\nError: ${error.message}`);
@@ -242,7 +189,6 @@ function Devotion() {
             setSelectedLeaderId("");
             setSelectedLeaderName("");
             setShowForm(false);
-
             const newRecord = {
                 id: Date.now(),
                 leader_id: targetLeaderId,
@@ -252,18 +198,11 @@ function Devotion() {
                 created_at: new Date().toISOString()
             };
             setRecords(prev => [newRecord, ...prev]);
-
-            // ── NEW: Refresh whole tribe stats if in whole_tribe mode ─────
-            if (recordMode === "whole_tribe") {
-                fetchWholeTribeRecords();
-            }
-            // ───────────────────────────────────────────────────────────────
+            if (recordMode === "whole_tribe") fetchWholeTribeRecords();
         }
-
         setLoading(false);
     };
 
-    // Handle leader selection change
     const handleLeaderChange = (e) => {
         const leaderId = e.target.value;
         setSelectedLeaderId(leaderId);
@@ -273,11 +212,10 @@ function Devotion() {
             fetchLeaderRecords(parseInt(leaderId));
         } else {
             setSelectedLeaderName("");
-            fetchRecords(); // Back to self
+            fetchRecords();
         }
     };
 
-    // Handle record mode change
     const handleModeChange = (mode) => {
         setRecordMode(mode);
         if (mode === "self") {
@@ -289,10 +227,8 @@ function Devotion() {
             setSelectedLeaderName("");
             fetchWholeTribeRecords();
         }
-        // If mode === "tribe", keep current selection or let user pick from dropdown
     };
 
-    // ── NEW: Handle clicking a row in the whole tribe table ─────────────────
     const handleSelectLeaderFromTable = (leaderId) => {
         const leader = tribeLeaders.find(l => l.id === leaderId);
         if (leader) {
@@ -302,15 +238,11 @@ function Devotion() {
             fetchLeaderRecords(leaderId);
         }
     };
-    // ───────────────────────────────────────────────────────────────────────
 
-    // Group records by month and check consistency
     const getMonthlyStats = () => {
         const monthly = {};
-
         records.forEach((record) => {
             const key = record.month;
-
             if (!monthly[key]) {
                 monthly[key] = { monthName: key, count: 0, totalCompleted: 0, totalDays: 0, records: [] };
             }
@@ -319,7 +251,6 @@ function Devotion() {
             monthly[key].totalDays += record.total_days;
             monthly[key].records.push(record);
         });
-
         return Object.entries(monthly)
             .sort((a, b) => b[0].localeCompare(a[0]))
             .map(([key, data]) => ({
@@ -334,7 +265,6 @@ function Devotion() {
 
     const monthlyStats = getMonthlyStats();
 
-    // Get all unique months for filter dropdown
     const getMonthOptions = () => {
         const months = new Set();
         records.forEach((record) => {
@@ -345,28 +275,22 @@ function Devotion() {
 
     const monthOptions = getMonthOptions();
 
-    // Filter records by selected month
     const filteredRecords = filterMonth === "ALL"
         ? records
         : records.filter((record) => record.month === filterMonth);
 
-    // Get current month stats
     const now = new Date();
     const currentMonthName = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
     const currentMonth = monthlyStats.find(m => m.monthName === currentMonthName);
 
-    // ── NEW: Compute whole tribe summary numbers ──────────────────────────
     const wholeTribeConsistentCount = wholeTribeStats.filter(s => s.isConsistent).length;
     const wholeTribeTotalCount = wholeTribeStats.length;
-    // ───────────────────────────────────────────────────────────────────────
 
-    // ── NEW: Paginated record cards ────────────────────────────────────────
     const totalCardPages = Math.ceil(filteredRecords.length / CARDS_PER_PAGE) || 1;
     const displayedCards = filteredRecords.slice(
         (cardPage - 1) * CARDS_PER_PAGE,
         cardPage * CARDS_PER_PAGE
     );
-    // ───────────────────────────────────────────────────────────────────────
 
     if (!user) {
         return (
@@ -383,14 +307,11 @@ function Devotion() {
         <div className="layout">
             <Sidebar />
             <div className="content" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                {/* COMPACT HEADER */}
+                {/* Header */}
                 <div style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "12px",
-                    padding: "12px 0",
-                    borderBottom: "1px solid #e5e7eb"
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    marginBottom: "12px", padding: "12px 0", borderBottom: "1px solid #e5e7eb",
+                    flexWrap: "wrap", gap: "10px"
                 }}>
                     <div>
                         <h1 style={{ fontSize: "20px", margin: 0, fontWeight: 700 }}>
@@ -403,112 +324,60 @@ function Devotion() {
                         <p style={{ opacity: 0.7, margin: "2px 0 0 0", fontSize: "12px" }}>
                             Welcome, <strong>{user.firstname} {user.lastname}</strong> • {user.tribe}
                             {isDevotionChecker && (
-                                <span style={{ marginLeft: "8px", padding: "2px 8px", borderRadius: "10px", background: "#fef3c7", color: "#92400e", fontSize: "10px", fontWeight: 700 }}>
+                                <span style={{
+                                    marginLeft: "8px", padding: "2px 8px", borderRadius: "10px",
+                                    background: "#fef3c7", color: "#92400e", fontSize: "10px", fontWeight: 700
+                                }}>
                                     DJ Checker — {assignedTribe}
                                 </span>
                             )}
                         </p>
                     </div>
-                    {/* ── MODIFIED: Only show + Record button when NOT in whole_tribe mode ── */}
                     {recordMode !== "whole_tribe" && (
-                        <button
-                            className="btn-sm btn-primary"
-                            onClick={() => setShowForm(true)}
-                            style={{ padding: "6px 14px", fontSize: "13px" }}
-                        >
+                        <button className="btn-sm btn-primary" onClick={() => setShowForm(true)}
+                            style={{ padding: "6px 14px", fontSize: "13px" }}>
                             + Record Devotion
                         </button>
                     )}
-                    {/* ─────────────────────────────────────────────────────────────────── */}
                 </div>
 
-                {/* ── MODIFIED: Devotion Checker Mode Selector (3 buttons) ──────────── */}
+                {/* Mode Selector */}
                 {isDevotionChecker && (
                     <div style={{
-                        marginBottom: "15px",
-                        padding: "12px 14px",
-                        background: "#fffbeb",
-                        border: "1px solid #fcd34d",
-                        borderRadius: "10px"
+                        marginBottom: "15px", padding: "12px 14px",
+                        background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: "10px"
                     }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                             <span style={{ fontSize: "12px", fontWeight: 700, color: "#92400e" }}>
                                 📋 Record For:
                             </span>
-                            <div style={{ display: "flex", gap: "6px" }}>
-                                <button
-                                    onClick={() => handleModeChange("self")}
-                                    style={{
-                                        padding: "5px 14px",
-                                        borderRadius: "8px",
-                                        border: "1px solid",
-                                        borderColor: recordMode === "self" ? "#c9a45c" : "#d1d5db",
-                                        background: recordMode === "self" ? "#c9a45c" : "#fff",
-                                        color: recordMode === "self" ? "#fff" : "#374151",
-                                        fontSize: "12px",
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        transition: "all 0.2s"
-                                    }}
-                                >
-                                    Myself
-                                </button>
-                                <button
-                                    onClick={() => handleModeChange("tribe")}
-                                    style={{
-                                        padding: "5px 14px",
-                                        borderRadius: "8px",
-                                        border: "1px solid",
-                                        borderColor: recordMode === "tribe" ? "#c9a45c" : "#d1d5db",
-                                        background: recordMode === "tribe" ? "#c9a45c" : "#fff",
-                                        color: recordMode === "tribe" ? "#fff" : "#374151",
-                                        fontSize: "12px",
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        transition: "all 0.2s"
-                                    }}
-                                >
-                                    Tribe Member
-                                </button>
-                                {/* ── NEW: Whole Tribe button ─────────────────────────────── */}
-                                <button
-                                    onClick={() => handleModeChange("whole_tribe")}
-                                    style={{
-                                        padding: "5px 14px",
-                                        borderRadius: "8px",
-                                        border: "1px solid",
-                                        borderColor: recordMode === "whole_tribe" ? "#c9a45c" : "#d1d5db",
-                                        background: recordMode === "whole_tribe" ? "#c9a45c" : "#fff",
-                                        color: recordMode === "whole_tribe" ? "#fff" : "#374151",
-                                        fontSize: "12px",
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                        transition: "all 0.2s"
-                                    }}
-                                >
-                                    Whole {assignedTribe}
-                                </button>
-                                {/* ─────────────────────────────────────────────────────────── */}
+                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                {["self", "tribe", "whole_tribe"].map((mode) => {
+                                    const labels = { self: "Myself", tribe: "Tribe Member", whole_tribe: `Whole ${assignedTribe}` };
+                                    return (
+                                        <button key={mode} onClick={() => handleModeChange(mode)}
+                                            style={{
+                                                padding: "5px 14px", borderRadius: "8px", border: "1px solid",
+                                                borderColor: recordMode === mode ? "#c9a45c" : "#d1d5db",
+                                                background: recordMode === mode ? "#c9a45c" : "#fff",
+                                                color: recordMode === mode ? "#fff" : "#374151",
+                                                fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s"
+                                            }}>
+                                            {labels[mode]}
+                                        </button>
+                                    );
+                                })}
                             </div>
-
                             {recordMode === "tribe" && (
-                                <select
-                                    value={selectedLeaderId}
-                                    onChange={handleLeaderChange}
+                                <select value={selectedLeaderId} onChange={handleLeaderChange}
                                     style={{
-                                        padding: "6px 10px",
-                                        fontSize: "13px",
-                                        borderRadius: "6px",
-                                        border: "1px solid #d1d5db",
-                                        minWidth: "200px",
-                                        background: "#fff"
-                                    }}
-                                >
+                                        padding: "6px 10px", fontSize: "13px", borderRadius: "6px",
+                                        border: "1px solid #d1d5db", minWidth: "200px", background: "#fff"
+                                    }}>
                                     <option value="">— Select Tribe Member —</option>
                                     {tribeLeaders.map((leader) => (
                                         <option key={leader.id} value={String(leader.id)}>
-                                            {leader.firstname} {leader.lastname}
-                                            {leader.nickname ? ` (${leader.nickname})` : ""}
+                                            {leader.firstname} {leader.lastname}{leader.nickname ? ` (${leader.nickname})` : ""}
                                         </option>
                                     ))}
                                 </select>
@@ -516,71 +385,35 @@ function Devotion() {
                         </div>
                     </div>
                 )}
-                {/* ───────────────────────────────────────────────────────────────────── */}
 
-                {/* ── NEW: WHOLE TRIBE SUMMARY TABLE ──────────────────────────────────── */}
+                {/* Whole Tribe View */}
                 {recordMode === "whole_tribe" && (
                     <div style={{ marginBottom: "20px" }}>
-                        {/* Whole Tribe Summary Stats */}
                         <div style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-                            gap: "8px",
-                            marginBottom: "15px"
+                            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                            gap: "8px", marginBottom: "15px"
                         }}>
-                            <div style={{
-                                padding: "10px 12px",
-                                borderRadius: "8px",
-                                background: "#fff",
-                                border: "1px solid #e5e7eb"
-                            }}>
-                                <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>
-                                    Tribe Members
-                                </h3>
-                                <h1 style={{ fontSize: "22px", margin: 0, color: "#111827" }}>
-                                    {wholeTribeTotalCount}
-                                </h1>
+                            <div style={{ padding: "10px 12px", borderRadius: "8px", background: "#fff", border: "1px solid #e5e7eb" }}>
+                                <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Tribe Members</h3>
+                                <h1 style={{ fontSize: "22px", margin: 0, color: "#111827" }}>{wholeTribeTotalCount}</h1>
                             </div>
-                            <div style={{
-                                padding: "10px 12px",
-                                borderRadius: "8px",
-                                background: "#ecfdf5",
-                                border: "1px solid #bbf7d0"
-                            }}>
-                                <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>
-                                    Consistent This Month
-                                </h3>
-                                <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>
-                                    {wholeTribeConsistentCount}
-                                </h1>
+                            <div style={{ padding: "10px 12px", borderRadius: "8px", background: "#ecfdf5", border: "1px solid #bbf7d0" }}>
+                                <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>Consistent This Month</h3>
+                                <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>{wholeTribeConsistentCount}</h1>
                             </div>
-                            <div style={{
-                                padding: "10px 12px",
-                                borderRadius: "8px",
-                                background: "#fef2f2",
-                                border: "1px solid #fecaca"
-                            }}>
-                                <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#dc2626", fontWeight: 500 }}>
-                                    Inconsistent This Month
-                                </h3>
-                                <h1 style={{ fontSize: "22px", margin: 0, color: "#dc2626" }}>
-                                    {wholeTribeTotalCount - wholeTribeConsistentCount}
-                                </h1>
+                            <div style={{ padding: "10px 12px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca" }}>
+                                <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#dc2626", fontWeight: 500 }}>Inconsistent This Month</h3>
+                                <h1 style={{ fontSize: "22px", margin: 0, color: "#dc2626" }}>{wholeTribeTotalCount - wholeTribeConsistentCount}</h1>
                             </div>
                         </div>
 
-                        {/* Whole Tribe Members Table */}
                         <div className="excel-card" style={{ borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
-                            <div className="excel-header" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
-                                    {assignedTribe} Members — This Month Overview
-                                </h2>
-                                <span style={{ fontSize: "11px", color: "#6b7280" }}>
-                                    Click a row to view / record for that member
-                                </span>
+                            <div className="excel-header" style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                                <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>{assignedTribe} Members — This Month Overview</h2>
+                                <span style={{ fontSize: "11px", color: "#6b7280" }}>Click a row to view / record for that member</span>
                             </div>
-                            <div className="excel-wrapper">
-                                <table className="excel-table" style={{ fontSize: "12px" }}>
+                            <div className="excel-wrapper" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                                <table className="excel-table" style={{ fontSize: "12px", minWidth: "700px" }}>
                                     <thead>
                                         <tr>
                                             <th style={{ padding: "8px 10px", textAlign: "left" }}>Member</th>
@@ -596,59 +429,23 @@ function Devotion() {
                                     </thead>
                                     <tbody>
                                         {wholeTribeStats.map((member) => (
-                                            <tr 
-                                                key={member.leaderId}
+                                            <tr key={member.leaderId}
                                                 style={{ cursor: "pointer", transition: "background 0.15s" }}
                                                 onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                                                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                            >
-                                                <td style={{ padding: "6px 10px", fontWeight: 600 }}>
-                                                    {member.name}
-                                                </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: 700, color: member.isConsistent ? "#16a34a" : "#dc2626" }}>
-                                                    {member.thisMonthTotal}
-                                                </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>
-                                                    {member.thisMonthEntries}
-                                                </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#9ca3af" }}>
-                                                    25
-                                                </td>
+                                                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                                                <td style={{ padding: "6px 10px", fontWeight: 600 }}>{member.name}</td>
+                                                <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: 700, color: member.isConsistent ? "#16a34a" : "#dc2626" }}>{member.thisMonthTotal}</td>
+                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{member.thisMonthEntries}</td>
+                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#9ca3af" }}>25</td>
                                                 <td style={{ padding: "6px 10px", textAlign: "center" }}>
-                                                    <span style={{
-                                                        padding: "2px 8px",
-                                                        borderRadius: "10px",
-                                                        background: member.statusBg,
-                                                        color: member.statusColor,
-                                                        fontSize: "10px",
-                                                        fontWeight: "700"
-                                                    }}>
-                                                        {member.status}
-                                                    </span>
+                                                    <span style={{ padding: "2px 8px", borderRadius: "10px", background: member.statusBg, color: member.statusColor, fontSize: "10px", fontWeight: "700" }}>{member.status}</span>
                                                 </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>
-                                                    {member.totalEntries}
-                                                </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#16a34a", fontWeight: 600 }}>
-                                                    {member.consistentMonths}
-                                                </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#dc2626" }}>
-                                                    {member.inconsistentMonths}
-                                                </td>
+                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{member.totalEntries}</td>
+                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#16a34a", fontWeight: 600 }}>{member.consistentMonths}</td>
+                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#dc2626" }}>{member.inconsistentMonths}</td>
                                                 <td style={{ padding: "6px 10px", textAlign: "center" }}>
-                                                    <button
-                                                        onClick={() => handleSelectLeaderFromTable(member.leaderId)}
-                                                        style={{
-                                                            padding: "3px 10px",
-                                                            borderRadius: "6px",
-                                                            border: "1px solid #c9a45c",
-                                                            background: "#fff",
-                                                            color: "#92400e",
-                                                            fontSize: "11px",
-                                                            fontWeight: 600,
-                                                            cursor: "pointer"
-                                                        }}
-                                                    >
+                                                    <button onClick={() => handleSelectLeaderFromTable(member.leaderId)}
+                                                        style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid #c9a45c", background: "#fff", color: "#92400e", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
                                                         View / Record
                                                     </button>
                                                 </td>
@@ -660,29 +457,19 @@ function Devotion() {
                         </div>
                     </div>
                 )}
-                {/* ───────────────────────────────────────────────────────────────────── */}
 
-                {/* ── MODIFIED: Only show stats cards and records when NOT in whole_tribe mode ── */}
+                {/* Self / Tribe Member View */}
                 {recordMode !== "whole_tribe" && (
                     <>
-                        {/* COMPACT STATS CARDS */}
-                        <div
-                            style={{
-                                display: "grid",
-                                gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))",
-                                gap: "8px",
-                                marginBottom: "15px"
-                            }}
-                        >
-                            <div
-                                className="record-card"
-                                style={{
-                                    border: currentMonth ? `2px solid ${currentMonth.statusColor}` : "2px solid #e5e7eb",
-                                    padding: "10px 12px",
-                                    borderRadius: "8px",
-                                    background: "#fff"
-                                }}
-                            >
+                        {/* Stats Cards */}
+                        <div style={{
+                            display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                            gap: "8px", marginBottom: "15px"
+                        }}>
+                            <div className="record-card" style={{
+                                border: currentMonth ? `2px solid ${currentMonth.statusColor}` : "2px solid #e5e7eb",
+                                padding: "10px 12px", borderRadius: "8px", background: "#fff"
+                            }}>
                                 <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>
                                     This Month ({currentMonthName})
                                 </h3>
@@ -691,77 +478,65 @@ function Devotion() {
                                 </h1>
                                 <p style={{ fontSize: "10px", marginTop: "2px", margin: 0, color: "#9ca3af" }}>Target: 25 days</p>
                                 {currentMonth && (
-                                    <span
-                                        style={{
-                                            display: "inline-block",
-                                            marginTop: "4px",
-                                            padding: "2px 8px",
-                                            borderRadius: "10px",
-                                            background: currentMonth.statusBg,
-                                            color: currentMonth.statusColor,
-                                            fontSize: "10px",
-                                            fontWeight: "700"
-                                        }}
-                                    >
+                                    <span style={{ display: "inline-block", marginTop: "4px", padding: "2px 8px", borderRadius: "10px", background: currentMonth.statusBg, color: currentMonth.statusColor, fontSize: "10px", fontWeight: "700" }}>
                                         {currentMonth.status}
                                     </span>
                                 )}
                                 {!currentMonth && (
-                                    <span
-                                        style={{
-                                            display: "inline-block",
-                                            marginTop: "4px",
-                                            padding: "2px 8px",
-                                            borderRadius: "10px",
-                                            background: "#f3f4f6",
-                                            color: "#6b7280",
-                                            fontSize: "10px",
-                                            fontWeight: "700"
-                                        }}
-                                    >
-                                        NO RECORDS
-                                    </span>
+                                    <span style={{ display: "inline-block", marginTop: "4px", padding: "2px 8px", borderRadius: "10px", background: "#f3f4f6", color: "#6b7280", fontSize: "10px", fontWeight: "700" }}>NO RECORDS</span>
                                 )}
                             </div>
-
                             <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#fff", border: "1px solid #e5e7eb" }}>
                                 <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Total Entries</h3>
                                 <h1 style={{ fontSize: "22px", margin: 0, color: "#111827" }}>{records.length}</h1>
                             </div>
-
                             <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#ecfdf5", border: "1px solid #bbf7d0" }}>
                                 <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>Consistent Months</h3>
-                                <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>
-                                    {monthlyStats.filter(m => m.status === "CONSISTENT").length}
-                                </h1>
+                                <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>{monthlyStats.filter(m => m.status === "CONSISTENT").length}</h1>
                             </div>
-
                             <div className="record-card" style={{ padding: "10px 12px", borderRadius: "8px", background: "#fef2f2", border: "1px solid #fecaca" }}>
                                 <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#dc2626", fontWeight: 500 }}>Inconsistent Months</h3>
-                                <h1 style={{ fontSize: "22px", margin: 0, color: "#dc2626" }}>
-                                    {monthlyStats.filter(m => m.status === "INCONSISTENT").length}
-                                </h1>
+                                <h1 style={{ fontSize: "22px", margin: 0, color: "#dc2626" }}>{monthlyStats.filter(m => m.status === "INCONSISTENT").length}</h1>
                             </div>
                         </div>
 
-                        {/* ── NEW: Two-column layout ─────────────────────────────────────── */}
-                        <div style={{ 
-                            display: "flex", 
-                            gap: "16px", 
-                            alignItems: "flex-start", 
-                            overflow: "hidden",
-                            flex: 1,
-                            minHeight: 0
-                        }}>
+                        {/* Mobile Tab Switcher */}
+                        <div style={{
+                            display: "none",
+                            marginBottom: "12px",
+                            borderBottom: "1px solid #e5e7eb"
+                        }} className="mobile-tabs">
+                            <button onClick={() => setActiveTab("records")}
+                                style={{
+                                    padding: "10px 16px", border: "none", background: "none",
+                                    borderBottom: `2px solid ${activeTab === "records" ? "#c9a45c" : "transparent"}`,
+                                    color: activeTab === "records" ? "#c9a45c" : "#6b7280",
+                                    fontWeight: 600, fontSize: "13px", cursor: "pointer"
+                                }}>
+                                📋 Records
+                            </button>
+                            <button onClick={() => setActiveTab("monthly")}
+                                style={{
+                                    padding: "10px 16px", border: "none", background: "none",
+                                    borderBottom: `2px solid ${activeTab === "monthly" ? "#c9a45c" : "transparent"}`,
+                                    color: activeTab === "monthly" ? "#c9a45c" : "#6b7280",
+                                    fontWeight: 600, fontSize: "13px", cursor: "pointer"
+                                }}>
+                                📊 Monthly Report
+                            </button>
+                        </div>
 
-                            {/* LEFT COLUMN: Monthly Breakdown Table */}
-                            <div style={{ 
-                                flex: "1 1 0", 
-                                minWidth: "0",
-                                overflowY: "auto",
+                        {/* Two Column Layout - Stacks on Mobile */}
+                        <div style={{
+                            display: "flex", gap: "16px", alignItems: "flex-start",
+                            overflow: "hidden", flex: 1, minHeight: 0
+                        }} className="devotion-columns">
+
+                            {/* LEFT: Monthly Table */}
+                            <div style={{
+                                flex: "1 1 0", minWidth: "0", overflowY: "auto",
                                 maxHeight: "calc(100vh - 260px)"
-                            }}>
-                                {/* COMPACT MONTHLY BREAKDOWN TABLE */}
+                            }} className="column-left">
                                 {monthlyStats.length > 0 && (
                                     <div className="excel-card" style={{ borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
                                         <div className="excel-header" style={{ padding: "10px 14px" }}>
@@ -771,8 +546,8 @@ function Devotion() {
                                                     : "Monthly Devotion Consistency Report"}
                                             </h2>
                                         </div>
-                                        <div className="excel-wrapper">
-                                            <table className="excel-table" style={{ fontSize: "12px" }}>
+                                        <div className="excel-wrapper" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                                            <table className="excel-table" style={{ fontSize: "12px", minWidth: "600px" }}>
                                                 <thead>
                                                     <tr>
                                                         <th style={{ padding: "8px 10px" }}>Month</th>
@@ -793,23 +568,12 @@ function Devotion() {
                                                             <td style={{ padding: "6px 10px" }}>{month.avgCompleted} days</td>
                                                             <td style={{ padding: "6px 10px" }}>25</td>
                                                             <td style={{ padding: "6px 10px" }}>
-                                                                <span
-                                                                    style={{
-                                                                        padding: "2px 8px",
-                                                                        borderRadius: "10px",
-                                                                        background: month.statusBg,
-                                                                        color: month.statusColor,
-                                                                        fontSize: "10px",
-                                                                        fontWeight: "700"
-                                                                    }}
-                                                                >
+                                                                <span style={{ padding: "2px 8px", borderRadius: "10px", background: month.statusBg, color: month.statusColor, fontSize: "10px", fontWeight: "700" }}>
                                                                     {month.status}
                                                                 </span>
                                                             </td>
                                                             <td style={{ padding: "6px 10px", fontSize: "11px", color: "#6b7280" }}>
-                                                                {month.totalCompleted >= 25
-                                                                    ? "✅ Keep it up!"
-                                                                    : `❌ ${25 - month.totalCompleted} days missing`}
+                                                                {month.totalCompleted >= 25 ? "✅ Keep it up!" : `❌ ${25 - month.totalCompleted} days missing`}
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -820,51 +584,25 @@ function Devotion() {
                                 )}
                             </div>
 
-                            {/* RIGHT COLUMN: Record Cards (vertical, scrollable) */}
-                            <div style={{ 
-                                flex: "0 0 320px", 
-                                maxWidth: "320px",
-                                overflowY: "auto",
-                                maxHeight: "calc(100vh - 260px)",
-                                display: "flex",
-                                flexDirection: "column"
-                            }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                            {/* RIGHT: Record Cards */}
+                            <div style={{
+                                flex: "0 0 320px", maxWidth: "320px", overflowY: "auto",
+                                maxHeight: "calc(100vh - 260px)", display: "flex", flexDirection: "column"
+                            }} className="column-right">
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
                                     <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
                                         {recordMode === "tribe" && selectedLeaderName
                                             ? `${selectedLeaderName}'s Records`
                                             : "My Records"}
-                                        <span
-                                            style={{
-                                                marginLeft: "8px",
-                                                padding: "2px 8px",
-                                                borderRadius: "10px",
-                                                background: "#dbeafe",
-                                                color: "#1e40af",
-                                                fontSize: "11px",
-                                                fontWeight: 600
-                                            }}
-                                        >
+                                        <span style={{ marginLeft: "8px", padding: "2px 8px", borderRadius: "10px", background: "#dbeafe", color: "#1e40af", fontSize: "11px", fontWeight: 600 }}>
                                             {filteredRecords.length} entries
                                         </span>
                                     </h2>
-
-                                    <select
-                                        value={filterMonth}
-                                        onChange={(e) => setFilterMonth(e.target.value)}
-                                        style={{
-                                            padding: "4px 8px",
-                                            borderRadius: "6px",
-                                            border: "1px solid #e5e7eb",
-                                            fontSize: "12px",
-                                            cursor: "pointer"
-                                        }}
-                                    >
+                                    <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}
+                                        style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #e5e7eb", fontSize: "12px", cursor: "pointer" }}>
                                         <option value="ALL">All Months</option>
                                         {monthOptions.map((month) => (
-                                            <option key={month.key} value={month.key}>
-                                                {month.label}
-                                            </option>
+                                            <option key={month.key} value={month.key}>{month.label}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -878,69 +616,35 @@ function Devotion() {
                                             : "No devotion records yet."}
                                     </p>
                                 ) : (
-                                    <div
-                                        style={{
-                                            display: "flex",
-                                            flexDirection: "column",
-                                            gap: "8px",
-                                            paddingRight: "6px"
-                                        }}
-                                    >
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingRight: "6px" }}>
                                         {displayedCards.map((record) => (
-                                            <div
-                                                key={record.id}
-                                                style={{
-                                                    padding: "10px 12px",
-                                                    borderRadius: "8px",
-                                                    background: "#f9fafb",
-                                                    border: "1px solid #e5e7eb",
-                                                    flexShrink: 0
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        justifyContent: "space-between",
-                                                        alignItems: "center",
-                                                        marginBottom: "6px"
-                                                    }}
-                                                >
+                                            <div key={record.id} style={{
+                                                padding: "10px 12px", borderRadius: "8px",
+                                                background: "#f9fafb", border: "1px solid #e5e7eb", flexShrink: 0
+                                            }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                                                     <h3 style={{ margin: 0, fontSize: "13px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
                                                         {record.month}
                                                     </h3>
-                                                    <span
-                                                        style={{
-                                                            padding: "2px 8px",
-                                                            borderRadius: "8px",
-                                                            background: record.completed_days >= 25 ? "#dcfce7" : "#fee2e2",
-                                                            color: record.completed_days >= 25 ? "#16a34a" : "#dc2626",
-                                                            fontSize: "10px",
-                                                            fontWeight: "600",
-                                                            marginLeft: "6px",
-                                                            flexShrink: 0
-                                                        }}
-                                                    >
+                                                    <span style={{
+                                                        padding: "2px 8px", borderRadius: "8px",
+                                                        background: record.completed_days >= 25 ? "#dcfce7" : "#fee2e2",
+                                                        color: record.completed_days >= 25 ? "#16a34a" : "#dc2626",
+                                                        fontSize: "10px", fontWeight: "600", marginLeft: "6px", flexShrink: 0
+                                                    }}>
                                                         {record.completed_days >= 25 ? "Consistent" : "Inconsistent"}
                                                     </span>
                                                 </div>
                                                 <div style={{ display: "flex", gap: "12px", marginBottom: "6px" }}>
-                                                    <p style={{ margin: 0, color: "#6b7280", fontSize: "11px" }}>
-                                                        ✅ <strong>{record.completed_days}</strong> done
-                                                    </p>
-                                                    <p style={{ margin: 0, color: "#9ca3af", fontSize: "11px" }}>
-                                                        📅 {record.total_days} total
-                                                    </p>
+                                                    <p style={{ margin: 0, color: "#6b7280", fontSize: "11px" }}>✅ <strong>{record.completed_days}</strong> done</p>
+                                                    <p style={{ margin: 0, color: "#9ca3af", fontSize: "11px" }}>📅 {record.total_days} total</p>
                                                 </div>
                                                 <div style={{ background: "#e5e7eb", borderRadius: "6px", height: "6px", overflow: "hidden" }}>
-                                                    <div
-                                                        style={{
-                                                            width: `${(record.completed_days / record.total_days) * 100}%`,
-                                                            height: "100%",
-                                                            background: record.completed_days >= 25 ? "#16a34a" : "#f59e0b",
-                                                            borderRadius: "6px",
-                                                            transition: "width 0.3s"
-                                                        }}
-                                                    />
+                                                    <div style={{
+                                                        width: `${(record.completed_days / record.total_days) * 100}%`,
+                                                        height: "100%", background: record.completed_days >= 25 ? "#16a34a" : "#f59e0b",
+                                                        borderRadius: "6px", transition: "width 0.3s"
+                                                    }} />
                                                 </div>
                                                 <p style={{ margin: "4px 0 0 0", color: "#9ca3af", fontSize: "10px", textAlign: "right" }}>
                                                     {Math.round((record.completed_days / record.total_days) * 100)}%
@@ -948,114 +652,44 @@ function Devotion() {
                                             </div>
                                         ))}
 
-                                        {/* ── NEW: Pagination controls ─────────────────────────── */}
                                         {filteredRecords.length > CARDS_PER_PAGE && (
-                                            <div style={{
-                                                display: "flex",
-                                                justifyContent: "center",
-                                                alignItems: "center",
-                                                gap: "6px",
-                                                padding: "8px 0",
-                                                flexShrink: 0
-                                            }}>
-                                                <button
-                                                    onClick={() => setCardPage(p => Math.max(1, p - 1))}
-                                                    disabled={cardPage === 1}
-                                                    style={{
-                                                        padding: "4px 10px",
-                                                        borderRadius: "6px",
-                                                        border: "1px solid #d1d5db",
-                                                        background: cardPage === 1 ? "#f3f4f6" : "#fff",
-                                                        color: cardPage === 1 ? "#9ca3af" : "#374151",
-                                                        fontSize: "11px",
-                                                        fontWeight: 600,
-                                                        cursor: cardPage === 1 ? "not-allowed" : "pointer",
-                                                        transition: "all 0.2s"
-                                                    }}
-                                                >
+                                            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", padding: "8px 0", flexShrink: 0 }}>
+                                                <button onClick={() => setCardPage(p => Math.max(1, p - 1))} disabled={cardPage === 1}
+                                                    style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: cardPage === 1 ? "#f3f4f6" : "#fff", color: cardPage === 1 ? "#9ca3af" : "#374151", fontSize: "11px", fontWeight: 600, cursor: cardPage === 1 ? "not-allowed" : "pointer" }}>
                                                     ← Prev
                                                 </button>
-                                                <span style={{
-                                                    fontSize: "11px",
-                                                    color: "#6b7280",
-                                                    fontWeight: 500,
-                                                    minWidth: "60px",
-                                                    textAlign: "center"
-                                                }}>
+                                                <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500, minWidth: "60px", textAlign: "center" }}>
                                                     Page {cardPage} of {totalCardPages}
                                                 </span>
-                                                <button
-                                                    onClick={() => setCardPage(p => Math.min(totalCardPages, p + 1))}
-                                                    disabled={cardPage === totalCardPages}
-                                                    style={{
-                                                        padding: "4px 10px",
-                                                        borderRadius: "6px",
-                                                        border: "1px solid #d1d5db",
-                                                        background: cardPage === totalCardPages ? "#f3f4f6" : "#fff",
-                                                        color: cardPage === totalCardPages ? "#9ca3af" : "#374151",
-                                                        fontSize: "11px",
-                                                        fontWeight: 600,
-                                                        cursor: cardPage === totalCardPages ? "not-allowed" : "pointer",
-                                                        transition: "all 0.2s"
-                                                    }}
-                                                >
+                                                <button onClick={() => setCardPage(p => Math.min(totalCardPages, p + 1))} disabled={cardPage === totalCardPages}
+                                                    style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: cardPage === totalCardPages ? "#f3f4f6" : "#fff", color: cardPage === totalCardPages ? "#9ca3af" : "#374151", fontSize: "11px", fontWeight: 600, cursor: cardPage === totalCardPages ? "not-allowed" : "pointer" }}>
                                                     Next →
                                                 </button>
                                             </div>
                                         )}
-                                        {/* ─────────────────────────────────────────────────── */}
                                     </div>
                                 )}
                             </div>
                         </div>
-                        {/* ───────────────────────────────────────────────────────────────────── */}
                     </>
                 )}
-                {/* ───────────────────────────────────────────────────────────────────── */}
             </div>
 
-            {/* RECORD DEVOTION MODAL */}
+            {/* Modal */}
             {showForm && (
-                <div
-                    className="modal-overlay"
-                    style={{
-                        position: "fixed",
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: "rgba(0,0,0,0.5)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 1000,
-                        padding: "20px"
-                    }}
-                    onClick={(e) => {
-                        if (e.target === e.currentTarget) setShowForm(false);
-                    }}
-                >
-                    <div
-                        style={{
-                            background: "#fff",
-                            borderRadius: "12px",
-                            width: "100%",
-                            maxWidth: "480px",
-                            maxHeight: "90vh",
-                            overflow: "auto",
-                            position: "relative"
-                        }}
-                    >
+                <div className="modal-overlay" style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center",
+                    justifyContent: "center", zIndex: 1000, padding: "20px"
+                }} onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+                    <div style={{
+                        background: "#fff", borderRadius: "12px", width: "100%",
+                        maxWidth: "480px", maxHeight: "90vh", overflow: "auto", position: "relative"
+                    }}>
                         <div style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: "14px 18px",
-                            borderBottom: "1px solid #e5e7eb",
-                            position: "sticky",
-                            top: 0,
-                            background: "#fff",
-                            zIndex: 10,
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            padding: "14px 18px", borderBottom: "1px solid #e5e7eb",
+                            position: "sticky", top: 0, background: "#fff", zIndex: 10,
                             borderRadius: "12px 12px 0 0"
                         }}>
                             <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>
@@ -1063,119 +697,41 @@ function Devotion() {
                                     ? `Record Devotion for ${selectedLeaderName}`
                                     : "Record New Devotion"}
                             </h2>
-                            <button
-                                onClick={() => setShowForm(false)}
-                                style={{
-                                    background: "none",
-                                    border: "none",
-                                    fontSize: "18px",
-                                    cursor: "pointer",
-                                    color: "#6b7280",
-                                    padding: "4px",
-                                    lineHeight: 1
-                                }}
-                            >
-                                ✕
-                            </button>
+                            <button onClick={() => setShowForm(false)}
+                                style={{ background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#6b7280", padding: "4px", lineHeight: 1 }}>✕</button>
                         </div>
                         <div style={{ padding: "14px 18px 18px" }}>
-                            {/* ── Show who we're recording for ───────────────── */}
                             {isDevotionChecker && recordMode === "tribe" && selectedLeaderId && (
-                                <div style={{
-                                    padding: "8px 12px",
-                                    background: "#fef3c7",
-                                    borderRadius: "8px",
-                                    marginBottom: "12px",
-                                    border: "1px solid #fcd34d"
-                                }}>
-                                    <p style={{ margin: 0, fontSize: "12px", color: "#92400e", fontWeight: 600 }}>
-                                        📝 Recording for: {selectedLeaderName}
-                                    </p>
+                                <div style={{ padding: "8px 12px", background: "#fef3c7", borderRadius: "8px", marginBottom: "12px", border: "1px solid #fcd34d" }}>
+                                    <p style={{ margin: 0, fontSize: "12px", color: "#92400e", fontWeight: 600 }}>📝 Recording for: {selectedLeaderName}</p>
                                 </div>
                             )}
-
                             {isDevotionChecker && recordMode === "tribe" && !selectedLeaderId && (
-                                <div style={{
-                                    padding: "8px 12px",
-                                    background: "#fee2e2",
-                                    borderRadius: "8px",
-                                    marginBottom: "12px",
-                                    border: "1px solid #fecaca"
-                                }}>
-                                    <p style={{ margin: 0, fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>
-                                        ⚠️ Please select a tribe member above before recording.
-                                    </p>
+                                <div style={{ padding: "8px 12px", background: "#fee2e2", borderRadius: "8px", marginBottom: "12px", border: "1px solid #fecaca" }}>
+                                    <p style={{ margin: 0, fontSize: "12px", color: "#dc2626", fontWeight: 600 }}>⚠️ Please select a tribe member above before recording.</p>
                                 </div>
                             )}
-                            {/* ─────────────────────────────────────────────────────── */}
-
                             <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                                <div style={{ display: "flex", gap: "8px" }}>
-                                    <select
-                                        value={month}
-                                        onChange={(e) => setMonth(e.target.value)}
-                                        style={{ flex: 2, padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
-                                    >
+                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    <select value={month} onChange={(e) => setMonth(e.target.value)}
+                                        style={{ flex: 2, minWidth: "140px", padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}>
                                         <option value="">Select Month</option>
-                                        <option value="January">January</option>
-                                        <option value="February">February</option>
-                                        <option value="March">March</option>
-                                        <option value="April">April</option>
-                                        <option value="May">May</option>
-                                        <option value="June">June</option>
-                                        <option value="July">July</option>
-                                        <option value="August">August</option>
-                                        <option value="September">September</option>
-                                        <option value="October">October</option>
-                                        <option value="November">November</option>
-                                        <option value="December">December</option>
-                                    </select>
-
-                                    <select
-                                        value={year}
-                                        onChange={(e) => setYear(e.target.value)}
-                                        style={{ flex: 1, padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
-                                    >
-                                        <option value="">Year</option>
-                                        {yearOptions.map((yr) => (
-                                            <option key={yr} value={yr}>
-                                                {yr}
-                                            </option>
+                                        {["January","February","March","April","May","June","July","August","September","October","November","December"].map(m => (
+                                            <option key={m} value={m}>{m}</option>
                                         ))}
                                     </select>
+                                    <select value={year} onChange={(e) => setYear(e.target.value)}
+                                        style={{ flex: 1, minWidth: "80px", padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}>
+                                        <option value="">Year</option>
+                                        {yearOptions.map((yr) => (<option key={yr} value={yr}>{yr}</option>))}
+                                    </select>
                                 </div>
-
-                                <input
-                                    type="number"
-                                    placeholder="Completed Days"
-                                    value={completedDays}
-                                    onChange={(e) => setCompletedDays(e.target.value)}
-                                    min="0"
-                                    max="31"
-                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
-                                />
-
-                                <input
-                                    type="number"
-                                    placeholder="Total Days in Month"
-                                    value={totalDays}
-                                    onChange={(e) => setTotalDays(e.target.value)}
-                                    min="1"
-                                    max="31"
-                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
-                                />
-
-                                <button
-                                    type="submit"
-                                    disabled={recordMode === "tribe" && !selectedLeaderId}
-                                    style={{
-                                        marginTop: "4px",
-                                        padding: "8px",
-                                        fontSize: "13px",
-                                        opacity: recordMode === "tribe" && !selectedLeaderId ? 0.5 : 1,
-                                        cursor: recordMode === "tribe" && !selectedLeaderId ? "not-allowed" : "pointer"
-                                    }}
-                                >
+                                <input type="number" placeholder="Completed Days" value={completedDays} onChange={(e) => setCompletedDays(e.target.value)} min="0" max="31"
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }} />
+                                <input type="number" placeholder="Total Days in Month" value={totalDays} onChange={(e) => setTotalDays(e.target.value)} min="1" max="31"
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }} />
+                                <button type="submit" disabled={recordMode === "tribe" && !selectedLeaderId}
+                                    style={{ marginTop: "4px", padding: "8px", fontSize: "13px", opacity: recordMode === "tribe" && !selectedLeaderId ? 0.5 : 1, cursor: recordMode === "tribe" && !selectedLeaderId ? "not-allowed" : "pointer" }}>
                                     {loading ? "Recording..." : "Record Devotion"}
                                 </button>
                             </form>
@@ -1183,6 +739,36 @@ function Devotion() {
                     </div>
                 </div>
             )}
+
+            {/* Mobile CSS */}
+            <style>{`
+                @media (max-width: 768px) {
+                    .devotion-columns {
+                        flex-direction: column !important;
+                        gap: 20px !important;
+                    }
+                    .column-left, .column-right {
+                        flex: 1 1 100% !important;
+                        max-width: 100% !important;
+                        width: 100% !important;
+                    }
+                    .mobile-tabs {
+                        display: flex !important;
+                    }
+                    .column-left {
+                        display: none;
+                    }
+                    .column-left.active-tab-visible {
+                        display: block !important;
+                    }
+                    .column-right {
+                        display: none;
+                    }
+                    .column-right.active-tab-visible {
+                        display: flex !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }
