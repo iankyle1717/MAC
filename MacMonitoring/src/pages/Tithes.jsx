@@ -113,7 +113,7 @@ function GrossInput({ leaderId, monthKey, defaultGross, monthlyGrossMap, onCommi
                 }}
             />
             {hasOverride && (
-                <span title="Override active — click to clear" 
+                <span title="Override active — click to clear"
                     onClick={() => { onCommit(leaderId, monthKey, null); setValue(""); setHasOverride(false); }}
                     style={{ cursor: "pointer", fontSize: "12px", color: "#b8934a", fontWeight: 700 }}>
                     ✕
@@ -140,6 +140,16 @@ function Tithes() {
         return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     });
     const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear().toString());
+
+    // Custom Range tab — pick any "from month" to "to month" span
+    const [rangeStart, setRangeStart] = useState(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-01`;
+    });
+    const [rangeEnd, setRangeEnd] = useState(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    });
 
     // Map for quick gross lookup
     const [monthlyGrossMap, setMonthlyGrossMap] = useState({});
@@ -209,6 +219,61 @@ function Tithes() {
             return `${leader.firstname} ${leader.lastname} / ${partner.firstname} ${partner.lastname}`;
         }
         return `${leader.firstname} ${leader.lastname}`;
+    };
+
+    // ── Month-span helpers (used by Custom Range tab + Year export leaderboard) ──
+    const formatMonthLabel = (monthKey) => {
+        const [y, m] = monthKey.split("-");
+        return `${MONTH_SHORT[parseInt(m, 10) - 1]} ${y}`;
+    };
+
+    const getMonthsInRange = (start, end) => {
+        const [sy, sm] = start.split("-").map(Number);
+        const [ey, em] = end.split("-").map(Number);
+        if (ey < sy || (ey === sy && em < sm)) return [];
+        const months = [];
+        let y = sy, m = sm;
+        while (y < ey || (y === ey && m <= em)) {
+            months.push(`${y}-${String(m).padStart(2, "0")}`);
+            m++;
+            if (m > 12) { m = 1; y++; }
+        }
+        return months;
+    };
+
+    // Only counts months that have already happened — avoids penalizing
+    // leaders for "missing" future months in the current year.
+    const getElapsedMonthKeysForYear = (year) => {
+        const y = parseInt(year, 10);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        let maxMonth = 12;
+        if (y === currentYear) maxMonth = currentMonth;
+        else if (y > currentYear) maxMonth = 0;
+        return Array.from({ length: maxMonth }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
+    };
+
+    // Shared consistency computation for any arbitrary set of months —
+    // used by Custom Range and the Year export's Leaderboard sheet.
+    const computeLeaderReport = (monthKeys) => {
+        const rows = [];
+        filteredLeaders.forEach(leader => {
+            const partner = getCombinedPartner(leader);
+            if (partner && leader.combined_with < leader.id) return;
+
+            let consistentCount = 0;
+            let total = 0;
+            const monthTotals = monthKeys.map(mk => {
+                const t = getMonthlyTotal(leader.id, mk) + (partner ? getMonthlyTotal(partner.id, mk) : 0);
+                if (isConsistent(leader, t, mk)) consistentCount++;
+                total += t;
+                return t;
+            });
+
+            rows.push({ leader, partner, monthTotals, total, consistentCount, totalMonths: monthKeys.length });
+        });
+        return rows;
     };
 
     const handleTitheEntry = async (leaderId, monthKey, amount, existingId = null) => {
@@ -303,16 +368,120 @@ function Tithes() {
         return { consistent, inconsistent };
     }, [filteredLeaders, tithes, selectedMonth, monthlyGrossMap]);
 
+    // Custom Range computed data
+    const rangeMonths = useMemo(() => getMonthsInRange(rangeStart, rangeEnd), [rangeStart, rangeEnd]);
+    const rangeRows = useMemo(
+        () => computeLeaderReport(rangeMonths),
+        [filteredLeaders, tithes, rangeMonths, monthlyGrossMap]
+    );
+
     // ═══════════════════════════════════════════════════════════════════════
     // PROFESSIONAL CHURCH REPORT EXPORT
     // ═══════════════════════════════════════════════════════════════════════
     const handleExport = () => {
         const wb = XLSX.utils.book_new();
 
-        if (activeTab === "month") {
-            const [year, month] = selectedMonth.split("-");
-            const monthName = MONTH_NAMES[parseInt(month) - 1];
+        // ── Shared style tokens ─────────────────────────────────────────────
+        const goldHeader = {
+            fill: { fgColor: { rgb: "C9A45C" }, patternType: "solid" },
+            font: { bold: true, color: { rgb: "FFFFFF" }, sz: 11 },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "B8934A" } },
+                bottom: { style: "thin", color: { rgb: "B8934A" } },
+                left: { style: "thin", color: { rgb: "B8934A" } },
+                right: { style: "thin", color: { rgb: "B8934A" } }
+            }
+        };
+        const dataCell = {
+            font: { sz: 11, color: { rgb: "374151" } },
+            border: {
+                top: { style: "thin", color: { rgb: "E5E7EB" } },
+                bottom: { style: "thin", color: { rgb: "E5E7EB" } },
+                left: { style: "thin", color: { rgb: "E5E7EB" } },
+                right: { style: "thin", color: { rgb: "E5E7EB" } }
+            }
+        };
+        const dataCellCenter = { ...dataCell, alignment: { horizontal: "center" } };
+        const altRowCenter = { fill: { fgColor: { rgb: "F9FAFB" }, patternType: "solid" }, ...dataCellCenter };
+        const consistentStyle = {
+            font: { sz: 11, color: { rgb: "16A34A" }, bold: true }, alignment: { horizontal: "center" },
+            border: dataCell.border, fill: { fgColor: { rgb: "ECFDF5" }, patternType: "solid" }
+        };
+        const inconsistentStyle = {
+            font: { sz: 11, color: { rgb: "DC2626" }, bold: true }, alignment: { horizontal: "center" },
+            border: dataCell.border, fill: { fgColor: { rgb: "FEF2F2" }, patternType: "solid" }
+        };
+        const overrideStyle = {
+            font: { sz: 11, color: { rgb: "92400E" }, bold: true }, alignment: { horizontal: "center" },
+            border: dataCell.border, fill: { fgColor: { rgb: "FEF3C7" }, patternType: "solid" }
+        };
+        const titleStyle = { font: { bold: true, color: { rgb: "B8934A" }, sz: 18 }, alignment: { horizontal: "center" } };
+        const subtitleStyle = { font: { sz: 10, color: { rgb: "6B7280" } }, alignment: { horizontal: "center" } };
+        const totalStyle = {
+            font: { bold: true, color: { rgb: "374151" }, sz: 12 },
+            fill: { fgColor: { rgb: "F3F4F6" }, patternType: "solid" },
+            border: dataCell.border
+        };
+        // Medal styling for the leaderboard sheet
+        const goldRankStyle = {
+            font: { sz: 12, color: { rgb: "92400E" }, bold: true }, alignment: { horizontal: "center" },
+            border: dataCell.border, fill: { fgColor: { rgb: "FDF6E8" }, patternType: "solid" }
+        };
+        const silverRankStyle = {
+            font: { sz: 12, color: { rgb: "374151" }, bold: true }, alignment: { horizontal: "center" },
+            border: dataCell.border, fill: { fgColor: { rgb: "F3F4F6" }, patternType: "solid" }
+        };
+        const bronzeRankStyle = {
+            font: { sz: 12, color: { rgb: "9A3412" }, bold: true }, alignment: { horizontal: "center" },
+            border: dataCell.border, fill: { fgColor: { rgb: "FDF2E9" }, patternType: "solid" }
+        };
 
+        // Applies border+shading to every cell in a row range; special columns
+        // (passed via a resolver keyed by column index) get their own style.
+        const styleDataRows = (ws, startRow, numRows, numCols, colResolvers = {}) => {
+            for (let i = 0; i < numRows; i++) {
+                const r = startRow + i;
+                const isAlt = i % 2 === 1;
+                for (let c = 0; c < numCols; c++) {
+                    const cell = XLSX.utils.encode_cell({ r, c });
+                    if (!ws[cell]) continue;
+                    if (colResolvers[c]) {
+                        ws[cell].s = colResolvers[c](ws[cell].v, i);
+                    } else {
+                        ws[cell].s = isAlt ? altRowCenter : dataCellCenter;
+                    }
+                }
+            }
+        };
+
+        const styleHeaderRow = (ws, row, numCols) => {
+            for (let c = 0; c < numCols; c++) {
+                const cell = XLSX.utils.encode_cell({ r: row, c });
+                if (ws[cell]) ws[cell].s = goldHeader;
+            }
+        };
+
+        const styleTitleBlock = (ws, numCols) => {
+            ws["!merges"] = ws["!merges"] || [];
+            for (let r = 0; r < 4; r++) {
+                const cell = XLSX.utils.encode_cell({ r, c: 0 });
+                if (ws[cell]) {
+                    ws[cell].s = r === 0 ? titleStyle : subtitleStyle;
+                    ws["!merges"].push({ s: { r, c: 0 }, e: { r, c: numCols - 1 } });
+                }
+            }
+        };
+
+        const leftAlignNameColumn = (ws, startRow, numRows, col = 1) => {
+            for (let i = 0; i < numRows; i++) {
+                const cell = XLSX.utils.encode_cell({ r: startRow + i, c: col });
+                if (ws[cell]) ws[cell].s = { ...ws[cell].s, alignment: { horizontal: "left" } };
+            }
+        };
+
+        if (activeTab === "month") {
+            const numCols = 12;
             const wsData = [
                 ["MAC TLDA CHURCH"],
                 ["Combined Tithes Record"],
@@ -323,9 +492,6 @@ function Tithes() {
             ];
 
             let rowNum = 1;
-            let grandTotalTithes = 0;
-            let grandTotalGross = 0;
-            let grandTotalExpected = 0;
 
             filteredLeaders.forEach(leader => {
                 const partner = getCombinedPartner(leader);
@@ -339,10 +505,6 @@ function Tithes() {
                 const expected = gross * 0.1;
                 const variance = total - expected;
                 const consistent = isConsistent(leader, total, selectedMonth);
-
-                grandTotalTithes += total;
-                grandTotalGross += gross;
-                grandTotalExpected += expected;
 
                 const slots = Array.from({ length: 4 }, (_, i) => monthlyTithes[i]?.amount || 0);
 
@@ -362,11 +524,12 @@ function Tithes() {
                 ]);
             });
 
-            // Summary section like attendance
+            const dataRowCount = rowNum - 1;
+
             wsData.push([]);
             wsData.push(["", "", "", "", "", "", "", "TOTAL CONSISTENT", stats.consistent.length, "", "", ""]);
             wsData.push(["", "", "", "", "", "", "", "TOTAL INCONSISTENT", stats.inconsistent.length, "", "", ""]);
-            wsData.push(["", "", "", "", "", "", "", "GRAND TOTAL", rowNum - 1, "", "", ""]);
+            wsData.push(["", "", "", "", "", "", "", "GRAND TOTAL", dataRowCount, "", "", ""]);
 
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             ws["!cols"] = [
@@ -375,10 +538,72 @@ function Tithes() {
                 { wch: 14 }, { wch: 20 }
             ];
 
+            styleTitleBlock(ws, numCols);
+            styleHeaderRow(ws, 5, numCols);
+            styleDataRows(ws, 6, dataRowCount, numCols, {
+                10: (val) => val === "CONSISTENT" ? consistentStyle : inconsistentStyle
+            });
+            leftAlignNameColumn(ws, 6, dataRowCount);
+
+            const summaryStart = 6 + dataRowCount + 1;
+            for (let r = summaryStart; r <= summaryStart + 2; r++) {
+                for (let c = 0; c < numCols; c++) {
+                    const cell = XLSX.utils.encode_cell({ r, c });
+                    if (ws[cell]) ws[cell].s = totalStyle;
+                }
+            }
+
             XLSX.utils.book_append_sheet(wb, ws, "Monthly Report");
 
+        } else if (activeTab === "range") {
+            const numCols = rangeMonths.length + 4;
+            const wsData = [
+                ["MAC TLDA CHURCH"],
+                ["Custom Range Tithes Report"],
+                [`Period: ${rangeMonths.length ? `${formatMonthLabel(rangeMonths[0])} – ${formatMonthLabel(rangeMonths[rangeMonths.length - 1])}` : "Invalid range"}`],
+                [`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`],
+                [],
+                ["No.", "Full Name", ...rangeMonths.map(formatMonthLabel), "Total", "Consistent Months", "Rate"]
+            ];
+
+            let rowNum = 1;
+            rangeRows.forEach(({ leader, monthTotals, total, consistentCount, totalMonths }) => {
+                wsData.push([
+                    rowNum++,
+                    getDisplayName(leader),
+                    ...monthTotals.map(t => t > 0 ? t : "—"),
+                    total > 0 ? total : "—",
+                    `${consistentCount}/${totalMonths}`,
+                    totalMonths > 0 ? `${((consistentCount / totalMonths) * 100).toFixed(0)}%` : "—"
+                ]);
+            });
+
+            const dataRowCount = rowNum - 1;
+            const consistentCol = 2 + rangeMonths.length + 1; // index of "Consistent Months" column
+
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws["!cols"] = [
+                { wch: 6 }, { wch: 30 }, ...rangeMonths.map(() => ({ wch: 11 })),
+                { wch: 12 }, { wch: 16 }, { wch: 10 }
+            ];
+
+            styleTitleBlock(ws, numCols);
+            styleHeaderRow(ws, 5, numCols);
+            styleDataRows(ws, 6, dataRowCount, numCols, {
+                [consistentCol]: (val) => {
+                    const [hit, of] = String(val).split("/").map(Number);
+                    if (of === 0) return dataCellCenter;
+                    if (hit === of) return consistentStyle;
+                    if (hit >= of / 2) return { ...dataCellCenter, font: { ...dataCellCenter.font, color: { rgb: "92400E" } } };
+                    return inconsistentStyle;
+                }
+            });
+            leftAlignNameColumn(ws, 6, dataRowCount);
+
+            XLSX.utils.book_append_sheet(wb, ws, "Custom Range Report");
+
         } else if (activeTab === "year") {
-            // ── WHOLE YEAR REPORT ──
+            const numCols = 17;
             const wsData = [
                 ["MAC TLDA CHURCH"],
                 ["Combined Tithes Record"],
@@ -406,8 +631,8 @@ function Tithes() {
                 });
                 const yearTotal = monthTotals.reduce((a, b) => a + b, 0);
 
-                const status = consistentMonths >= 10 ? "EXCELLENT" : 
-                              consistentMonths >= 7 ? "GOOD" : 
+                const status = consistentMonths >= 10 ? "EXCELLENT" :
+                              consistentMonths >= 7 ? "GOOD" :
                               consistentMonths >= 4 ? "FAIR" : "NEEDS ATTENTION";
 
                 wsData.push([
@@ -420,10 +645,11 @@ function Tithes() {
                 ]);
             });
 
-            // Summary row at bottom (like attendance)
+            const dataRowCount = rowNum - 1;
             const grandTotal = monthlyTotals.reduce((a, b) => a + b, 0);
+
             wsData.push([]);
-            wsData.push(["", "", ...monthlyTotals.map(t => t > 0 ? t : "—"), grandTotal > 0 ? grandTotal : "—", "", ""]);
+            wsData.push(["", "TOTAL", ...monthlyTotals.map(t => t > 0 ? t : "—"), grandTotal > 0 ? grandTotal : "—", "", ""]);
 
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             ws["!cols"] = [
@@ -431,9 +657,78 @@ function Tithes() {
                 { wch: 12 }, { wch: 12 }, { wch: 16 }
             ];
 
+            const statusColorMap = { EXCELLENT: consistentStyle, GOOD: consistentStyle, FAIR: inconsistentStyle, "NEEDS ATTENTION": inconsistentStyle };
+
+            styleTitleBlock(ws, numCols);
+            styleHeaderRow(ws, 5, numCols);
+            styleDataRows(ws, 6, dataRowCount, numCols, {
+                16: (val) => statusColorMap[val] || dataCellCenter
+            });
+            leftAlignNameColumn(ws, 6, dataRowCount);
+
+            const summaryRow = 6 + dataRowCount + 1;
+            for (let c = 0; c < numCols; c++) {
+                const cell = XLSX.utils.encode_cell({ r: summaryRow, c });
+                if (ws[cell]) ws[cell].s = totalStyle;
+            }
+
             XLSX.utils.book_append_sheet(wb, ws, "Annual Report");
 
+            // ═══════════════════════════════════════════════════════════════
+            // LEADERBOARD SHEET — Excel-only. Ranked by consistency (months
+            // hit), not by amount given. Only counts elapsed months so the
+            // current year isn't unfairly penalized for "missing" future months.
+            // ═══════════════════════════════════════════════════════════════
+            const elapsedMonths = getElapsedMonthKeysForYear(selectedYear);
+            if (elapsedMonths.length > 0) {
+                const boardRows = computeLeaderReport(elapsedMonths)
+                    .map(r => ({ ...r, percent: r.totalMonths > 0 ? (r.consistentCount / r.totalMonths) * 100 : 0 }))
+                    .sort((a, b) => {
+                        if (b.consistentCount !== a.consistentCount) return b.consistentCount - a.consistentCount;
+                        if (b.percent !== a.percent) return b.percent - a.percent;
+                        if (b.total !== a.total) return b.total - a.total;
+                        return getDisplayName(a.leader).localeCompare(getDisplayName(b.leader));
+                    });
+
+                const lbNumCols = 6;
+                const lbData = [
+                    ["MAC TLDA CHURCH"],
+                    ["Consistency Leaderboard"],
+                    [`Period: ${formatMonthLabel(elapsedMonths[0])} – ${formatMonthLabel(elapsedMonths[elapsedMonths.length - 1])} (${elapsedMonths.length} of 12 months)`],
+                    [`Generated: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`],
+                    [],
+                    ["Rank", "Full Name", "Tribe", "Months Consistent", "Consistency Rate", "Total Given"]
+                ];
+
+                boardRows.forEach((row, i) => {
+                    lbData.push([
+                        i + 1,
+                        getDisplayName(row.leader),
+                        row.leader.tribe || "—",
+                        `${row.consistentCount}/${row.totalMonths}`,
+                        `${row.percent.toFixed(0)}%`,
+                        row.total > 0 ? row.total : "—"
+                    ]);
+                });
+
+                const lbDataRowCount = boardRows.length;
+                const lbWs = XLSX.utils.aoa_to_sheet(lbData);
+                lbWs["!cols"] = [
+                    { wch: 8 }, { wch: 32 }, { wch: 14 }, { wch: 18 }, { wch: 16 }, { wch: 14 }
+                ];
+
+                styleTitleBlock(lbWs, lbNumCols);
+                styleHeaderRow(lbWs, 5, lbNumCols);
+                styleDataRows(lbWs, 6, lbDataRowCount, lbNumCols, {
+                    0: (val) => val === 1 ? goldRankStyle : val === 2 ? silverRankStyle : val === 3 ? bronzeRankStyle : dataCellCenter
+                });
+                leftAlignNameColumn(lbWs, 6, lbDataRowCount);
+
+                XLSX.utils.book_append_sheet(wb, lbWs, "Leaderboard");
+            }
+
         } else {
+            const numCols = 7;
             const [year, month] = selectedMonth.split("-");
             const monthName = MONTH_NAMES[parseInt(month) - 1];
 
@@ -466,29 +761,42 @@ function Tithes() {
                 ]);
             });
 
+            const dataRowCount = rowNum - 1;
+
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             ws["!cols"] = [
                 { wch: 6 }, { wch: 35 }, { wch: 16 }, { wch: 18 },
                 { wch: 16 }, { wch: 14 }, { wch: 25 }
             ];
 
+            styleTitleBlock(ws, numCols);
+            styleHeaderRow(ws, 5, numCols);
+            styleDataRows(ws, 6, dataRowCount, numCols, {
+                5: (val) => val === "OVERRIDE" ? overrideStyle : dataCellCenter
+            });
+            leftAlignNameColumn(ws, 6, dataRowCount);
+
             XLSX.utils.book_append_sheet(wb, ws, "Gross Record");
         }
 
         const filename = activeTab === "month"
             ? `MAC_Tithes_Monthly_${selectedMonth}.xlsx`
-            : activeTab === "year"
-                ? `MAC_Tithes_Annual_${selectedYear}.xlsx`
-                : `MAC_Gross_${selectedMonth}.xlsx`;
+            : activeTab === "range"
+                ? `MAC_Tithes_Range_${rangeStart}_to_${rangeEnd}.xlsx`
+                : activeTab === "year"
+                    ? `MAC_Tithes_Annual_${selectedYear}.xlsx`
+                    : `MAC_Gross_${selectedMonth}.xlsx`;
 
         XLSX.writeFile(wb, filename);
 
-        Swal.fire({ 
-            icon: "success", 
-            title: "Report Exported", 
-            text: "Church report downloaded successfully.", 
-            timer: 2000, 
-            showConfirmButton: false 
+        Swal.fire({
+            icon: "success",
+            title: "Report Exported",
+            text: activeTab === "year"
+                ? "Church report downloaded, including the Leaderboard sheet."
+                : "Church report downloaded successfully.",
+            timer: 2200,
+            showConfirmButton: false
         });
     };
 
@@ -523,8 +831,8 @@ function Tithes() {
                 </div>
 
                 {/* ── TABS ─────────────────────────────────────────────────── */}
-                <div style={{ display: "flex", gap: "4px", marginBottom: "16px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", width: "fit-content" }}>
-                    {["month", "year", "gross"].map(tab => (
+                <div style={{ display: "flex", gap: "4px", marginBottom: "16px", background: "#f3f4f6", borderRadius: "10px", padding: "4px", width: "fit-content", flexWrap: "wrap" }}>
+                    {["month", "range", "year", "gross"].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)} style={{
                             padding: "8px 22px", borderRadius: "8px", border: "none", fontSize: "13px", cursor: "pointer",
                             fontWeight: activeTab === tab ? 700 : 500,
@@ -533,7 +841,10 @@ function Tithes() {
                             boxShadow: activeTab === tab ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
                             transition: "all 0.2s"
                         }}>
-                            {tab === "month" ? "Whole Month" : tab === "year" ? "Whole Year" : "Monthly Gross"}
+                            {tab === "month" ? "Whole Month"
+                                : tab === "range" ? "Custom Range"
+                                : tab === "year" ? "Whole Year"
+                                : "Monthly Gross"}
                         </button>
                     ))}
                 </div>
@@ -702,7 +1013,107 @@ function Tithes() {
                 )}
 
                 {/* ════════════════════════════════════════════════════════════
-                    WHOLE YEAR TAB - NOW MATCHES ATTENDANCE STYLE
+                    CUSTOM RANGE TAB
+                ════════════════════════════════════════════════════════════ */}
+                {activeTab === "range" && (
+                    <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", background: "#fff" }}>
+
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #e5e7eb", flexWrap: "wrap", gap: "12px" }}>
+                            <div>
+                                <div style={{ fontWeight: 800, fontSize: "18px", letterSpacing: "-0.3px", color: "#111827" }}>CUSTOM RANGE</div>
+                                <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>
+                                    Pick any span of months — e.g. reporting Jan–Feb during a July meeting.
+                                </div>
+                            </div>
+                            <div style={{ display: "flex", gap: "16px", alignItems: "flex-end", flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#9ca3af" }}>From</span>
+                                    <input type="month" value={rangeStart} onChange={e => setRangeStart(e.target.value)}
+                                        style={{ padding: "8px 12px", fontSize: "14px", fontWeight: 600, borderRadius: "8px", border: "1px solid #d1d5db", color: "#111827" }} />
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#9ca3af" }}>To</span>
+                                    <input type="month" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)}
+                                        style={{ padding: "8px 12px", fontSize: "14px", fontWeight: 600, borderRadius: "8px", border: "1px solid #d1d5db", color: "#111827" }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {rangeMonths.length === 0 ? (
+                            <div style={{ padding: "30px", textAlign: "center", color: "#dc2626", fontSize: "13px", fontWeight: 600 }}>
+                                "To" month must be the same as or after "From" month.
+                            </div>
+                        ) : (
+                            <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse", minWidth: `${400 + rangeMonths.length * 80}px` }}>
+                                    <thead>
+                                        <tr style={{ background: "#f9fafb" }}>
+                                            <th style={{ ...th({ textAlign: "left", width: "220px", borderRight: "1px solid #e5e7eb", padding: "12px 16px" }) }}>FULL NAME</th>
+                                            {rangeMonths.map((mk, i) => (
+                                                <th key={mk} style={{ ...th({ textAlign: "center", minWidth: "80px", padding: "12px 8px", ...(i === rangeMonths.length - 1 ? { borderRight: "1px solid #e5e7eb" } : {}) }) }}>
+                                                    {formatMonthLabel(mk)}
+                                                </th>
+                                            ))}
+                                            <th style={{ ...th({ textAlign: "center", width: "90px", borderRight: "1px solid #e5e7eb", padding: "12px 8px" }) }}>TOTAL</th>
+                                            <th style={{ ...th({ textAlign: "center", width: "110px", padding: "12px 8px" }) }}>CONSISTENT</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {loading ? (
+                                            <tr><td colSpan={rangeMonths.length + 3} style={{ padding: "30px", textAlign: "center", color: "#9ca3af" }}>Loading…</td></tr>
+                                        ) : rangeRows.length === 0 ? (
+                                            <tr><td colSpan={rangeMonths.length + 3} style={{ padding: "30px", textAlign: "center", color: "#9ca3af" }}>No members found.</td></tr>
+                                        ) : rangeRows.map(({ leader, monthTotals, total, consistentCount, totalMonths }) => (
+                                            <tr key={leader.id}
+                                                style={{ borderBottom: "1px solid #f3f4f6", transition: "background 0.15s" }}
+                                                onMouseEnter={e => e.currentTarget.style.background = "#fafafa"}
+                                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+
+                                                <td style={{ padding: "13px 16px", fontWeight: 600, color: "#111827", borderRight: "1px solid #f3f4f6", fontSize: "13px" }}>
+                                                    {getDisplayName(leader)}
+                                                </td>
+
+                                                {monthTotals.map((amt, i) => {
+                                                    const mc = isConsistent(leader, amt, rangeMonths[i]);
+                                                    return (
+                                                        <td key={i} style={{
+                                                            padding: "13px 8px", textAlign: "center",
+                                                            fontWeight: amt > 0 ? 700 : 400,
+                                                            color: amt > 0 ? "#111827" : "#d1d5db",
+                                                            background: amt > 0 && !mc ? "#fff5f5" : "transparent",
+                                                            fontSize: "12px",
+                                                            ...(i === rangeMonths.length - 1 ? { borderRight: "1px solid #f3f4f6" } : {})
+                                                        }}>
+                                                            {amt > 0 ? amt.toLocaleString() : "—"}
+                                                        </td>
+                                                    );
+                                                })}
+
+                                                <td style={{ padding: "13px 12px", textAlign: "center", fontWeight: 800, color: "#111827", borderRight: "1px solid #f3f4f6", fontSize: "13px" }}>
+                                                    {total > 0 ? total.toLocaleString() : "—"}
+                                                </td>
+
+                                                <td style={{ padding: "13px 12px", textAlign: "center" }}>
+                                                    <span style={{
+                                                        display: "inline-block", padding: "4px 12px", borderRadius: "20px",
+                                                        fontSize: "11px", fontWeight: 700,
+                                                        background: consistentCount === totalMonths ? "#dcfce7" : consistentCount >= totalMonths / 2 ? "#fef3c7" : "#fee2e2",
+                                                        color: consistentCount === totalMonths ? "#16a34a" : consistentCount >= totalMonths / 2 ? "#92400e" : "#dc2626"
+                                                    }}>
+                                                        {consistentCount}/{totalMonths}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ════════════════════════════════════════════════════════════
+                    WHOLE YEAR TAB
                 ════════════════════════════════════════════════════════════ */}
                 {activeTab === "year" && (
                     <div style={{ borderRadius: "12px", border: "1px solid #e5e7eb", overflow: "hidden", background: "#fff" }}>
@@ -710,7 +1121,9 @@ function Tithes() {
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #e5e7eb" }}>
                             <div>
                                 <div style={{ fontWeight: 800, fontSize: "18px", letterSpacing: "-0.3px", color: "#111827" }}>WHOLE YEAR</div>
-                                <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>Monthly tithe totals for the selected year.</div>
+                                <div style={{ fontSize: "12px", color: "#9ca3af", marginTop: "2px" }}>
+                                    Monthly tithe totals for the selected year. Exporting also includes a Leaderboard sheet ranked by consistency.
+                                </div>
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
                                 <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", color: "#9ca3af" }}>Year Picker</span>
@@ -759,8 +1172,8 @@ function Tithes() {
                                             const yearTotal = monthTotals.reduce((a, b) => a + b, 0);
                                             grandYearTotal += yearTotal;
 
-                                            const status = consistentMonths >= 10 ? "EXCELLENT" : 
-                                                          consistentMonths >= 7 ? "GOOD" : 
+                                            const status = consistentMonths >= 10 ? "EXCELLENT" :
+                                                          consistentMonths >= 7 ? "GOOD" :
                                                           consistentMonths >= 4 ? "FAIR" : "NEEDS ATTENTION";
 
                                             return { leader, monthTotals, yearTotal, consistentMonths, status };
@@ -816,7 +1229,7 @@ function Tithes() {
                                                     </tr>
                                                 ))}
 
-                                                {/* SUMMARY ROW - like attendance */}
+                                                {/* SUMMARY ROW */}
                                                 <tr style={{ background: "#f9fafb", borderTop: "2px solid #e5e7eb", fontWeight: 700 }}>
                                                     <td style={{ padding: "14px 16px", color: "#374151", borderRight: "1px solid #e5e7eb" }}>
                                                         TOTAL
@@ -933,10 +1346,10 @@ function Tithes() {
                                                 </td>
 
                                                 <td style={{ padding: "14px 16px", textAlign: "center", borderRight: "1px solid #f3f4f6" }}>
-                                                    <span style={{ 
-                                                        fontWeight: 800, 
-                                                        fontSize: "14px", 
-                                                        color: hasOverride ? "#b8934a" : "#374151" 
+                                                    <span style={{
+                                                        fontWeight: 800,
+                                                        fontSize: "14px",
+                                                        color: hasOverride ? "#b8934a" : "#374151"
                                                     }}>
                                                         {effectiveGross ? effectiveGross.toLocaleString() : "—"}
                                                     </span>
@@ -963,10 +1376,10 @@ function Tithes() {
                         </div>
 
                         <div style={{ padding: "12px 20px", background: "#f9fafb", borderTop: "1px solid #e5e7eb", fontSize: "11px", color: "#6b7280" }}>
-                            <strong style={{ color: "#374151" }}>How it works:</strong> The "Default Gross" comes from the leader's profile. 
-                            If their salary changes for a specific month, enter the new amount in the override column. 
-                            The system will use the override for consistency checks and reports. 
-                            Leave blank or click ✕ to revert to the default. 
+                            <strong style={{ color: "#374151" }}>How it works:</strong> The "Default Gross" comes from the leader's profile.
+                            If their salary changes for a specific month, enter the new amount in the override column.
+                            The system will use the override for consistency checks and reports.
+                            Leave blank or click ✕ to revert to the default.
                             <strong style={{ color: "#b8934a" }}> Combined tithing partners share the same gross.</strong>
                         </div>
                     </div>
