@@ -7,13 +7,14 @@ import {
     allNewcomerStages,
     getNextStage,
     isReadyForConversion,
+    usheringStages,
     soulWinningStages,
     soakingStages,
     schoolingStages,
     consoStages,
     getStageCategory
 } from "../constants/options";
-import { isAdmin, isUshering, canConvertNewcomer } from "../utils/auth";
+import { isAdmin, isUshering, isDiscipleship, canConvertNewcomer } from "../utils/auth";
 
 function Assimilation() {
     const navigate = useNavigate();
@@ -31,9 +32,20 @@ function Assimilation() {
     const [filterStage, setFilterStage] = useState("ALL");
 
     // Permission flags
+    // ────────────────────────────────────────────────────────────────────────
+    // Two separate ministries share this list, each owning a different part
+    // of the journey:
+    //   • Ushering — only 1st Timer -> 2nd Timer -> 3rd Timer. Their job is
+    //     recording attendance (done on the Attendance page); here they can
+    //     still nudge someone to the next Conso stage manually if needed.
+    //   • Discipleship Journey (DJ) — everything from "Regular Attendee"
+    //     onward (Soul Winning, Soaking, Schooling). Only DJ/Admin decide
+    //     that path forward.
+    // ────────────────────────────────────────────────────────────────────────
     const admin = isAdmin();
     const ushering = isUshering();
-    const canAdd = admin || ushering;
+    const discipleship = isDiscipleship();
+    const canAddNewcomer = admin || ushering;
     const canConvert = canConvertNewcomer();
 
     useEffect(() => {
@@ -106,6 +118,16 @@ function Assimilation() {
             .eq("id", id);
 
         fetchMembers();
+    };
+
+    // Can the CURRENT user advance THIS member's stage?
+    // - Still inside Ushering's own 1st/2nd/3rd Timer range -> Admin or Ushering.
+    // - Regular Attendee and beyond (handed off to DJ) -> Admin or Discipleship.
+    const canAdvanceStage = (member) => {
+        if (usheringStages.includes(member.remarks)) {
+            return admin || ushering;
+        }
+        return admin || discipleship;
     };
 
     // Filter helpers
@@ -202,7 +224,7 @@ function Assimilation() {
                             Monitor visitors, invites, and newcomers.
                         </p>
                     </div>
-                    {canAdd && (
+                    {canAddNewcomer && (
                         <button
                             className="btn-sm btn-primary"
                             onClick={() => setShowForm(true)}
@@ -211,6 +233,28 @@ function Assimilation() {
                             + Add Newcomer
                         </button>
                     )}
+                </div>
+
+                {/* WORKFLOW LEGEND — keeps the Ushering / DJ hand-off clear for everyone */}
+                <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                    marginBottom: "15px",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    background: "#fdf6e8",
+                    border: "1px solid #f3e3c1",
+                    fontSize: "11px",
+                    color: "#6b7280"
+                }}>
+                    <span style={{ fontWeight: 700, color: "#92400e" }}>How this works:</span>
+                    <span>Ushering records attendance and carries newcomers through</span>
+                    <span style={{ fontWeight: 700, color: "#1e40af" }}>1st → 2nd → 3rd Timer → Regular Attendee</span>
+                    <span>. From Regular Attendee onward, the</span>
+                    <span style={{ fontWeight: 700, color: "#166534" }}>Discipleship Journey (DJ)</span>
+                    <span>team decides the next step (Life Track, Life Retreat, Schooling, etc.).</span>
                 </div>
 
                 {/* COMPACT STATS CARDS */}
@@ -235,6 +279,9 @@ function Assimilation() {
                     >
                         <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#6b7280", fontWeight: 500 }}>Conso</h3>
                         <h1 style={{ fontSize: "22px", margin: 0, color: "#3b82f6" }}>{countByStage(consoStages)}</h1>
+                        <p style={{ fontSize: "9px", color: "#9ca3af", marginTop: "2px", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {consoStages.map(s => `${s.split(" ")[0]}: ${countByExactStage(s)}`).join(" | ")}
+                        </p>
                     </div>
 
                     <div 
@@ -474,7 +521,7 @@ function Assimilation() {
                                             </td>
                                             <td style={{ padding: "8px 10px", textAlign: "center" }}>
                                                 <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                                                    {canAdd && !isReadyForConversion(member.remarks) && (
+                                                    {canAdvanceStage(member) && !isReadyForConversion(member.remarks) && (
                                                         <button
                                                             onClick={() => updateRemarks(member.id, member.remarks)}
                                                             style={{
@@ -513,6 +560,12 @@ function Assimilation() {
                                                     {!canConvert && isReadyForConversion(member.remarks) && (
                                                         <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10px" }}>
                                                             Ready
+                                                        </span>
+                                                    )}
+
+                                                    {!canAdvanceStage(member) && !isReadyForConversion(member.remarks) && member.remarks === "Regular Attendee" && (
+                                                        <span style={{ color: "#b8934a", fontWeight: 700, fontSize: "10px" }}>
+                                                            Awaiting DJ
                                                         </span>
                                                     )}
                                                 </div>
@@ -587,6 +640,11 @@ function Assimilation() {
                             </button>
                         </div>
                         <div style={{ padding: "14px 18px 18px" }}>
+                            <p style={{ margin: "0 0 12px 0", fontSize: "11px", color: "#9ca3af" }}>
+                                Ushering adds newcomers on their Conso stage only (1st/2nd/3rd Timer or
+                                Regular Attendee). Anything further along their journey is set by the
+                                Discipleship Journey team.
+                            </p>
                             <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 <input
                                     type="text"
@@ -635,7 +693,7 @@ function Assimilation() {
                                     onChange={(e) => setRemarks(e.target.value)}
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                                 >
-                                    {allNewcomerStages.map((stage) => (
+                                    {consoStages.map((stage) => (
                                         <option key={stage} value={stage}>{stage}</option>
                                     ))}
                                 </select>

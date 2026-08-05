@@ -63,13 +63,14 @@ export const getConversations = async (userId) => {
 };
 
 export const getOrCreateDirectConversation = async (userId1, userId2) => {
-    const { data: existing } = await supabase
+    const { data: user1DirectConvs } = await supabase
         .from("tblConversationMembers")
-        .select("conversation_id")
-        .eq("user_id", userId1);
+        .select("conversation_id, tblConversations!inner(type)")
+        .eq("user_id", userId1)
+        .eq("tblConversations.type", "direct");
 
-    if (existing && existing.length > 0) {
-        const convIds = existing.map(e => e.conversation_id);
+    if (user1DirectConvs && user1DirectConvs.length > 0) {
+        const convIds = user1DirectConvs.map(e => e.conversation_id);
 
         const { data: match } = await supabase
             .from("tblConversationMembers")
@@ -82,7 +83,6 @@ export const getOrCreateDirectConversation = async (userId1, userId2) => {
                 .from("tblConversations")
                 .select("*")
                 .eq("id", match[0].conversation_id)
-                .eq("type", "direct")
                 .single();
 
             if (conv) return conv;
@@ -100,10 +100,16 @@ export const getOrCreateDirectConversation = async (userId1, userId2) => {
         return null;
     }
 
-    await supabase.from("tblConversationMembers").insert([
+    const { error: memberError } = await supabase.from("tblConversationMembers").insert([
         { conversation_id: newConv.id, user_id: userId1 },
         { conversation_id: newConv.id, user_id: userId2 }
     ]);
+
+    if (memberError) {
+        console.error("Error adding direct conversation members, rolling back:", memberError);
+        await supabase.from("tblConversations").delete().eq("id", newConv.id);
+        return null;
+    }
 
     return newConv;
 };
@@ -112,6 +118,21 @@ export const getOrCreateDirectConversation = async (userId1, userId2) => {
 // GROUP CHAT
 // ============================================
 
+// UPDATED: now returns a { success, conversation, error, stage } object
+// instead of just the conversation or null. This means the UI can show the
+// REAL Postgres error message (e.g. "violates foreign key constraint...",
+// "violates check constraint...", "new row violates row-level security
+// policy...") directly to you, instead of a generic "something went wrong"
+// with the real reason only visible in the browser console.
+//
+// "stage" tells you which insert failed:
+//   - "conversation": the tblConversations insert itself failed (e.g. a
+//     restrictive CHECK constraint on `type`, a NOT NULL column not being
+//     filled in, etc). Members are never touched in this case.
+//   - "members": the conversation was created fine, but adding the member
+//     rows failed (e.g. RLS blocking inserting rows for other users' IDs,
+//     or a foreign key on user_id pointing at the wrong table). The
+//     orphaned conversation row is rolled back automatically.
 export const createGroupConversation = async (name, creatorId, memberIds) => {
     const { data: newConv, error } = await supabase
         .from("tblConversations")
@@ -120,8 +141,8 @@ export const createGroupConversation = async (name, creatorId, memberIds) => {
         .single();
 
     if (error) {
-        console.error("Error creating group:", error);
-        return null;
+        console.error("Error creating group (conversation insert failed):", error);
+        return { success: false, error: error.message, stage: "conversation" };
     }
 
     const members = [creatorId, ...memberIds.filter(id => id !== creatorId)];
@@ -130,8 +151,17 @@ export const createGroupConversation = async (name, creatorId, memberIds) => {
         user_id: userId
     }));
 
-    await supabase.from("tblConversationMembers").insert(memberRows);
-    return newConv;
+    const { error: memberError } = await supabase
+        .from("tblConversationMembers")
+        .insert(memberRows);
+
+    if (memberError) {
+        console.error("Error adding group members, rolling back orphaned conversation:", memberError);
+        await supabase.from("tblConversations").delete().eq("id", newConv.id);
+        return { success: false, error: memberError.message, stage: "members" };
+    }
+
+    return { success: true, conversation: newConv };
 };
 
 export const getConversationMembers = async (conversationId) => {
@@ -213,6 +243,47 @@ export const leaveGroup = async (conversationId, userId) => {
         .eq("user_id", userId);
 
     return !error;
+};
+
+// Admin-only full conversation delete. Removes messages and memberships
+// first (FK-safe order), then the conversation row itself.
+export const deleteConversation = async (conversationId) => {
+    if (!isAdmin()) {
+        console.error("Only admins can delete conversations");
+        return false;
+    }
+
+    const { error: msgError } = await supabase
+        .from("tblMessages")
+        .delete()
+        .eq("conversation_id", conversationId);
+
+    if (msgError) {
+        console.error("Error deleting conversation messages:", msgError);
+        return false;
+    }
+
+    const { error: memberError } = await supabase
+        .from("tblConversationMembers")
+        .delete()
+        .eq("conversation_id", conversationId);
+
+    if (memberError) {
+        console.error("Error deleting conversation members:", memberError);
+        return false;
+    }
+
+    const { error } = await supabase
+        .from("tblConversations")
+        .delete()
+        .eq("id", conversationId);
+
+    if (error) {
+        console.error("Error deleting conversation:", error);
+        return false;
+    }
+
+    return true;
 };
 
 // ============================================
@@ -400,14 +471,18 @@ export const subscribeToConversations = (userId, callback) => {
         .channel(`conversations-${userId}`)
         .on(
             "postgres_changes",
-            {
-                event: "*",
-                schema: "public",
-                table: "tblConversations"
-            },
-            () => {
-                callback();
-            }
+            { event: "*", schema: "public", table: "tblConversations" },
+            () => callback()
+        )
+        .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "tblMessages" },
+            () => callback()
+        )
+        .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "tblConversationMembers" },
+            () => callback()
         )
         .subscribe();
 

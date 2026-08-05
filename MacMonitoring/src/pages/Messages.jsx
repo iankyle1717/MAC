@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
 import { getCurrentUser, isAdmin } from "../utils/auth";
+import Swal from "sweetalert2";
 import {
     getConversations,
     getMessages,
@@ -11,14 +12,13 @@ import {
     getAvailableUsers,
     getOrCreateDirectConversation,
     sendBroadcast,
-    subscribeToMessages,
-    subscribeToConversations,
     runMessageCleanup,
     createGroupConversation,
     getConversationMembers,
     removeGroupMember,
     addGroupMembers,
-    leaveGroup
+    leaveGroup,
+    deleteConversation
 } from "../utils/messages";
 
 // ── Theme (matches your system) ───────────────────────────────────────────
@@ -80,6 +80,14 @@ const formatTime = (ts) => {
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
+// De-dupe any array of records by `id`, keeping the first occurrence.
+// This is the actual fix for "doubled" conversations/messages: if a query
+// joins against a one-to-many table (e.g. conversation members) without a
+// DISTINCT, a single group chat with 3 members can come back as 3 rows with
+// the same id. Duplicate ids in a React list also break `key`, which is why
+// this was showing up as flaky clicking / "can't open convo" too.
+const dedupeById = (arr) => Array.from(new Map(arr.map(item => [item.id, item])).values());
+
 // ── Avatar Component ────────────────────────────────────────────────────────
 function Avatar({ name, size = 36, imageUrl }) {
     return (
@@ -103,7 +111,7 @@ function Avatar({ name, size = 36, imageUrl }) {
 }
 
 // ── Conversation List Item ──────────────────────────────────────────────────
-function ConversationItem({ conv, isActive, currentUserId, onClick }) {
+function ConversationItem({ conv, isActive, currentUserId, isAdminUser, onClick, onDelete }) {
     const isDirect = conv.type === "direct";
     const isBroadcast = conv.type === "broadcast";
     const isGroup = conv.type === "group";
@@ -139,6 +147,7 @@ function ConversationItem({ conv, isActive, currentUserId, onClick }) {
                 background: isActive ? THEME.goldMuted : "transparent",
                 borderLeft: isActive ? `3px solid ${THEME.gold}` : "3px solid transparent",
                 transition: "all 0.2s ease",
+                position: "relative",
             }}
             onMouseEnter={e => {
                 if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)";
@@ -202,7 +211,7 @@ function ConversationItem({ conv, isActive, currentUserId, onClick }) {
                 </p>
             </div>
 
-            {conv.lastMessage && (
+            {conv.lastMessage && !isAdminUser && (
                 <span style={{
                     fontSize: "10px",
                     color: THEME.textMuted,
@@ -210,6 +219,34 @@ function ConversationItem({ conv, isActive, currentUserId, onClick }) {
                 }}>
                     {formatTime(conv.lastMessage.created_at)}
                 </span>
+            )}
+
+            {isAdminUser && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(conv); }}
+                    title="Delete conversation"
+                    style={{
+                        background: "none",
+                        border: "none",
+                        color: THEME.textMuted,
+                        fontSize: "14px",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        padding: "4px 6px",
+                        borderRadius: "6px",
+                        transition: "all 0.15s",
+                    }}
+                    onMouseEnter={e => {
+                        e.currentTarget.style.background = THEME.dangerMuted;
+                        e.currentTarget.style.color = THEME.danger;
+                    }}
+                    onMouseLeave={e => {
+                        e.currentTarget.style.background = "none";
+                        e.currentTarget.style.color = THEME.textMuted;
+                    }}
+                >
+                    🗑
+                </button>
             )}
         </div>
     );
@@ -271,6 +308,8 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
     const [mode, setMode] = useState("direct");
     const [groupName, setGroupName] = useState("");
     const [selectedMembers, setSelectedMembers] = useState(new Set());
+    const [creating, setCreating] = useState(false);
+    const [starting, setStarting] = useState(false);
 
     useEffect(() => {
         if (!show) return;
@@ -289,6 +328,8 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
             setGroupName("");
             setSelectedMembers(new Set());
             setSearch("");
+            setCreating(false);
+            setStarting(false);
         }
     }, [show]);
 
@@ -307,10 +348,21 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
         });
     };
 
-    const handleCreateGroup = () => {
-        if (!groupName.trim() || selectedMembers.size === 0) return;
-        onCreateGroup(groupName.trim(), Array.from(selectedMembers));
-        onClose();
+    // Guarded so a fast double-click can't fire onStartConversation twice.
+    const handleStartClick = async (targetUser) => {
+        if (starting) return;
+        setStarting(true);
+        await onStartConversation(targetUser);
+        setStarting(false);
+    };
+
+    const handleCreateGroup = async () => {
+        if (!groupName.trim() || selectedMembers.size === 0 || creating) return;
+        setCreating(true);
+        const success = await onCreateGroup(groupName.trim(), Array.from(selectedMembers));
+        setCreating(false);
+        if (success) onClose();
+        // on failure, modal stays open so the user doesn't lose their input
     };
 
     if (!show) return null;
@@ -377,7 +429,6 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
                             flex: 1,
                             padding: "8px",
                             borderRadius: "8px",
-                            border: "none",
                             background: mode === "direct" ? THEME.goldMuted : "transparent",
                             color: mode === "direct" ? THEME.gold : THEME.textMuted,
                             fontSize: "12px",
@@ -394,7 +445,6 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
                             flex: 1,
                             padding: "8px",
                             borderRadius: "8px",
-                            border: "none",
                             background: mode === "group" ? THEME.goldMuted : "transparent",
                             color: mode === "group" ? THEME.gold : THEME.textMuted,
                             fontSize: "12px",
@@ -513,18 +563,19 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
                         filtered.map(user => (
                             <div
                                 key={user.id}
-                                onClick={() => mode === "direct" ? onStartConversation(user) : toggleMember(user.id)}
+                                onClick={() => mode === "direct" ? handleStartClick(user) : toggleMember(user.id)}
                                 style={{
                                     display: "flex",
                                     alignItems: "center",
                                     gap: "12px",
                                     padding: "10px 12px",
                                     borderRadius: "10px",
-                                    cursor: "pointer",
+                                    cursor: mode === "direct" && starting ? "wait" : "pointer",
                                     transition: "all 0.2s",
                                     background: mode === "group" && selectedMembers.has(user.id) 
                                         ? THEME.goldMuted 
                                         : "transparent",
+                                    opacity: mode === "direct" && starting ? 0.6 : 1,
                                 }}
                                 onMouseEnter={e => {
                                     if (!(mode === "group" && selectedMembers.has(user.id))) {
@@ -571,7 +622,7 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
                     <div style={{ padding: "12px 16px", borderTop: `1px solid ${THEME.border}` }}>
                         <button
                             onClick={handleCreateGroup}
-                            disabled={!groupName.trim() || selectedMembers.size === 0}
+                            disabled={!groupName.trim() || selectedMembers.size === 0 || creating}
                             style={{
                                 width: "100%",
                                 padding: "12px",
@@ -581,10 +632,11 @@ function NewMessageModal({ show, onClose, currentUser, onStartConversation, onCr
                                 color: groupName.trim() && selectedMembers.size > 0 ? THEME.black : THEME.textMuted,
                                 fontWeight: 700,
                                 fontSize: "14px",
-                                cursor: groupName.trim() && selectedMembers.size > 0 ? "pointer" : "not-allowed",
+                                cursor: groupName.trim() && selectedMembers.size > 0 && !creating ? "pointer" : "not-allowed",
+                                opacity: creating ? 0.7 : 1,
                             }}
                         >
-                            Create Group ({selectedMembers.size})
+                            {creating ? "Creating..." : `Create Group (${selectedMembers.size})`}
                         </button>
                     </div>
                 )}
@@ -603,7 +655,7 @@ function GroupMembersModal({ show, onClose, conversationId, currentUser, isCreat
         const fetchMembers = async () => {
             setLoading(true);
             const data = await getConversationMembers(conversationId);
-            setMembers(data);
+            setMembers(dedupeById(data || []));
             setLoading(false);
         };
         fetchMembers();
@@ -764,7 +816,7 @@ function BroadcastModal({ show, onClose, currentUser, onSend }) {
     if (!show) return null;
 
     const handleSend = async () => {
-        if (!text.trim()) return;
+        if (!text.trim() || sending) return;
         setSending(true);
         await onSend(text.trim());
         setSending(false);
@@ -871,8 +923,18 @@ function Messages() {
     const [showMembers, setShowMembers] = useState(false);
     const [otherMember, setOtherMember] = useState(null);
 
-    // BUG FIX: Prevent rapid switching race condition
-    const switchingRef = useRef(false);
+    // MOBILE: track viewport so we can show either the conversation list OR
+    // the active chat (never both squeezed side by side, which is what was
+    // causing the broken/misaligned mobile layout).
+    const [isMobile, setIsMobile] = useState(
+        typeof window !== "undefined" ? window.innerWidth < 768 : false
+    );
+    useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, []);
+
     const activeConvIdRef = useRef(null);
 
     const messagesEndRef = useRef(null);
@@ -896,12 +958,15 @@ function Messages() {
         runMessageCleanup();
     }, []);
 
-    // Fetch conversations
+    // Fetch conversations. De-duped by id — this is what stops group chats
+    // (or anything joined against a members table) from showing up more than
+    // once in the sidebar.
     const fetchConversations = useCallback(async () => {
         if (!user) return;
         const convs = await getConversations(user.id);
+        const uniqueConvs = dedupeById(convs || []);
 
-        const enrichedConvs = await Promise.all(convs.map(async (conv) => {
+        const enrichedConvs = await Promise.all(uniqueConvs.map(async (conv) => {
             if (conv.type === "direct") {
                 const { data } = await supabase
                     .from("tblConversationMembers")
@@ -934,54 +999,56 @@ function Messages() {
         fetchConversations();
     }, [fetchConversations]);
 
-    // Subscribe to conversation updates
+    // SINGLE sync mechanism: poll the conversation list every 3 seconds.
+    // (We intentionally do NOT also run a realtime subscription here —
+    // running both was the two-systems-writing-the-same-state problem that
+    // caused flicker/duplication. Polling alone is simpler and reliable
+    // regardless of whether Supabase Realtime is configured correctly.)
     useEffect(() => {
         if (!user) return;
-        const unsubscribe = subscribeToConversations(user.id, fetchConversations);
-        return unsubscribe;
+        const interval = setInterval(() => {
+            fetchConversations();
+        }, 3000);
+        return () => clearInterval(interval);
     }, [user, fetchConversations]);
 
-    // BUG FIX: Fetch messages with race condition protection
+    // Fetch + poll messages for the active conversation.
     useEffect(() => {
         if (!activeConvId) return;
 
-        // Mark this effect instance as active
         let isActive = true;
         const currentConvId = activeConvId;
 
         const loadMessages = async () => {
             const msgs = await getMessages(currentConvId, 100);
+            if (!isActive || activeConvIdRef.current !== currentConvId) return;
 
-            // BUG FIX: Only update state if this effect is still active AND conv hasn't changed
-            if (isActive && activeConvIdRef.current === currentConvId) {
-                setMessages(msgs);
-                await markAsRead(currentConvId, user.id);
+            setMessages(dedupeById(msgs || []));
+            await markAsRead(currentConvId, user.id);
 
-                const activeConv = conversations.find(c => c.id === currentConvId);
-                if (activeConv?.type === "direct" && activeConv.otherMember) {
-                    setOtherMember(activeConv.otherMember);
-                } else {
-                    setOtherMember(null);
-                }
-            }
+            const activeConv = conversations.find(c => c.id === currentConvId);
+            setOtherMember(activeConv?.type === "direct" ? (activeConv.otherMember || null) : null);
         };
 
         loadMessages();
 
-        const unsubscribe = subscribeToMessages(currentConvId, (newMsg) => {
-            // BUG FIX: Only add message if we're still viewing this conversation
-            if (activeConvIdRef.current === currentConvId) {
-                setMessages(prev => {
-                    if (prev.find(m => m.id === newMsg.id)) return prev;
-                    return [...prev, newMsg];
-                });
-                markAsRead(currentConvId, user.id);
-            }
-        });
+        // Poll for new messages every 3 seconds. New messages are merged in
+        // by id, so this never causes duplicates or disrupts what's already
+        // on screen.
+        const pollInterval = setInterval(async () => {
+            if (!isActive || activeConvIdRef.current !== currentConvId) return;
+            const latest = await getMessages(currentConvId, 100);
+            if (!isActive || activeConvIdRef.current !== currentConvId) return;
+            setMessages(prev => {
+                const existingIds = new Set(prev.map(m => m.id));
+                const hasNew = (latest || []).some(m => !existingIds.has(m.id));
+                return hasNew ? dedupeById(latest) : prev;
+            });
+        }, 3000);
 
         return () => {
             isActive = false;
-            unsubscribe();
+            clearInterval(pollInterval);
         };
     }, [activeConvId, user?.id]);
 
@@ -999,7 +1066,7 @@ function Messages() {
 
         const msg = await sendMessage(activeConvId, user.id, `${user.firstname} ${user.lastname}`, text);
         if (msg) {
-            setMessages(prev => [...prev, msg]);
+            setMessages(prev => (prev.find(m => m.id === msg.id) ? prev : [...prev, msg]));
         }
         setSending(false);
         inputRef.current?.focus();
@@ -1012,17 +1079,16 @@ function Messages() {
         }
     };
 
-    // BUG FIX: Debounced conversation switch to prevent double-click twitching
+    // Switch conversation — a plain state update. No debounce lock: clicking
+    // the same conversation twice is a no-op already, and clicking two
+    // different conversations quickly is fine since setActiveConvId just
+    // takes the latest value.
     const handleSwitchConversation = useCallback((convId) => {
-        if (switchingRef.current || convId === activeConvIdRef.current) return;
+        setActiveConvId(prev => (prev === convId ? prev : convId));
+    }, []);
 
-        switchingRef.current = true;
-        setActiveConvId(convId);
-
-        // Allow next switch after 300ms
-        setTimeout(() => {
-            switchingRef.current = false;
-        }, 300);
+    const handleBackToList = useCallback(() => {
+        setActiveConvId(null);
     }, []);
 
     const handleStartConversation = async (targetUser) => {
@@ -1031,20 +1097,76 @@ function Messages() {
             setShowNewMsg(false);
             await fetchConversations();
             setActiveConvId(conv.id);
+        } else {
+            Swal.fire({
+                icon: "error",
+                title: "Couldn't Start Conversation",
+                text: "Something went wrong. Please try again.",
+                confirmButtonColor: "#c9a45c"
+            });
         }
     };
 
+    // createGroupConversation returns { success, conversation, error, stage }.
+    // We surface the REAL database error message here so you see exactly why
+    // it failed (RLS, a foreign key pointing at the wrong table, a check
+    // constraint on `type`, etc) instead of a generic "something went wrong."
     const handleCreateGroup = async (name, memberIds) => {
-        const conv = await createGroupConversation(name, user.id, memberIds);
-        if (conv) {
+        const result = await createGroupConversation(name, user.id, memberIds);
+        if (result.success) {
             await fetchConversations();
-            setActiveConvId(conv.id);
+            setActiveConvId(result.conversation.id);
+            return true;
         }
+
+        const stageLabel = result.stage === "conversation"
+            ? "Creating the group record failed"
+            : "Adding members failed";
+
+        Swal.fire({
+            icon: "error",
+            title: "Group Not Created",
+            html: `<div style="text-align:left"><strong>${stageLabel}:</strong><br/><code style="font-size:12px;word-break:break-word;">${result.error || "Unknown error"}</code></div>`,
+            confirmButtonColor: "#c9a45c"
+        });
+        return false;
     };
 
     const handleBroadcast = async (text) => {
         await sendBroadcast(user.id, `${user.firstname} ${user.lastname}`, text);
         await fetchConversations();
+    };
+
+    // Admin-only delete conversation, with confirmation
+    const handleDeleteConversation = async (conv) => {
+        const label = conv.type === "direct"
+            ? (conv.otherMember ? `${conv.otherMember.firstname} ${conv.otherMember.lastname}` : "this conversation")
+            : (conv.name || "this conversation");
+
+        const result = await Swal.fire({
+            icon: "warning",
+            title: "Delete conversation?",
+            text: `This permanently deletes all messages in "${label}". This cannot be undone.`,
+            showCancelButton: true,
+            confirmButtonColor: "#dc2626",
+            cancelButtonColor: "#6b7280",
+            confirmButtonText: "Delete",
+        });
+
+        if (!result.isConfirmed) return;
+
+        const success = await deleteConversation(conv.id);
+        if (success) {
+            if (activeConvId === conv.id) setActiveConvId(null);
+            await fetchConversations();
+        } else {
+            Swal.fire({
+                icon: "error",
+                title: "Delete Failed",
+                text: "Something went wrong deleting this conversation.",
+                confirmButtonColor: "#c9a45c"
+            });
+        }
     };
 
     const activeConv = conversations.find(c => c.id === activeConvId);
@@ -1063,6 +1185,11 @@ function Messages() {
         : isGroupChat ? `${activeConv?.memberCount || 0} members`
         : "";
 
+    // On mobile: show the list only when no chat is open, and the chat only
+    // when one is open. On desktop: always show both side by side.
+    const showListPane = !isMobile || !activeConvId;
+    const showChatPane = !isMobile || !!activeConvId;
+
     return (
         <div className="layout" style={{ background: THEME.black, minHeight: "100vh" }}>
             <Sidebar />
@@ -1074,332 +1201,367 @@ function Messages() {
                 overflow: "hidden",
             }}>
                 {/* ── LEFT SIDEBAR: Conversation List ────────────────────── */}
-                <div style={{
-                    width: "320px",
-                    minWidth: "320px",
-                    background: THEME.blackCard,
-                    borderRight: `1px solid ${THEME.border}`,
-                    display: "flex",
-                    flexDirection: "column",
-                }}>
-                    {/* Header */}
+                {showListPane && (
                     <div style={{
-                        padding: "18px 16px",
-                        borderBottom: `1px solid ${THEME.border}`,
+                        width: isMobile ? "100%" : "320px",
+                        minWidth: isMobile ? "100%" : "320px",
+                        background: THEME.blackCard,
+                        borderRight: `1px solid ${THEME.border}`,
                         display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
+                        flexDirection: "column",
                     }}>
-                        <h2 style={{
-                            margin: 0,
-                            fontSize: "18px",
-                            fontWeight: 800,
-                            color: THEME.textPrimary,
-                            letterSpacing: "-0.3px",
+                        {/* Header */}
+                        <div style={{
+                            padding: "18px 16px",
+                            borderBottom: `1px solid ${THEME.border}`,
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
                         }}>
-                            MAC-MESSAGE
-                        </h2>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                            {admin && (
+                            <h2 style={{
+                                margin: 0,
+                                fontSize: "18px",
+                                fontWeight: 800,
+                                color: THEME.textPrimary,
+                                letterSpacing: "-0.3px",
+                            }}>
+                                MAC-MESSAGE
+                            </h2>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                                {admin && (
+                                    <button
+                                        onClick={() => setShowBroadcast(true)}
+                                        title="Broadcast"
+                                        style={{
+                                            width: "32px",
+                                            height: "32px",
+                                            borderRadius: "8px",
+                                            border: `1px solid ${THEME.borderGold}`,
+                                            background: "rgba(201,164,92,0.1)",
+                                            color: THEME.gold,
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            fontSize: "14px",
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        !
+                                    </button>
+                                )}
                                 <button
-                                    onClick={() => setShowBroadcast(true)}
-                                    title="Broadcast"
+                                    onClick={() => setShowNewMsg(true)}
                                     style={{
                                         width: "32px",
                                         height: "32px",
                                         borderRadius: "8px",
-                                        border: `1px solid ${THEME.borderGold}`,
-                                        background: "rgba(201,164,92,0.1)",
-                                        color: THEME.gold,
+                                        border: "none",
+                                        background: THEME.gradientGold,
+                                        color: THEME.black,
                                         cursor: "pointer",
                                         display: "flex",
                                         alignItems: "center",
                                         justifyContent: "center",
-                                        fontSize: "14px",
+                                        fontSize: "18px",
                                         fontWeight: 700,
                                     }}
                                 >
-                                    !
+                                    +
                                 </button>
-                            )}
-                            <button
-                                onClick={() => setShowNewMsg(true)}
-                                style={{
-                                    width: "32px",
-                                    height: "32px",
-                                    borderRadius: "8px",
-                                    border: "none",
-                                    background: THEME.gradientGold,
-                                    color: THEME.black,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: "18px",
-                                    fontWeight: 700,
-                                }}
-                            >
-                                +
-                            </button>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Conversation List */}
-                    <div style={{
-                        flex: 1,
-                        overflowY: "auto",
-                        padding: "8px",
-                    }}>
-                        {loading ? (
-                            <div style={{ textAlign: "center", padding: "40px" }}>
-                                <div style={{
-                                    width: "24px",
-                                    height: "24px",
-                                    border: `2px solid ${THEME.border}`,
-                                    borderTopColor: THEME.gold,
-                                    borderRadius: "50%",
-                                    margin: "0 auto 10px",
-                                    animation: "spin 0.8s linear infinite",
-                                }} />
-                                <p style={{ color: THEME.textMuted, fontSize: "12px" }}>Loading...</p>
-                            </div>
-                        ) : conversations.length === 0 ? (
-                            <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                                <p style={{ color: THEME.textMuted, fontSize: "13px", margin: "0 0 12px 0" }}>
-                                    No conversations yet
-                                </p>
-                                <button
-                                    onClick={() => setShowNewMsg(true)}
-                                    style={{
-                                        padding: "10px 20px",
-                                        borderRadius: "10px",
-                                        border: `1px solid ${THEME.gold}`,
-                                        background: "transparent",
-                                        color: THEME.gold,
-                                        fontSize: "12px",
-                                        fontWeight: 600,
-                                        cursor: "pointer",
-                                    }}
-                                >
-                                    Start a conversation
-                                </button>
-                            </div>
-                        ) : (
-                            conversations.map(conv => (
-                                <ConversationItem
-                                    key={conv.id}
-                                    conv={conv}
-                                    isActive={conv.id === activeConvId}
-                                    currentUserId={user?.id}
-                                    onClick={() => handleSwitchConversation(conv.id)}
-                                />
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                {/* ── RIGHT: Chat Area ─────────────────────────────────── */}
-                <div style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    background: THEME.black,
-                }}>
-                    {activeConvId ? (
-                        <>
-                            {/* Chat Header */}
-                            <div style={{
-                                padding: "14px 20px",
-                                borderBottom: `1px solid ${THEME.border}`,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "12px",
-                                background: THEME.blackCard,
-                            }}>
-                                <Avatar 
-                                    name={chatTitle} 
-                                    size={38} 
-                                    imageUrl={otherMember?.image_url} 
-                                />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <h3 style={{
-                                        margin: 0,
-                                        fontSize: "15px",
-                                        fontWeight: 700,
-                                        color: THEME.textPrimary,
-                                        whiteSpace: "nowrap",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                    }}>
-                                        {chatTitle}
-                                    </h3>
-                                    {chatSubtitle && (
-                                        <p style={{
-                                            margin: "2px 0 0 0",
-                                            fontSize: "11px",
-                                            color: THEME.textMuted,
-                                        }}>
-                                            {chatSubtitle}
-                                        </p>
-                                    )}
+                        {/* Conversation List */}
+                        <div style={{
+                            flex: 1,
+                            overflowY: "auto",
+                            padding: "8px",
+                        }}>
+                            {loading ? (
+                                <div style={{ textAlign: "center", padding: "40px" }}>
+                                    <div style={{
+                                        width: "24px",
+                                        height: "24px",
+                                        border: `2px solid ${THEME.border}`,
+                                        borderTopColor: THEME.gold,
+                                        borderRadius: "50%",
+                                        margin: "0 auto 10px",
+                                        animation: "spin 0.8s linear infinite",
+                                    }} />
+                                    <p style={{ color: THEME.textMuted, fontSize: "12px" }}>Loading...</p>
                                 </div>
-                                {isGroupChat && (
+                            ) : conversations.length === 0 ? (
+                                <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                                    <p style={{ color: THEME.textMuted, fontSize: "13px", margin: "0 0 12px 0" }}>
+                                        No conversations yet
+                                    </p>
                                     <button
-                                        onClick={() => setShowMembers(true)}
+                                        onClick={() => setShowNewMsg(true)}
                                         style={{
-                                            padding: "6px 12px",
-                                            borderRadius: "8px",
-                                            border: `1px solid ${THEME.border}`,
+                                            padding: "10px 20px",
+                                            borderRadius: "10px",
+                                            border: `1px solid ${THEME.gold}`,
                                             background: "transparent",
-                                            color: THEME.textSecondary,
+                                            color: THEME.gold,
                                             fontSize: "12px",
                                             fontWeight: 600,
                                             cursor: "pointer",
                                         }}
                                     >
-                                        Members
+                                        Start a conversation
                                     </button>
-                                )}
-                            </div>
-
-                            {/* Messages */}
-                            <div
-                                ref={messagesContainerRef}
-                                style={{
-                                    flex: 1,
-                                    overflowY: "auto",
-                                    padding: "16px 20px",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    scrollbarWidth: "thin",
-                                    scrollbarColor: `${THEME.border} transparent`,
-                                }}
-                            >
-                                {messages.length === 0 ? (
-                                    <div style={{
-                                        flex: 1,
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                    }}>
-                                        <p style={{ color: THEME.textMuted, fontSize: "13px" }}>
-                                            No messages yet. Start the conversation!
-                                        </p>
-                                    </div>
-                                ) : (
-                                    messages.map((msg, idx) => {
-                                        const isMine = msg.sender_id === user?.id;
-                                        const showSender = activeConv?.type !== "direct" && !isMine;
-                                        const prevMsg = idx > 0 ? messages[idx - 1] : null;
-                                        const showName = showSender && (!prevMsg || prevMsg.sender_id !== msg.sender_id);
-
-                                        return (
-                                            <MessageBubble
-                                                key={msg.id}
-                                                msg={msg}
-                                                isMine={isMine}
-                                                showSender={showName}
-                                            />
-                                        );
-                                    })
-                                )}
-                                <div ref={messagesEndRef} />
-                            </div>
-
-                            {/* Input */}
-                            <div style={{
-                                padding: "12px 20px",
-                                borderTop: `1px solid ${THEME.border}`,
-                                background: THEME.blackCard,
-                            }}>
-                                <div style={{
-                                    display: "flex",
-                                    gap: "10px",
-                                    alignItems: "flex-end",
-                                }}>
-                                    <textarea
-                                        ref={inputRef}
-                                        value={inputText}
-                                        onChange={e => setInputText(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        placeholder="Type a message..."
-                                        rows={1}
-                                        style={{
-                                            flex: 1,
-                                            padding: "10px 14px",
-                                            borderRadius: "20px",
-                                            border: `1.5px solid ${THEME.border}`,
-                                            background: THEME.blackLight,
-                                            color: THEME.textPrimary,
-                                            fontSize: "14px",
-                                            outline: "none",
-                                            resize: "none",
-                                            maxHeight: "120px",
-                                            fontFamily: "inherit",
-                                            lineHeight: 1.4,
-                                        }}
-                                        onFocus={e => { e.target.style.borderColor = THEME.gold; }}
-                                        onBlur={e => { e.target.style.borderColor = THEME.border; }}
+                                </div>
+                            ) : (
+                                conversations.map(conv => (
+                                    <ConversationItem
+                                        key={conv.id}
+                                        conv={conv}
+                                        isActive={conv.id === activeConvId}
+                                        currentUserId={user?.id}
+                                        isAdminUser={admin}
+                                        onClick={() => handleSwitchConversation(conv.id)}
+                                        onDelete={handleDeleteConversation}
                                     />
-                                    <button
-                                        onClick={handleSend}
-                                        disabled={sending || !inputText.trim()}
-                                        style={{
-                                            width: "40px",
-                                            height: "40px",
-                                            borderRadius: "50%",
-                                            border: "none",
-                                            background: inputText.trim() ? THEME.gradientGold : THEME.border,
-                                            color: inputText.trim() ? THEME.black : THEME.textMuted,
-                                            cursor: inputText.trim() ? "pointer" : "not-allowed",
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* ── RIGHT: Chat Area ─────────────────────────────────── */}
+                {showChatPane && (
+                    <div style={{
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        background: THEME.black,
+                        width: isMobile ? "100%" : undefined,
+                        minWidth: 0,
+                    }}>
+                        {activeConvId ? (
+                            <>
+                                {/* Chat Header */}
+                                <div style={{
+                                    padding: "14px 20px",
+                                    borderBottom: `1px solid ${THEME.border}`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "12px",
+                                    background: THEME.blackCard,
+                                }}>
+                                    {isMobile && (
+                                        <button
+                                            onClick={handleBackToList}
+                                            aria-label="Back to conversations"
+                                            style={{
+                                                width: "32px",
+                                                height: "32px",
+                                                borderRadius: "8px",
+                                                border: `1px solid ${THEME.border}`,
+                                                background: "transparent",
+                                                color: THEME.textSecondary,
+                                                cursor: "pointer",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                fontSize: "16px",
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            ←
+                                        </button>
+                                    )}
+                                    <Avatar 
+                                        name={chatTitle} 
+                                        size={38} 
+                                        imageUrl={otherMember?.image_url} 
+                                    />
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <h3 style={{
+                                            margin: 0,
+                                            fontSize: "15px",
+                                            fontWeight: 700,
+                                            color: THEME.textPrimary,
+                                            whiteSpace: "nowrap",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                        }}>
+                                            {chatTitle}
+                                        </h3>
+                                        {chatSubtitle && (
+                                            <p style={{
+                                                margin: "2px 0 0 0",
+                                                fontSize: "11px",
+                                                color: THEME.textMuted,
+                                            }}>
+                                                {chatSubtitle}
+                                            </p>
+                                        )}
+                                    </div>
+                                    {isGroupChat && (
+                                        <button
+                                            onClick={() => setShowMembers(true)}
+                                            style={{
+                                                padding: "6px 12px",
+                                                borderRadius: "8px",
+                                                border: `1px solid ${THEME.border}`,
+                                                background: "transparent",
+                                                color: THEME.textSecondary,
+                                                fontSize: "12px",
+                                                fontWeight: 600,
+                                                cursor: "pointer",
+                                                flexShrink: 0,
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
+                                            Members
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Messages */}
+                                <div
+                                    ref={messagesContainerRef}
+                                    style={{
+                                        flex: 1,
+                                        overflowY: "auto",
+                                        padding: "16px 20px",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        scrollbarWidth: "thin",
+                                        scrollbarColor: `${THEME.border} transparent`,
+                                    }}
+                                >
+                                    {messages.length === 0 ? (
+                                        <div style={{
+                                            flex: 1,
                                             display: "flex",
                                             alignItems: "center",
                                             justifyContent: "center",
-                                            fontSize: "16px",
-                                            fontWeight: 700,
-                                            flexShrink: 0,
-                                            transition: "all 0.2s",
-                                        }}
-                                    >
-                                        &gt;
-                                    </button>
+                                        }}>
+                                            <p style={{ color: THEME.textMuted, fontSize: "13px" }}>
+                                                No messages yet. Start the conversation!
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        messages.map((msg, idx) => {
+                                            const isMine = msg.sender_id === user?.id;
+                                            const showSender = activeConv?.type !== "direct" && !isMine;
+                                            const prevMsg = idx > 0 ? messages[idx - 1] : null;
+                                            const showName = showSender && (!prevMsg || prevMsg.sender_id !== msg.sender_id);
+
+                                            return (
+                                                <MessageBubble
+                                                    key={msg.id}
+                                                    msg={msg}
+                                                    isMine={isMine}
+                                                    showSender={showName}
+                                                />
+                                            );
+                                        })
+                                    )}
+                                    <div ref={messagesEndRef} />
                                 </div>
-                            </div>
-                        </>
-                    ) : (
-                        /* Empty State */
-                        <div style={{
-                            flex: 1,
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: THEME.textMuted,
-                        }}>
+
+                                {/* Input */}
+                                <div style={{
+                                    padding: "12px 20px",
+                                    borderTop: `1px solid ${THEME.border}`,
+                                    background: THEME.blackCard,
+                                }}>
+                                    <div style={{
+                                        display: "flex",
+                                        gap: "10px",
+                                        alignItems: "flex-end",
+                                    }}>
+                                        <textarea
+                                            ref={inputRef}
+                                            value={inputText}
+                                            onChange={e => setInputText(e.target.value)}
+                                            onKeyDown={handleKeyDown}
+                                            placeholder="Type a message..."
+                                            rows={1}
+                                            style={{
+                                                flex: 1,
+                                                padding: "10px 14px",
+                                                borderRadius: "20px",
+                                                border: `1.5px solid ${THEME.border}`,
+                                                background: THEME.blackLight,
+                                                color: THEME.textPrimary,
+                                                fontSize: "14px",
+                                                outline: "none",
+                                                resize: "none",
+                                                maxHeight: "120px",
+                                                fontFamily: "inherit",
+                                                lineHeight: 1.4,
+                                                minWidth: 0,
+                                            }}
+                                            onFocus={e => { e.target.style.borderColor = THEME.gold; }}
+                                            onBlur={e => { e.target.style.borderColor = THEME.border; }}
+                                        />
+                                        <button
+                                            onClick={handleSend}
+                                            disabled={sending || !inputText.trim()}
+                                            style={{
+                                                width: "40px",
+                                                height: "40px",
+                                                borderRadius: "50%",
+                                                border: "none",
+                                                background: inputText.trim() ? THEME.gradientGold : THEME.border,
+                                                color: inputText.trim() ? THEME.black : THEME.textMuted,
+                                                cursor: inputText.trim() ? "pointer" : "not-allowed",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                fontSize: "16px",
+                                                fontWeight: 700,
+                                                flexShrink: 0,
+                                                transition: "all 0.2s",
+                                            }}
+                                        >
+                                            &gt;
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            /* Empty State */
                             <div style={{
-                                width: "60px",
-                                height: "60px",
-                                borderRadius: "50%",
-                                background: THEME.blackLight,
-                                border: `2px solid ${THEME.border}`,
+                                flex: 1,
                                 display: "flex",
+                                flexDirection: "column",
                                 alignItems: "center",
                                 justifyContent: "center",
-                                marginBottom: "16px",
+                                color: THEME.textMuted,
+                                padding: "20px",
+                                textAlign: "center",
                             }}>
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={THEME.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                                </svg>
+                                <div style={{
+                                    width: "60px",
+                                    height: "60px",
+                                    borderRadius: "50%",
+                                    background: THEME.blackLight,
+                                    border: `2px solid ${THEME.border}`,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    marginBottom: "16px",
+                                }}>
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={THEME.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                    </svg>
+                                </div>
+                                <p style={{ fontSize: "15px", fontWeight: 600, color: THEME.textSecondary, margin: "0 0 6px 0" }}>
+                                    Select a conversation
+                                </p>
+                                <p style={{ fontSize: "12px", color: THEME.textMuted, margin: 0 }}>
+                                    or start a new message from the sidebar
+                                </p>
                             </div>
-                            <p style={{ fontSize: "15px", fontWeight: 600, color: THEME.textSecondary, margin: "0 0 6px 0" }}>
-                                Select a conversation
-                            </p>
-                            <p style={{ fontSize: "12px", color: THEME.textMuted, margin: 0 }}>
-                                or start a new message from the sidebar
-                            </p>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Modals */}

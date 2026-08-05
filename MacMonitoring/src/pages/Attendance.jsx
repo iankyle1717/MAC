@@ -4,7 +4,6 @@ import Sidebar from "../components/Sidebar";
 import { supabase } from "../lib/supabase";
 import {
     tribes as allTribes,
-    allNewcomerStages,
     getStageCategory,
     consoStages,
 } from "../constants/options";
@@ -18,12 +17,19 @@ const tribes = allTribes && allTribes.length ? allTribes : [
 
 const SERVICE_PRESETS = ["PRAYER WORKS", "YOUTH GIG", "SUNDAY SERVICE"];
 
-// Conso-only auto-advance: 1st Timer -> 2nd Timer -> 3rd Timer.
-const CONSO_STAGES = ["1st Timer", "2nd Timer", "3rd Timer"];
+// ═══════════════════════════════════════════════════════════════════════════
+// Ushering auto-advance: 1st Timer -> 2nd Timer -> 3rd Timer -> Regular Attendee.
+//
+// "Regular Attendee" is the hand-off stage. Ushering's responsibility ends the
+// moment a newcomer reaches it — it is the LAST stage this function will ever
+// move someone into. From there, only the Discipleship Journey (DJ) ministry
+// decides what happens next (Life Track, Life Retreat, Schooling, etc.), and
+// that decision is made on the Assimilation page, not here.
+// ═══════════════════════════════════════════════════════════════════════════
 const getConsoAutoAdvance = (currentStage) => {
-    const idx = CONSO_STAGES.indexOf(currentStage);
-    if (idx === -1 || idx === CONSO_STAGES.length - 1) return null;
-    return CONSO_STAGES[idx + 1];
+    const idx = consoStages.indexOf(currentStage);
+    if (idx === -1 || idx === consoStages.length - 1) return null;
+    return consoStages[idx + 1];
 };
 
 const INACTIVE_STREAK = 5;
@@ -329,7 +335,12 @@ function AttendanceModal({
 }
 
 // ── Add Newcomer Modal ──────────────────────────────────────────────────────
-function AddNewcomerModal({ show, onClose, onAdd, tribesList }) {
+// Mirrors the Assimilation page's "Add Newcomer" form (tribe -> inviter
+// dropdown filtered to that tribe), but is intentionally scoped down to
+// Ushering's world only: a walk-in can only ever start at 1st/2nd/3rd Timer,
+// or already be a Regular Attendee. Everything past that point (Life Track,
+// Life Retreat, Schooling, etc.) is DJ's call and is managed on Assimilation.
+function AddNewcomerModal({ show, onClose, onAdd, tribesList, leaders }) {
     const [firstname, setFirstname] = useState("");
     const [lastname, setLastname] = useState("");
     const [tribe, setTribe] = useState("");
@@ -338,6 +349,8 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList }) {
     const [saving, setSaving] = useState(false);
 
     if (!show) return null;
+
+    const filteredLeaders = (leaders || []).filter(l => l.tribe === tribe);
 
     const handleSave = async () => {
         if (!firstname || !lastname || !tribe) {
@@ -363,17 +376,30 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList }) {
                 <h2 style={{ margin: "0 0 4px 0", fontSize: "17px", fontWeight: 700 }}>Add Newcomer</h2>
                 <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: "#9ca3af" }}>
                     Walk-in during this service — will be marked Present automatically.
+                    Only Conso stages are tracked here; once a newcomer becomes a
+                    Regular Attendee, the Discipleship Journey team takes it from there.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     <input type="text" placeholder="First Name" value={firstname} onChange={e => setFirstname(e.target.value)} style={modalInputStyle} />
                     <input type="text" placeholder="Last Name" value={lastname} onChange={e => setLastname(e.target.value)} style={modalInputStyle} />
-                    <select value={tribe} onChange={e => setTribe(e.target.value)} style={modalInputStyle}>
+                    <select
+                        value={tribe}
+                        onChange={e => { setTribe(e.target.value); setInvitedBy(""); }}
+                        style={modalInputStyle}
+                    >
                         <option value="">Select Tribe *</option>
                         {tribesList.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <input type="text" placeholder="Invited By (optional)" value={invitedBy} onChange={e => setInvitedBy(e.target.value)} style={modalInputStyle} />
+                    <select value={invitedBy} onChange={e => setInvitedBy(e.target.value)} style={modalInputStyle}>
+                        <option value="">Select Inviter (optional)</option>
+                        {filteredLeaders.map(l => (
+                            <option key={l.id} value={`${l.firstname} ${l.lastname}`}>
+                                {l.firstname} {l.lastname}
+                            </option>
+                        ))}
+                    </select>
                     <select value={remarks} onChange={e => setRemarks(e.target.value)} style={modalInputStyle}>
-                        {(allNewcomerStages && allNewcomerStages.length ? allNewcomerStages : ["1st Timer", "2nd Timer", "3rd Timer"]).map(stage => (
+                        {consoStages.map(stage => (
                             <option key={stage} value={stage}>{stage}</option>
                         ))}
                     </select>
@@ -729,6 +755,10 @@ function Attendance() {
                 newVisitNumber = prevVisitNumber + 1;
                 newConsecutiveAbsences = 0;
                 if (newVisitNumber >= ACTIVE_STREAK) newStatus = "ACTIVE";
+                // Ushering-only auto-advance. This will carry a 3rd Timer into
+                // "Regular Attendee" and then stop — it will NEVER push someone
+                // from Regular Attendee into Soul Winning/Soaking/Schooling.
+                // That hand-off is DJ's decision, made on the Assimilation page.
                 const advanced = getConsoAutoAdvance(prevStage);
                 if (advanced) newStage = advanced;
             } else {
@@ -1318,6 +1348,7 @@ function Attendance() {
                 onClose={() => setShowAddNewcomer(false)}
                 onAdd={handleAddWalkInNewcomer}
                 tribesList={tribes}
+                leaders={leaders}
             />
         </div>
     );

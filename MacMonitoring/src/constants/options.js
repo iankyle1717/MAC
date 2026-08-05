@@ -64,11 +64,37 @@ export const tithingTypes = [
 // =========================
 // NEWCOMER JOURNEY STAGES
 // =========================
+//
+// The journey is split into two clearly separated ownership zones:
+//
+// 1) USHERING (Attendance page) — owns the walk-in / first-visits phase.
+//    They only ever see and advance: 1st Timer -> 2nd Timer -> 3rd Timer.
+//    The moment a 3rd Timer attends again, Ushering's job is done and the
+//    newcomer is simply marked "Regular Attendee". Ushering never advances
+//    anyone past that point.
+//
+// 2) DISCIPLESHIP JOURNEY / DJ (Assimilation page) — owns everything from
+//    "Regular Attendee" onward: deciding whether the person goes into
+//    Life Track, Life Retreat, Schooling, etc. Only DJ (or Admin) can move
+//    a newcomer past "Regular Attendee".
+//
+// Both roles read/write the same `remarks` column on tblNewMembers, but the
+// UI enforces who is allowed to touch it at each stage.
 
-export const consoStages = [
+// Stages Ushering is responsible for recording/advancing via Attendance.
+export const usheringStages = [
     "1st Timer",
     "2nd Timer",
     "3rd Timer"
+];
+
+// The hand-off stage: Ushering's work ends here, DJ's work begins here.
+export const REGULAR_ATTENDEE = "Regular Attendee";
+
+// Full "Conso" bucket = Ushering's 3 stages + the hand-off stage.
+export const consoStages = [
+    ...usheringStages,
+    REGULAR_ATTENDEE
 ];
 
 export const soulWinningStages = [
@@ -129,6 +155,14 @@ export const isSchoolingStage = (stage) => schoolingStages.includes(stage);
 
 // Helper: Check if newcomer is ready for conversion
 export const isReadyForConversion = (stage) => stage === "Life Group Class";
+
+// Helper: Is this stage still inside Ushering's own 1st/2nd/3rd Timer range?
+// (Regular Attendee is deliberately excluded — that's the hand-off point.)
+export const isUsheringStage = (stage) => usheringStages.includes(stage);
+
+// Helper: Has this newcomer already been handed off to DJ?
+// True from "Regular Attendee" onward (Soul Winning, Soaking, Schooling too).
+export const isHandedToDJ = (stage) => !!stage && !usheringStages.includes(stage);
 
 // Helper: Check if user is still in schooling process
 export const isInSchooling = (ministry) => {
