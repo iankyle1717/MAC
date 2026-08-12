@@ -25,6 +25,8 @@ export const ministries = [
     "USHERING",
     "HOSPITALITY",
     "DANCE",
+    "KITCHEN",
+    "PASTOR",
     "DISCIPLESHIP JOURNEY",
     "EVENT ORGANIZER",
     "NONE"

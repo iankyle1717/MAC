@@ -17,6 +17,28 @@ const tribes = allTribes && allTribes.length ? allTribes : [
 
 const SERVICE_PRESETS = ["PRAYER WORKS", "YOUTH GIG", "SUNDAY SERVICE"];
 
+// ── Excel-style table tokens (copied from Assimilation, for visual parity) ─
+const ETH = (extra = {}) => ({
+    padding: "5px 4px",
+    fontWeight: 700,
+    fontSize: "11px",
+    textAlign: "center",
+    color: "#000",
+    background: "#f3f4f6",
+    border: "1px solid #000",
+    whiteSpace: "nowrap",
+    ...extra,
+});
+
+const ETD = (extra = {}) => ({
+    padding: "0",
+    fontSize: "11px",
+    textAlign: "center",
+    border: "1px solid #000",
+    background: "#fff",
+    ...extra,
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Ushering auto-advance: 1st Timer -> 2nd Timer -> 3rd Timer -> Regular Attendee.
 //
@@ -1193,41 +1215,84 @@ function Attendance() {
                             </div>
                         </div>
 
-                        <div className="attendance-table-container">
-                            <div className="flex-table-header">
-                                <div className="flex-col flex-col-name">Name</div>
-                                <div className="flex-col flex-col-tribe">Tribe</div>
-                                <div className="flex-col flex-col-type">Type</div>
-                                <div className="flex-col flex-col-status">Status</div>
-                                <div className="flex-col flex-col-action">Action</div>
-                            </div>
-                            <div className="flex-table-body">
-                                {sorted.map(leader => {
-                                    const status = attendanceMap[leader.id] || "Absent";
-                                    return (
-                                        <div className="flex-row" key={leader.id}>
-                                            <div className="flex-col flex-col-name">
-                                                <img src={leader.image_url || "https://placehold.co/32"} alt="" className="avatar-sm" />
-                                                <span className="name-text">{leader.firstname} {leader.lastname}</span>
-                                            </div>
-                                            <div className="flex-col flex-col-tribe">{leader.tribe}</div>
-                                            <div className="flex-col flex-col-type">
-                                                <span className="badge-sm">{leader.type}</span>
-                                            </div>
-                                            <div className="flex-col flex-col-status">
-                                                <span className={`dot ${status === "Present" ? "dot-present" : "dot-absent"}`}></span>
-                                                <span className="status-text">{status}</span>
-                                            </div>
-                                            <div className="flex-col flex-col-action">
-                                                <button className={`toggle-sm ${status === "Present" ? "is-present" : "is-absent"}`}
-                                                    onClick={() => toggleAttendance(leader.id)}>
-                                                    {status === "Present" ? "Absent" : "Present"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                        {/* EXCEL-STYLE TABLE — matches Assimilation page design */}
+                        <div style={{ overflowX: "auto", border: "1px solid #000" }}>
+                            <table style={{ width: "100%", fontSize: "11px", borderCollapse: "collapse", minWidth: "700px" }}>
+                                <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                                    <tr>
+                                        <th style={ETH({ textAlign: "left", width: "220px" })}>NAME</th>
+                                        <th style={ETH({ width: "100px" })}>TRIBE</th>
+                                        <th style={ETH({ width: "110px" })}>TYPE</th>
+                                        <th style={ETH({ width: "110px" })}>STATUS</th>
+                                        <th style={ETH({ width: "120px" })}>ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sorted.length === 0 ? (
+                                        <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No leaders found.</td></tr>
+                                    ) : (
+                                        sorted.map(leader => {
+                                            const status = attendanceMap[leader.id] || "Absent";
+                                            return (
+                                                <tr key={leader.id}>
+                                                    <td style={ETD({ textAlign: "left", padding: "4px 6px" })}>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                            <img
+                                                                src={leader.image_url || "https://placehold.co/28"}
+                                                                alt=""
+                                                                style={{ width: "28px", height: "28px", borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                                                            />
+                                                            <span style={{ fontWeight: 600, color: "#111827" }}>{leader.firstname} {leader.lastname}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td style={ETD()}>{leader.tribe}</td>
+                                                    <td style={ETD()}>
+                                                        <span style={{
+                                                            padding: "2px 8px",
+                                                            borderRadius: "10px",
+                                                            background: "#f3f4f6",
+                                                            color: "#374151",
+                                                            fontSize: "10px",
+                                                            fontWeight: 700
+                                                        }}>
+                                                            {leader.type}
+                                                        </span>
+                                                    </td>
+                                                    <td style={ETD()}>
+                                                        <span style={{
+                                                            padding: "2px 8px",
+                                                            borderRadius: "10px",
+                                                            background: status === "Present" ? "#dcfce7" : "#fee2e2",
+                                                            color: status === "Present" ? "#166534" : "#dc2626",
+                                                            fontSize: "10px",
+                                                            fontWeight: 700
+                                                        }}>
+                                                            {status}
+                                                        </span>
+                                                    </td>
+                                                    <td style={ETD()}>
+                                                        <button
+                                                            onClick={() => toggleAttendance(leader.id)}
+                                                            style={{
+                                                                padding: "4px 10px",
+                                                                borderRadius: "6px",
+                                                                border: status === "Present" ? "1px solid #dc2626" : "1px solid #16a34a",
+                                                                background: status === "Present" ? "#fee2e2" : "#dcfce7",
+                                                                color: status === "Present" ? "#dc2626" : "#166534",
+                                                                fontSize: "10px",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer"
+                                                            }}
+                                                        >
+                                                            Mark {status === "Present" ? "Absent" : "Present"}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </>
                 )}
@@ -1251,82 +1316,123 @@ function Attendance() {
                             </div>
                         </div>
 
-                        <div className="attendance-table-container">
-                            <div className="flex-table-header">
-                                <div className="flex-col flex-col-name">Name</div>
-                                <div className="flex-col flex-col-tribe">Tribe</div>
-                                <div className="flex-col" style={{ flex: "1 1 20%", minWidth: "105px" }}>Stage</div>
-                                <div className="flex-col" style={{ flex: "1 1 14%", minWidth: "90px" }}>Status</div>
-                                <div className="flex-col flex-col-status">Attendance</div>
-                                <div className="flex-col flex-col-action" style={{ flex: "0 0 100px", minWidth: "90px" }}>Action</div>
-                            </div>
-                            <div className="flex-table-body">
-                                {newcomersLoading ? (
-                                    <div style={{ padding: "30px", textAlign: "center", color: "#9ca3af", fontSize: "13px" }}>Loading newcomers...</div>
-                                ) : filteredNewcomers.length === 0 ? (
-                                    <div style={{ padding: "30px", textAlign: "center", color: "#9ca3af", fontSize: "13px" }}>No newcomers found.</div>
-                                ) : (
-                                    filteredNewcomers.map(member => {
-                                        const ncStatus = member.status || "ACTIVE";
-                                        const ncStyle = getNewcomerStatusStyle(ncStatus);
-                                        const present = newcomerAttendanceMap[member.id] === "Present";
-                                        const willAdvance = present && getConsoAutoAdvance(member.remarks);
+                        {/* EXCEL-STYLE TABLE — matches Assimilation page design */}
+                        <div style={{ overflowX: "auto", border: "1px solid #000" }}>
+                            <table style={{ width: "100%", fontSize: "11px", borderCollapse: "collapse", minWidth: "800px" }}>
+                                <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                                    <tr>
+                                        <th style={ETH({ textAlign: "left", width: "200px" })}>NAME</th>
+                                        <th style={ETH({ width: "90px" })}>TRIBE</th>
+                                        <th style={ETH({ width: "140px" })}>STAGE</th>
+                                        <th style={ETH({ width: "100px" })}>STATUS</th>
+                                        <th style={ETH({ width: "110px" })}>ATTENDANCE</th>
+                                        <th style={ETH({ width: "110px" })}>ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {newcomersLoading ? (
+                                        <tr><td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading newcomers...</td></tr>
+                                    ) : filteredNewcomers.length === 0 ? (
+                                        <tr><td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No newcomers found.</td></tr>
+                                    ) : (
+                                        filteredNewcomers.map(member => {
+                                            const ncStatus = member.status || "ACTIVE";
+                                            const ncStyle = getNewcomerStatusStyle(ncStatus);
+                                            const present = newcomerAttendanceMap[member.id] === "Present";
+                                            const willAdvance = present && getConsoAutoAdvance(member.remarks);
 
-                                        return (
-                                            <div className="flex-row" key={member.id}>
-                                                <div className="flex-col flex-col-name">
-                                                    <div style={{
-                                                        width: "28px", height: "28px", borderRadius: "50%",
-                                                        background: getStageColor(member.remarks),
-                                                        color: getStageTextColor(member.remarks),
-                                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                                        fontSize: "10px", fontWeight: 700, flexShrink: 0
-                                                    }}>
-                                                        {getInitials(member.firstname, member.lastname)}
-                                                    </div>
-                                                    <span className="name-text">{member.firstname} {member.lastname}</span>
-                                                </div>
-                                                <div className="flex-col flex-col-tribe">{member.tribe}</div>
-                                                <div className="flex-col" style={{ flex: "1 1 20%", minWidth: "105px" }}>
-                                                    <span style={{
-                                                        padding: "3px 9px", borderRadius: "10px",
-                                                        background: getStageColor(member.remarks),
-                                                        color: getStageTextColor(member.remarks),
-                                                        fontSize: "10px", fontWeight: 700, whiteSpace: "nowrap"
-                                                    }}>
-                                                        {member.remarks}
-                                                    </span>
-                                                    {willAdvance && (
-                                                        <div style={{ fontSize: "9px", color: "#16a34a", marginTop: "2px", fontWeight: 600 }}>
-                                                            → {willAdvance} on save
+                                            return (
+                                                <tr key={member.id}>
+                                                    <td style={ETD({ textAlign: "left", padding: "4px 6px" })}>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                            <div style={{
+                                                                width: "28px",
+                                                                height: "28px",
+                                                                borderRadius: "50%",
+                                                                background: getStageColor(member.remarks),
+                                                                color: getStageTextColor(member.remarks),
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                                fontSize: "10px",
+                                                                fontWeight: 700,
+                                                                flexShrink: 0
+                                                            }}>
+                                                                {getInitials(member.firstname, member.lastname)}
+                                                            </div>
+                                                            <span style={{ fontWeight: 600, color: "#111827" }}>{member.firstname} {member.lastname}</span>
                                                         </div>
-                                                    )}
-                                                </div>
-                                                <div className="flex-col" style={{ flex: "1 1 14%", minWidth: "90px" }}>
-                                                    <span style={{
-                                                        padding: "3px 9px", borderRadius: "10px",
-                                                        background: ncStyle.bg, color: ncStyle.color,
-                                                        border: `1px solid ${ncStyle.border}`,
-                                                        fontSize: "10px", fontWeight: 700, whiteSpace: "nowrap"
-                                                    }} title={`Present streak: ${member.visit_number || 0} | Absent streak: ${member.consecutive_absences || 0}`}>
-                                                        {ncStatus}
-                                                    </span>
-                                                </div>
-                                                <div className="flex-col flex-col-status">
-                                                    <span className={`dot ${present ? "dot-present" : "dot-absent"}`}></span>
-                                                    <span className="status-text">{present ? "Present" : "Absent"}</span>
-                                                </div>
-                                                <div className="flex-col flex-col-action" style={{ flex: "0 0 100px", minWidth: "90px" }}>
-                                                    <button className={`toggle-sm ${present ? "is-present" : "is-absent"}`}
-                                                        onClick={() => toggleNewcomerAttendance(member.id)}>
-                                                        {present ? "Absent" : "Present"}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
+                                                    </td>
+                                                    <td style={ETD()}>{member.tribe}</td>
+                                                    <td style={ETD({ padding: "4px 4px" })}>
+                                                        <span style={{
+                                                            padding: "2px 8px",
+                                                            borderRadius: "10px",
+                                                            background: getStageColor(member.remarks),
+                                                            color: getStageTextColor(member.remarks),
+                                                            fontSize: "10px",
+                                                            fontWeight: 700,
+                                                            whiteSpace: "nowrap"
+                                                        }}>
+                                                            {member.remarks}
+                                                        </span>
+                                                        {willAdvance && (
+                                                            <div style={{ fontSize: "9px", color: "#16a34a", marginTop: "2px", fontWeight: 600 }}>
+                                                                → {willAdvance} on save
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={ETD()}>
+                                                        <span
+                                                            style={{
+                                                                padding: "2px 8px",
+                                                                borderRadius: "10px",
+                                                                background: ncStyle.bg,
+                                                                color: ncStyle.color,
+                                                                border: `1px solid ${ncStyle.border}`,
+                                                                fontSize: "10px",
+                                                                fontWeight: 700
+                                                            }}
+                                                            title={`Present streak: ${member.visit_number || 0} | Absent streak: ${member.consecutive_absences || 0}`}
+                                                        >
+                                                            {ncStatus}
+                                                        </span>
+                                                    </td>
+                                                    <td style={ETD()}>
+                                                        <span style={{
+                                                            padding: "2px 8px",
+                                                            borderRadius: "10px",
+                                                            background: present ? "#dcfce7" : "#fee2e2",
+                                                            color: present ? "#166534" : "#dc2626",
+                                                            fontSize: "10px",
+                                                            fontWeight: 700
+                                                        }}>
+                                                            {present ? "Present" : "Absent"}
+                                                        </span>
+                                                    </td>
+                                                    <td style={ETD()}>
+                                                        <button
+                                                            onClick={() => toggleNewcomerAttendance(member.id)}
+                                                            style={{
+                                                                padding: "4px 10px",
+                                                                borderRadius: "6px",
+                                                                border: present ? "1px solid #dc2626" : "1px solid #16a34a",
+                                                                background: present ? "#fee2e2" : "#dcfce7",
+                                                                color: present ? "#dc2626" : "#166534",
+                                                                fontSize: "10px",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer"
+                                                            }}
+                                                        >
+                                                            Mark {present ? "Absent" : "Present"}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </>
                 )}

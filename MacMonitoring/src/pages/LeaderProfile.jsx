@@ -62,6 +62,30 @@ const theme = {
     purple: "#7a6b8a"
 };
 
+// ── Excel-style table tokens (matches Assimilation / Attendance pages) ─────
+const ETH = (extra = {}) => ({
+    padding: "5px 4px",
+    fontWeight: 700,
+    fontSize: "11px",
+    textAlign: "center",
+    color: "#000",
+    background: "#f3f4f6",
+    border: "1px solid #000",
+    whiteSpace: "nowrap",
+    ...extra,
+});
+
+const ETD = (extra = {}) => ({
+    padding: "6px 8px",
+    fontSize: "11px",
+    textAlign: "left",
+    border: "1px solid #000",
+    background: "#fff",
+    color: theme.text,
+    fontWeight: 500,
+    ...extra,
+});
+
 // SVG ICON PATHS
 const iconPaths = {
     user: "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
@@ -313,13 +337,13 @@ function LeaderProfile() {
 
     const c = theme;
 
+    // ── Excel-style table wrapper tokens (matches Assimilation / Attendance) ──
     const tableStyles = {
-        container: { overflow: "hidden", borderRadius: "10px", border: `1px solid ${c.border}`, background: c.card },
-        table: { width: "100%", borderCollapse: "collapse", fontSize: "12px" },
-        thead: { background: c.bg },
-        th: { padding: "8px 12px", textAlign: "left", fontWeight: 600, color: c.textSecondary, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px", borderBottom: `1px solid ${c.border}`, whiteSpace: "nowrap" },
-        td: { padding: "8px 12px", color: c.text, borderBottom: `1px solid ${c.borderLight}`, fontWeight: 500, fontSize: "12px" },
-        trHover: { cursor: "default", transition: "background 0.15s" },
+        container: { overflowX: "auto", border: "1px solid #000" },
+        table: { width: "100%", borderCollapse: "collapse", fontSize: "11px", minWidth: "560px" },
+        thead: { position: "sticky", top: 0, zIndex: 10 },
+        th: ETH,
+        td: ETD,
         badge: (bg, color) => ({ display: "inline-block", padding: "2px 8px", borderRadius: "12px", fontSize: "10px", fontWeight: 700, background: bg, color, letterSpacing: "0.3px", whiteSpace: "nowrap" }),
         progressBar: { width: "100%", height: "5px", background: c.borderLight, borderRadius: "3px", overflow: "hidden", marginTop: "2px" },
         progressFill: (pct, color) => ({ width: `${pct}%`, height: "100%", background: color, borderRadius: "3px", transition: "width 0.4s ease", opacity: 0.85 }),
@@ -395,22 +419,6 @@ function LeaderProfile() {
                                     <h1 style={{ fontSize: "16px", fontWeight: 700, color: c.text, margin: "0 0 2px 0", lineHeight: 1.2, letterSpacing: "-0.2px" }}>
                                         {leader.firstname} {leader.lastname}
                                     </h1>
-                                    {/* {leader.nickname && (
-                                        <p style={{ margin: "0 0 4px 0", fontSize: "11px", color: c.textMuted, fontStyle: "italic" }}>{leader.nickname}</p>
-                                    )} */}
-                                    {/* <div style={{ display: "flex", alignItems: "center", gap: "5px", flexWrap: "wrap" }}>
-                                        <span style={{ padding: "2px 8px", borderRadius: "12px", background: c.borderLight, color: c.textSecondary, fontSize: "10px", fontWeight: 600, letterSpacing: "0.3px" }}>
-                                            {leader.tribe}
-                                        </span>
-                                        <span style={{ padding: "2px 8px", borderRadius: "12px", background: "rgba(139,115,85,0.1)", color: c.primary, fontSize: "10px", fontWeight: 600, letterSpacing: "0.3px" }}>
-                                            {leader.type}
-                                        </span>
-                                        {leaderMinistries.map(m => (
-                                            <span key={m} style={{ padding: "2px 8px", borderRadius: "12px", background: "#e8f0e8", color: "#4a7a4a", fontSize: "10px", fontWeight: 600, letterSpacing: "0.3px" }}>
-                                                {m}
-                                            </span>
-                                        ))}
-                                    </div> */}
                                 </div>
 
                                 {canEditProfile && (
@@ -565,27 +573,25 @@ function LeaderProfile() {
                                     <table style={tableStyles.table}>
                                         <thead style={tableStyles.thead}>
                                             <tr>
-                                                <th style={tableStyles.th}>#</th>
-                                                <th style={tableStyles.th}>Service Date</th>
-                                                <th style={tableStyles.th}>Status</th>
-                                                <th style={tableStyles.th}>Remarks</th>
+                                                <th style={ETH({ width: "40px" })}>#</th>
+                                                <th style={ETH({ textAlign: "left", width: "130px" })}>SERVICE DATE</th>
+                                                <th style={ETH({ width: "100px" })}>STATUS</th>
+                                                <th style={ETH({ textAlign: "left" })}>REMARKS</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {(() => {
                                                 const { items, totalPages, startIndex } = getPaginatedData(attendance, tablePage);
                                                 return items.map((record, idx) => (
-                                                <tr key={record.id} style={tableStyles.trHover}
-                                                    onMouseEnter={e => e.currentTarget.style.background = c.bg}
-                                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
-                                                    <td style={tableStyles.td}>{formatDate(record.service_date)}</td>
-                                                    <td style={tableStyles.td}>
+                                                <tr key={record.id}>
+                                                    <td style={ETD({ textAlign: "center", ...tableStyles.textMuted })}>{startIndex + idx + 1}</td>
+                                                    <td style={ETD()}>{formatDate(record.service_date)}</td>
+                                                    <td style={ETD({ textAlign: "center" })}>
                                                         <span style={tableStyles.badge(record.status === "Present" ? "#e8f5e9" : "#ffebee", record.status === "Present" ? c.success : c.danger)}>
                                                             {record.status}
                                                         </span>
                                                     </td>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{record.remarks || "—"}</td>
+                                                    <td style={ETD({ ...tableStyles.textMuted })}>{record.remarks || "—"}</td>
                                                 </tr>
                                             ));})()}
                                         </tbody>
@@ -606,25 +612,23 @@ function LeaderProfile() {
                                     <table style={tableStyles.table}>
                                         <thead style={tableStyles.thead}>
                                             <tr>
-                                                <th style={tableStyles.th}>#</th>
-                                                <th style={tableStyles.th}>Date</th>
-                                                <th style={{ ...tableStyles.th, ...tableStyles.rightAlign }}>Amount</th>
-                                                <th style={tableStyles.th}>Remarks</th>
+                                                <th style={ETH({ width: "40px" })}>#</th>
+                                                <th style={ETH({ textAlign: "left", width: "130px" })}>DATE</th>
+                                                <th style={ETH({ width: "130px" })}>AMOUNT</th>
+                                                <th style={ETH({ textAlign: "left" })}>REMARKS</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {(() => {
                                                 const { items, totalPages, startIndex } = getPaginatedData(tithes, tablePage);
                                                 return items.map((tithe, idx) => (
-                                                <tr key={tithe.id} style={tableStyles.trHover}
-                                                    onMouseEnter={e => e.currentTarget.style.background = c.bg}
-                                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
-                                                    <td style={tableStyles.td}>{formatDate(tithe.date)}</td>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.rightAlign, fontWeight: 700, color: c.success }}>
+                                                <tr key={tithe.id}>
+                                                    <td style={ETD({ textAlign: "center", ...tableStyles.textMuted })}>{startIndex + idx + 1}</td>
+                                                    <td style={ETD()}>{formatDate(tithe.date)}</td>
+                                                    <td style={ETD({ ...tableStyles.rightAlign, fontWeight: 700, color: c.success })}>
                                                         ₱{Number(tithe.amount).toLocaleString()}
                                                     </td>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{tithe.remarks || "—"}</td>
+                                                    <td style={ETD({ ...tableStyles.textMuted })}>{tithe.remarks || "—"}</td>
                                                 </tr>
                                             ));})()}
                                         </tbody>
@@ -645,12 +649,12 @@ function LeaderProfile() {
                                     <table style={tableStyles.table}>
                                         <thead style={tableStyles.thead}>
                                             <tr>
-                                                <th style={tableStyles.th}>#</th>
-                                                <th style={tableStyles.th}>Month</th>
-                                                <th style={{ ...tableStyles.th, ...tableStyles.centerAlign }}>Completed</th>
-                                                <th style={{ ...tableStyles.th, ...tableStyles.centerAlign }}>Target</th>
-                                                <th style={tableStyles.th}>Progress</th>
-                                                <th style={{ ...tableStyles.th, ...tableStyles.centerAlign }}>Status</th>
+                                                <th style={ETH({ width: "40px" })}>#</th>
+                                                <th style={ETH({ textAlign: "left", width: "110px" })}>MONTH</th>
+                                                <th style={ETH({ width: "90px" })}>COMPLETED</th>
+                                                <th style={ETH({ width: "90px" })}>TARGET</th>
+                                                <th style={ETH({ width: "160px" })}>PROGRESS</th>
+                                                <th style={ETH({ width: "110px" })}>STATUS</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -660,14 +664,12 @@ function LeaderProfile() {
                                                 const progress = Math.round((dev.completed_days / dev.total_days) * 100);
                                                 const consistent = dev.completed_days >= 25;
                                                 return (
-                                                    <tr key={dev.id} style={tableStyles.trHover}
-                                                        onMouseEnter={e => e.currentTarget.style.background = c.bg}
-                                                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
-                                                        <td style={{ ...tableStyles.td, fontWeight: 600 }}>{dev.month}</td>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.centerAlign, fontWeight: 700 }}>{dev.completed_days}</td>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.centerAlign, ...tableStyles.textMuted }}>{dev.total_days}</td>
-                                                        <td style={tableStyles.td}>
+                                                    <tr key={dev.id}>
+                                                        <td style={ETD({ textAlign: "center", ...tableStyles.textMuted })}>{startIndex + idx + 1}</td>
+                                                        <td style={ETD({ fontWeight: 600 })}>{dev.month}</td>
+                                                        <td style={ETD({ textAlign: "center", fontWeight: 700 })}>{dev.completed_days}</td>
+                                                        <td style={ETD({ textAlign: "center", ...tableStyles.textMuted })}>{dev.total_days}</td>
+                                                        <td style={ETD()}>
                                                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                                                 <div style={{ ...tableStyles.progressBar, flex: 1 }}>
                                                                     <div style={tableStyles.progressFill(progress, consistent ? c.success : c.warning)} />
@@ -675,7 +677,7 @@ function LeaderProfile() {
                                                                 <span style={{ fontSize: "10px", color: c.textMuted, fontWeight: 600, minWidth: "30px", textAlign: "right" }}>{progress}%</span>
                                                             </div>
                                                         </td>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.centerAlign }}>
+                                                        <td style={ETD({ textAlign: "center" })}>
                                                             <span style={tableStyles.badge(consistent ? "#e8f5e9" : "#ffebee", consistent ? c.success : c.danger)}>
                                                                 {consistent ? "Consistent" : "Inconsistent"}
                                                             </span>
@@ -701,27 +703,25 @@ function LeaderProfile() {
                                     <table style={tableStyles.table}>
                                         <thead style={tableStyles.thead}>
                                             <tr>
-                                                <th style={tableStyles.th}>#</th>
-                                                <th style={tableStyles.th}>Date</th>
-                                                <th style={tableStyles.th}>Topic</th>
-                                                <th style={tableStyles.th}>Type</th>
-                                                <th style={tableStyles.th}>Place</th>
+                                                <th style={ETH({ width: "40px" })}>#</th>
+                                                <th style={ETH({ textAlign: "left", width: "120px" })}>DATE</th>
+                                                <th style={ETH({ textAlign: "left" })}>TOPIC</th>
+                                                <th style={ETH({ width: "110px" })}>TYPE</th>
+                                                <th style={ETH({ textAlign: "left", width: "140px" })}>PLACE</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {(() => {
                                                 const { items, totalPages, startIndex } = getPaginatedData(lifeGroups, tablePage);
                                                 return items.map((group, idx) => (
-                                                <tr key={group.id} style={tableStyles.trHover}
-                                                    onMouseEnter={e => e.currentTarget.style.background = c.bg}
-                                                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
-                                                    <td style={tableStyles.td}>{formatDate(group.date)}</td>
-                                                    <td style={{ ...tableStyles.td, fontWeight: 600 }}>{group.topic}</td>
-                                                    <td style={tableStyles.td}>
+                                                <tr key={group.id}>
+                                                    <td style={ETD({ textAlign: "center", ...tableStyles.textMuted })}>{startIndex + idx + 1}</td>
+                                                    <td style={ETD()}>{formatDate(group.date)}</td>
+                                                    <td style={ETD({ fontWeight: 600 })}>{group.topic}</td>
+                                                    <td style={ETD({ textAlign: "center" })}>
                                                         <span style={tableStyles.badge("#fff8e1", c.warning)}>{group.type}</span>
                                                     </td>
-                                                    <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{group.place}</td>
+                                                    <td style={ETD({ ...tableStyles.textMuted })}>{group.place}</td>
                                                 </tr>
                                             ));})()}
                                         </tbody>
@@ -786,11 +786,11 @@ function LeaderProfile() {
                                     <table style={tableStyles.table}>
                                         <thead style={tableStyles.thead}>
                                             <tr>
-                                                <th style={tableStyles.th}>#</th>
-                                                <th style={tableStyles.th}>Name</th>
-                                                <th style={tableStyles.th}>Tribe</th>
-                                                <th style={tableStyles.th}>Stage</th>
-                                                <th style={{ ...tableStyles.th, ...tableStyles.centerAlign }}>Category</th>
+                                                <th style={ETH({ width: "40px" })}>#</th>
+                                                <th style={ETH({ textAlign: "left", width: "180px" })}>NAME</th>
+                                                <th style={ETH({ width: "100px" })}>TRIBE</th>
+                                                <th style={ETH({ textAlign: "left", width: "150px" })}>STAGE</th>
+                                                <th style={ETH({ width: "110px" })}>CATEGORY</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -800,14 +800,12 @@ function LeaderProfile() {
                                                 const category = getStageCategory(invite.remarks);
                                                 const catColors = getCategoryColor(category);
                                                 return (
-                                                    <tr key={invite.id} style={tableStyles.trHover}
-                                                        onMouseEnter={e => e.currentTarget.style.background = c.bg}
-                                                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted, width: "40px" }}>{startIndex + idx + 1}</td>
-                                                        <td style={{ ...tableStyles.td, fontWeight: 600 }}>{invite.firstname} {invite.lastname}</td>
-                                                        <td style={tableStyles.td}>{invite.tribe || "—"}</td>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.textMuted }}>{invite.remarks || "Newcomer"}</td>
-                                                        <td style={{ ...tableStyles.td, ...tableStyles.centerAlign }}>
+                                                    <tr key={invite.id}>
+                                                        <td style={ETD({ textAlign: "center", ...tableStyles.textMuted })}>{startIndex + idx + 1}</td>
+                                                        <td style={ETD({ fontWeight: 600 })}>{invite.firstname} {invite.lastname}</td>
+                                                        <td style={ETD({ textAlign: "center" })}>{invite.tribe || "—"}</td>
+                                                        <td style={ETD({ ...tableStyles.textMuted })}>{invite.remarks || "Newcomer"}</td>
+                                                        <td style={ETD({ textAlign: "center" })}>
                                                             <span style={tableStyles.badge(catColors.bg, catColors.color)}>{catColors.label}</span>
                                                         </td>
                                                     </tr>

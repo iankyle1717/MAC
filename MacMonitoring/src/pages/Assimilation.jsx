@@ -16,6 +16,28 @@ import {
 } from "../constants/options";
 import { isAdmin, isUshering, isDiscipleship, canConvertNewcomer } from "../utils/auth";
 
+
+// ── Excel-style table tokens (from Tithes) ─────────────────────────────────
+const ETH = (extra = {}) => ({
+    padding: "5px 4px",
+    fontWeight: 700,
+    fontSize: "11px",
+    textAlign: "center",
+    color: "#000",
+    background: "#f3f4f6",
+    border: "1px solid #000",
+    whiteSpace: "nowrap",
+    ...extra,
+});
+
+const ETD = (extra = {}) => ({
+    padding: "0",
+    fontSize: "11px",
+    textAlign: "center",
+    border: "1px solid #000",
+    background: "#fff",
+    ...extra,
+});
 function Assimilation() {
     const navigate = useNavigate();
     const [members, setMembers] = useState([]);
@@ -457,125 +479,116 @@ function Assimilation() {
                     </div>
                 )}
 
-                {/* COMPACT TABLE */}
-                <div style={{ borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden", background: "#fff" }}>
-                    <div style={{ padding: "10px 14px", borderBottom: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>Newcomers List</h2>
-                        <span style={{ fontSize: "11px", color: "#9ca3af" }}>{filteredMembers.length} total</span>
-                    </div>
-                    <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
-                            <thead>
-                                <tr style={{ background: "#f9fafb" }}>
-                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Name</th>
-                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Tribe</th>
-                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Invited By</th>
-                                    <th style={{ padding: "8px 10px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Stage</th>
-                                    <th style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr><td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#6b7280" }}>Loading...</td></tr>
-                                ) : filteredMembers.length === 0 ? (
-                                    <tr><td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#6b7280" }}>No newcomers found.</td></tr>
-                                ) : (
-                                    filteredMembers.map((member) => (
-                                        <tr key={member.id} style={{ borderBottom: "1px solid #f3f4f6", transition: "background 0.15s" }}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
-                                        >
-                                            <td style={{ padding: "8px 10px" }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                                    <div style={{
-                                                        width: "28px",
-                                                        height: "28px",
-                                                        borderRadius: "50%",
-                                                        background: getStageColor(member.remarks),
-                                                        color: getStageTextColor(member.remarks),
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        fontSize: "10px",
-                                                        fontWeight: 700,
-                                                        flexShrink: 0
-                                                    }}>
-                                                        {getInitials(member.firstname, member.lastname)}
-                                                    </div>
-                                                    <span style={{ fontWeight: 600, color: "#111827" }}>{member.firstname} {member.lastname}</span>
-                                                </div>
-                                            </td>
-                                            <td style={{ padding: "8px 10px", color: "#6b7280" }}>{member.tribe}</td>
-                                            <td style={{ padding: "8px 10px", color: "#6b7280", fontSize: "11px" }}>{member.invited_by || "—"}</td>
-                                            <td style={{ padding: "8px 10px" }}>
-                                                <span style={{
-                                                    padding: "2px 8px",
-                                                    borderRadius: "10px",
+                {/* EXCEL-STYLE TABLE */}
+                <div style={{ overflowX: "auto", border: "1px solid #000" }}>
+                    <table style={{ width: "100%", fontSize: "11px", borderCollapse: "collapse", minWidth: "700px" }}>
+                        <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                            <tr>
+                                <th style={ETH({ textAlign: "left", width: "220px" })}>NAME</th>
+                                <th style={ETH({ width: "100px" })}>TRIBE</th>
+                                <th style={ETH({ textAlign: "left", width: "140px" })}>INVITED BY</th>
+                                <th style={ETH({ width: "140px" })}>STAGE</th>
+                                <th style={ETH({ width: "110px" })}>ACTION</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading...</td></tr>
+                            ) : filteredMembers.length === 0 ? (
+                                <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No newcomers found.</td></tr>
+                            ) : (
+                                filteredMembers.map((member) => (
+                                    <tr key={member.id}>
+                                        <td style={ETD({ textAlign: "left", padding: "4px 6px" })}>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <div style={{
+                                                    width: "28px",
+                                                    height: "28px",
+                                                    borderRadius: "50%",
                                                     background: getStageColor(member.remarks),
                                                     color: getStageTextColor(member.remarks),
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
                                                     fontSize: "10px",
-                                                    fontWeight: 700
+                                                    fontWeight: 700,
+                                                    flexShrink: 0
                                                 }}>
-                                                    {member.remarks}
-                                                </span>
-                                            </td>
-                                            <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                                                <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                                                    {canAdvanceStage(member) && !isReadyForConversion(member.remarks) && (
-                                                        <button
-                                                            onClick={() => updateRemarks(member.id, member.remarks)}
-                                                            style={{
-                                                                padding: "4px 10px",
-                                                                borderRadius: "6px",
-                                                                border: `1px solid ${getStageBorderColor(member.remarks)}`,
-                                                                background: getStageColor(member.remarks),
-                                                                color: getStageTextColor(member.remarks),
-                                                                fontSize: "10px",
-                                                                fontWeight: 600,
-                                                                cursor: "pointer"
-                                                            }}
-                                                        >
-                                                            Next
-                                                        </button>
-                                                    )}
-
-                                                    {canConvert && isReadyForConversion(member.remarks) && (
-                                                        <button
-                                                            onClick={() => navigate("/add-leader", { state: { newcomer: member } })}
-                                                            style={{
-                                                                padding: "4px 10px",
-                                                                borderRadius: "6px",
-                                                                border: "1px solid #16a34a",
-                                                                background: "#dcfce7",
-                                                                color: "#166534",
-                                                                fontSize: "10px",
-                                                                fontWeight: 600,
-                                                                cursor: "pointer"
-                                                            }}
-                                                        >
-                                                            Convert
-                                                        </button>
-                                                    )}
-
-                                                    {!canConvert && isReadyForConversion(member.remarks) && (
-                                                        <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10px" }}>
-                                                            Ready
-                                                        </span>
-                                                    )}
-
-                                                    {!canAdvanceStage(member) && !isReadyForConversion(member.remarks) && member.remarks === "Regular Attendee" && (
-                                                        <span style={{ color: "#b8934a", fontWeight: 700, fontSize: "10px" }}>
-                                                            Awaiting DJ
-                                                        </span>
-                                                    )}
+                                                    {getInitials(member.firstname, member.lastname)}
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                                <span style={{ fontWeight: 600, color: "#111827" }}>{member.firstname} {member.lastname}</span>
+                                            </div>
+                                        </td>
+                                        <td style={ETD()}>{member.tribe}</td>
+                                        <td style={ETD({ textAlign: "left", padding: "4px 6px", color: "#6b7280", fontSize: "11px" })}>{member.invited_by || "—"}</td>
+                                        <td style={ETD()}>
+                                            <span style={{
+                                                padding: "2px 8px",
+                                                borderRadius: "10px",
+                                                background: getStageColor(member.remarks),
+                                                color: getStageTextColor(member.remarks),
+                                                fontSize: "10px",
+                                                fontWeight: 700
+                                            }}>
+                                                {member.remarks}
+                                            </span>
+                                        </td>
+                                        <td style={ETD()}>
+                                            <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
+                                                {canAdvanceStage(member) && !isReadyForConversion(member.remarks) && (
+                                                    <button
+                                                        onClick={() => updateRemarks(member.id, member.remarks)}
+                                                        style={{
+                                                            padding: "4px 10px",
+                                                            borderRadius: "6px",
+                                                            border: `1px solid ${getStageBorderColor(member.remarks)}`,
+                                                            background: getStageColor(member.remarks),
+                                                            color: getStageTextColor(member.remarks),
+                                                            fontSize: "10px",
+                                                            fontWeight: 600,
+                                                            cursor: "pointer"
+                                                        }}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                )}
+
+                                                {canConvert && isReadyForConversion(member.remarks) && (
+                                                    <button
+                                                        onClick={() => navigate("/add-leader", { state: { newcomer: member } })}
+                                                        style={{
+                                                            padding: "4px 10px",
+                                                            borderRadius: "6px",
+                                                            border: "1px solid #16a34a",
+                                                            background: "#dcfce7",
+                                                            color: "#166534",
+                                                            fontSize: "10px",
+                                                            fontWeight: 600,
+                                                            cursor: "pointer"
+                                                        }}
+                                                    >
+                                                        Convert
+                                                    </button>
+                                                )}
+
+                                                {!canConvert && isReadyForConversion(member.remarks) && (
+                                                    <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10px" }}>
+                                                        Ready
+                                                    </span>
+                                                )}
+
+                                                {!canAdvanceStage(member) && !isReadyForConversion(member.remarks) && member.remarks === "Regular Attendee" && (
+                                                    <span style={{ color: "#b8934a", fontWeight: 700, fontSize: "10px" }}>
+                                                        Awaiting DJ
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
