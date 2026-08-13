@@ -13,6 +13,7 @@ function Sidebar() {
     const [showOnlinePanel, setShowOnlinePanel] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [loadingOnline, setLoadingOnline] = useState(false);
+    const [isFullscreen, setIsFullscreen] = useState(false);
     const user = getCurrentUser();
     const newcomer = getNewcomer();
     const visibleRoutes = getVisibleRoutes();
@@ -79,6 +80,55 @@ function Sidebar() {
         const interval = setInterval(fetchUsers, 10000); // Refresh every 10s
         return () => clearInterval(interval);
     }, [showOnlinePanel, admin]);
+
+    // ── Fullscreen / Maximize toggle ──────────────────────────────────────
+    // Tracks the browser's actual fullscreen state (covers vendor-prefixed
+    // events so this stays accurate even if the user exits fullscreen via
+    // Esc or a browser control instead of clicking the button again).
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            const fsElement = document.fullscreenElement
+                || document.webkitFullscreenElement
+                || document.mozFullScreenElement
+                || document.msFullscreenElement;
+            setIsFullscreen(!!fsElement);
+        };
+        document.addEventListener("fullscreenchange", handleFullscreenChange);
+        document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+        document.addEventListener("mozfullscreenchange", handleFullscreenChange);
+        document.addEventListener("MSFullscreenChange", handleFullscreenChange);
+        return () => {
+            document.removeEventListener("fullscreenchange", handleFullscreenChange);
+            document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+            document.removeEventListener("mozfullscreenchange", handleFullscreenChange);
+            document.removeEventListener("MSFullscreenChange", handleFullscreenChange);
+        };
+    }, []);
+
+    const toggleFullscreen = () => {
+        const fsElement = document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement
+            || document.msFullscreenElement;
+
+        if (!fsElement) {
+            const el = document.documentElement;
+            const request = el.requestFullscreen || el.webkitRequestFullscreen
+                || el.mozRequestFullScreen || el.msRequestFullscreen;
+            if (request) {
+                request.call(el).catch(() => {
+                    alert("Fullscreen isn't supported on this device/browser.");
+                });
+            } else {
+                alert("Fullscreen isn't supported on this device/browser.");
+            }
+        } else {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen
+                || document.mozCancelFullScreen || document.msExitFullscreen;
+            if (exit) exit.call(document);
+        }
+    };
+    // ───────────────────────────────────────────────────────────────────────
 
     const isActive = (path) => location.pathname === path;
 
@@ -329,7 +379,7 @@ function Sidebar() {
 
             {/* NAV LINKS */}
             <div style={{ 
-                flex: 1, 
+                flex: "1 1 auto", 
                 padding: "4px 8px",
                 display: "flex",
                 flexDirection: "column",
@@ -387,12 +437,38 @@ function Sidebar() {
                 })}
             </div>
 
-            {/* LOGOUT */}
+            {/* MAXIMIZE / LOGOUT */}
             <div style={{ 
                 padding: "10px",
                 borderTop: "1px solid rgba(201, 164, 92, 0.15)",
-                flexShrink: 0
+                flexShrink: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px"
             }}>
+                <button
+                    onClick={toggleFullscreen}
+                    style={{
+                        width: "100%",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(201, 164, 92, 0.3)",
+                        background: "rgba(201, 164, 92, 0.1)",
+                        color: "#c9a45c",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px"
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(201, 164, 92, 0.2)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(201, 164, 92, 0.1)"; }}
+                >
+                    {isFullscreen ? "🗗 Exit Full Screen" : "⛶ Maximize View"}
+                </button>
                 <button 
                     onClick={handleLogout}
                     style={{
@@ -453,7 +529,6 @@ function Sidebar() {
                     color: "#c9a45c",
                     fontSize: "20px",
                     cursor: "pointer",
-                    display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
@@ -461,6 +536,35 @@ function Sidebar() {
                 }}
             >
                 {mobileOpen ? "✕" : "☰"}
+            </button>
+
+            {/* Floating Maximize Button (always available, mirrors the hamburger) */}
+            <button
+                onClick={toggleFullscreen}
+                className="maximize-fab-btn"
+                aria-label={isFullscreen ? "Exit full screen" : "Maximize view"}
+                title={isFullscreen ? "Exit full screen" : "Maximize view"}
+                style={{
+                    position: "fixed",
+                    top: "12px",
+                    right: "12px",
+                    zIndex: 1100,
+                    width: "44px",
+                    height: "44px",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(201, 164, 92, 0.3)",
+                    background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+                    color: "#c9a45c",
+                    fontSize: "18px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                    transition: "all 0.2s ease"
+                }}
+            >
+                {isFullscreen ? "🗗" : "⛶"}
             </button>
 
             {/* Mobile Overlay */}
@@ -693,8 +797,7 @@ function Sidebar() {
                     position: "fixed",
                     top: 0,
                     left: 0,
-                    width: "270px",
-                    height: "100vh",
+                    width: "min(270px, 85vw)",
                     background: "linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
                     borderRight: "1px solid rgba(201, 164, 92, 0.2)",
                     boxShadow: "4px 0 24px rgba(0, 0, 0, 0.3)",
@@ -707,8 +810,8 @@ function Sidebar() {
                 {sidebarContent}
             </div>
 
-            {/* Spacer div to push content right of fixed sidebar */}
-            <div style={{ width: "270px", flexShrink: 0 }} />
+            {/* Spacer div to push content right of fixed sidebar (desktop only) */}
+            <div className="sidebar-spacer" style={{ width: "270px", flexShrink: 0 }} />
 
             <style>{`
                 @keyframes fadeIn {
@@ -721,6 +824,52 @@ function Sidebar() {
                 }
                 @keyframes spin {
                     to { transform: rotate(360deg); }
+                }
+
+                /* ── Sidebar height: prefer dvh so mobile browser chrome
+                   (address bar showing/hiding) never pushes the logout
+                   button off-screen on iOS/Android. Falls back to vh on
+                   browsers without dvh support. ── */
+                .sidebar {
+                    height: 100vh;
+                    height: 100dvh;
+                }
+
+                /* ── Desktop default: sidebar always visible, hamburger
+                   hidden since there's room for a persistent sidebar. ── */
+                .mobile-menu-btn {
+                    display: none !important;
+                }
+                .mobile-overlay {
+                    display: none !important;
+                }
+
+                /* ── Tablet & phone (iPad included): sidebar becomes an
+                   off-canvas drawer that slides in, so it never competes
+                   with page content for width, and its own height is the
+                   full (dynamic) viewport height so Logout/Maximize are
+                   always reachable by scrolling the nav list, never cut off. ── */
+                @media (max-width: 1024px) {
+                    .sidebar {
+                        transform: translateX(-100%);
+                        transition: transform 0.25s ease;
+                    }
+                    .sidebar.mobile-open {
+                        transform: translateX(0);
+                    }
+                    .mobile-menu-btn {
+                        display: flex !important;
+                    }
+                    .sidebar-spacer {
+                        display: none !important;
+                        width: 0 !important;
+                    }
+                }
+
+                @media (min-width: 1025px) {
+                    .sidebar {
+                        transform: translateX(0) !important;
+                    }
                 }
             `}</style>
         </>
