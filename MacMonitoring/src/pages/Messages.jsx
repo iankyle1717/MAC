@@ -1190,6 +1190,10 @@ function Messages() {
     const showListPane = !isMobile || !activeConvId;
     const showChatPane = !isMobile || !!activeConvId;
 
+    // Total unread messages across all conversations — drives the badge on
+    // the "+" New Message button.
+    const totalUnread = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+
     return (
         <div className="layout" style={{ background: THEME.black, minHeight: "100vh" }}>
             <Sidebar />
@@ -1250,25 +1254,54 @@ function Messages() {
                                         !
                                     </button>
                                 )}
-                                <button
-                                    onClick={() => setShowNewMsg(true)}
-                                    style={{
-                                        width: "32px",
-                                        height: "32px",
-                                        borderRadius: "8px",
-                                        border: "none",
-                                        background: THEME.gradientGold,
-                                        color: THEME.black,
-                                        cursor: "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        fontSize: "18px",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    +
-                                </button>
+                                {/* Wrapper needed so the unread badge can be
+                                    absolutely positioned at the top-right
+                                    corner of the "+" button. */}
+                                <div style={{ position: "relative" }}>
+                                    <button
+                                        onClick={() => setShowNewMsg(true)}
+                                        title="New message"
+                                        style={{
+                                            width: "32px",
+                                            height: "32px",
+                                            borderRadius: "8px",
+                                            border: "none",
+                                            background: THEME.gradientGold,
+                                            color: THEME.black,
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            fontSize: "18px",
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        +
+                                    </button>
+                                    {totalUnread > 0 && (
+                                        <span style={{
+                                            position: "absolute",
+                                            top: "-6px",
+                                            right: "-6px",
+                                            minWidth: "18px",
+                                            height: "18px",
+                                            padding: "0 4px",
+                                            borderRadius: "9px",
+                                            background: THEME.danger,
+                                            color: "#fff",
+                                            fontSize: "10px",
+                                            fontWeight: 800,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            border: `2px solid ${THEME.blackCard}`,
+                                            boxShadow: "0 0 0 1px rgba(0,0,0,0.2)",
+                                            lineHeight: 1,
+                                        }}>
+                                            {totalUnread > 99 ? "99+" : totalUnread}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
