@@ -5,14 +5,14 @@ import { supabase } from "../lib/supabase";
 import {
     tribes,
     allNewcomerStages,
-    getNextStage,
     isReadyForConversion,
     usheringStages,
     soulWinningStages,
     soakingStages,
     schoolingStages,
     consoStages,
-    getStageCategory
+    getStageCategory,
+    REGULAR_ATTENDEE
 } from "../constants/options";
 import { isAdmin, isUshering, isDiscipleship, canConvertNewcomer } from "../utils/auth";
 
@@ -38,6 +38,25 @@ const ETD = (extra = {}) => ({
     background: "#fff",
     ...extra,
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// JOURNEY CHECKLIST — replaces the old one-step-at-a-time "Next" button.
+//
+// Why: clicking "Next" repeatedly is easy to fumble (double-click, wrong
+// row) and there was no way back once a stage was set — a mis-click stuck a
+// newcomer on the wrong stage permanently. Instead, the whole journey is
+// shown as a checklist grouped by phase. Tapping ANY stage sets the
+// newcomer's current stage to exactly that one: everything up to and
+// including it is marked done, everything after is not. So correcting a
+// mistake is just tapping the right (earlier) stage — no separate "undo".
+// ═══════════════════════════════════════════════════════════════════════════
+const journeySections = [
+    { label: "Conso (Ushering)", stages: consoStages },
+    { label: "Soul Winning", stages: soulWinningStages },
+    { label: "Soaking", stages: soakingStages },
+    { label: "Schooling", stages: schoolingStages },
+];
+
 function Assimilation() {
     const navigate = useNavigate();
     const [members, setMembers] = useState([]);
@@ -52,17 +71,18 @@ function Assimilation() {
     const [search, setSearch] = useState("");
     const [filterTribe, setFilterTribe] = useState("ALL");
     const [filterStage, setFilterStage] = useState("ALL");
+    const [checklistMember, setChecklistMember] = useState(null);
 
     // Permission flags
     // ────────────────────────────────────────────────────────────────────────
     // Two separate ministries share this list, each owning a different part
     // of the journey:
-    //   • Ushering — only 1st Timer -> 2nd Timer -> 3rd Timer. Their job is
-    //     recording attendance (done on the Attendance page); here they can
-    //     still nudge someone to the next Conso stage manually if needed.
-    //   • Discipleship Journey (DJ) — everything from "Regular Attendee"
-    //     onward (Soul Winning, Soaking, Schooling). Only DJ/Admin decide
-    //     that path forward.
+    //   • Ushering — only 1st Timer -> 2nd Timer -> 3rd Timer -> Regular
+    //     Attendee. Their job is recording attendance (done on the
+    //     Attendance page); here they can still correct the Conso stage
+    //     manually via the checklist if needed.
+    //   • Discipleship Journey (DJ) — everything from Soul Winning
+    //     onward. Only DJ/Admin decide that path forward.
     // ────────────────────────────────────────────────────────────────────────
     const admin = isAdmin();
     const ushering = isUshering();
@@ -126,30 +146,70 @@ function Assimilation() {
         }
     };
 
-    const updateRemarks = async (id, currentRemark) => {
-        const nextRemark = getNextStage(currentRemark);
-
-        if (!nextRemark) {
-            alert("This newcomer has completed all stages!");
-            return;
-        }
-
-        await supabase
-            .from("tblNewMembers")
-            .update({ remarks: nextRemark })
-            .eq("id", id);
-
-        fetchMembers();
-    };
-
-    // Can the CURRENT user advance THIS member's stage?
-    // - Still inside Ushering's own 1st/2nd/3rd Timer range -> Admin or Ushering.
-    // - Regular Attendee and beyond (handed off to DJ) -> Admin or Discipleship.
-    const canAdvanceStage = (member) => {
-        if (usheringStages.includes(member.remarks)) {
+    // Can the CURRENT user set a newcomer's stage TO this target stage?
+    // - Target still inside Ushering's own 1st/2nd/3rd Timer -> Regular
+    //   Attendee range -> Admin or Ushering.
+    // - Target is Soul Winning / Soaking / Schooling (handed to DJ) ->
+    //   Admin or Discipleship.
+    const canSetStage = (targetStage) => {
+        if (usheringStages.includes(targetStage) || targetStage === REGULAR_ATTENDEE) {
             return admin || ushering;
         }
         return admin || discipleship;
+    };
+
+    // Does the CURRENT user have ANY edit rights over this member at all?
+    // (Used to decide whether the checklist opens read-only or editable.)
+    const canEditMember = () => admin || ushering || discipleship;
+
+    // Tap-to-set: directly write the exact stage tapped. No "next", no
+    // multi-step chain — one write, and it's always reversible by tapping
+    // an earlier stage.
+    const setMemberStage = async (member, stage) => {
+        if (!canSetStage(stage)) {
+            alert("You don't have permission to set this stage.");
+            return;
+        }
+        const { error } = await supabase
+            .from("tblNewMembers")
+            .update({ remarks: stage })
+            .eq("id", member.id);
+
+        if (error) {
+            console.log(error);
+            alert("Failed to update stage.");
+            return;
+        }
+
+        setMembers(prev => prev.map(m => (m.id === member.id ? { ...m, remarks: stage } : m)));
+        setChecklistMember(prev => (prev && prev.id === member.id ? { ...prev, remarks: stage } : prev));
+    };
+
+    // Who can delete a newcomer record? Same people who can add one, plus
+    // admin always — this is for typos or someone who's no longer around,
+    // not a stage-progression action, so it doesn't need Discipleship perms.
+    const canDeleteNewcomer = () => admin || ushering;
+
+    const handleDeleteMember = async (member) => {
+        if (!canDeleteNewcomer()) return;
+        const confirmed = window.confirm(
+            `Delete ${member.firstname} ${member.lastname}? This permanently removes their record and cannot be undone.`
+        );
+        if (!confirmed) return;
+
+        const { error } = await supabase
+            .from("tblNewMembers")
+            .delete()
+            .eq("id", member.id);
+
+        if (error) {
+            console.log(error);
+            alert("Failed to delete newcomer. Please try again.");
+            return;
+        }
+
+        setMembers(prev => prev.filter(m => m.id !== member.id));
+        if (checklistMember?.id === member.id) setChecklistMember(null);
     };
 
     // Filter helpers
@@ -204,17 +264,6 @@ function Assimilation() {
             case "SOAKING": return "#92400e";
             case "SCHOOLING": return "#9d174d";
             default: return "#374151";
-        }
-    };
-
-    const getStageBorderColor = (stage) => {
-        const category = getStageCategory(stage);
-        switch (category) {
-            case "CONSO": return "#3b82f6";
-            case "SOUL WINNING": return "#22c55e";
-            case "SOAKING": return "#f59e0b";
-            case "SCHOOLING": return "#ec4899";
-            default: return "#9ca3af";
         }
     };
 
@@ -276,7 +325,9 @@ function Assimilation() {
                     <span style={{ fontWeight: 700, color: "#1e40af" }}>1st → 2nd → 3rd Timer → Regular Attendee</span>
                     <span>. From Regular Attendee onward, the</span>
                     <span style={{ fontWeight: 700, color: "#166534" }}>Discipleship Journey (DJ)</span>
-                    <span>team decides the next step (Life Track, Life Retreat, Schooling, etc.).</span>
+                    <span>team decides the next step (Life Track, Life Retreat, Schooling, etc.). Tap</span>
+                    <span style={{ fontWeight: 700, color: "#c9a45c" }}>📋 Checklist</span>
+                    <span>on any row to see and correct exactly where someone is in the journey.</span>
                 </div>
 
                 {/* COMPACT STATS CARDS */}
@@ -488,7 +539,7 @@ function Assimilation() {
                                 <th style={ETH({ width: "100px" })}>TRIBE</th>
                                 <th style={ETH({ textAlign: "left", width: "140px" })}>INVITED BY</th>
                                 <th style={ETH({ width: "140px" })}>STAGE</th>
-                                <th style={ETH({ width: "110px" })}>ACTION</th>
+                                <th style={ETH({ width: "130px" })}>ACTION</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -534,24 +585,24 @@ function Assimilation() {
                                             </span>
                                         </td>
                                         <td style={ETD()}>
-                                            <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                                                {canAdvanceStage(member) && !isReadyForConversion(member.remarks) && (
-                                                    <button
-                                                        onClick={() => updateRemarks(member.id, member.remarks)}
-                                                        style={{
-                                                            padding: "4px 10px",
-                                                            borderRadius: "6px",
-                                                            border: `1px solid ${getStageBorderColor(member.remarks)}`,
-                                                            background: getStageColor(member.remarks),
-                                                            color: getStageTextColor(member.remarks),
-                                                            fontSize: "10px",
-                                                            fontWeight: 600,
-                                                            cursor: "pointer"
-                                                        }}
-                                                    >
-                                                        Next
-                                                    </button>
-                                                )}
+                                            <div style={{ display: "flex", gap: "6px", justifyContent: "center", alignItems: "center" }}>
+                                                <button
+                                                    onClick={() => setChecklistMember(member)}
+                                                    title="View / update journey checklist"
+                                                    style={{
+                                                        padding: "4px 10px",
+                                                        borderRadius: "6px",
+                                                        border: "1px solid #c9a45c",
+                                                        background: "#fdf6e8",
+                                                        color: "#92400e",
+                                                        fontSize: "10px",
+                                                        fontWeight: 600,
+                                                        cursor: "pointer",
+                                                        whiteSpace: "nowrap"
+                                                    }}
+                                                >
+                                                    📋 Checklist
+                                                </button>
 
                                                 {canConvert && isReadyForConversion(member.remarks) && (
                                                     <button
@@ -577,10 +628,24 @@ function Assimilation() {
                                                     </span>
                                                 )}
 
-                                                {!canAdvanceStage(member) && !isReadyForConversion(member.remarks) && member.remarks === "Regular Attendee" && (
-                                                    <span style={{ color: "#b8934a", fontWeight: 700, fontSize: "10px" }}>
-                                                        Awaiting DJ
-                                                    </span>
+                                                {canDeleteNewcomer() && (
+                                                    <button
+                                                        onClick={() => handleDeleteMember(member)}
+                                                        title="Delete this newcomer record"
+                                                        style={{
+                                                            padding: "4px 8px",
+                                                            borderRadius: "6px",
+                                                            border: "1px solid #fca5a5",
+                                                            background: "#fef2f2",
+                                                            color: "#dc2626",
+                                                            fontSize: "11px",
+                                                            fontWeight: 600,
+                                                            cursor: "pointer",
+                                                            flexShrink: 0
+                                                        }}
+                                                    >
+                                                        🗑
+                                                    </button>
                                                 )}
                                             </div>
                                         </td>
@@ -719,6 +784,171 @@ function Assimilation() {
                     </div>
                 </div>
             )}
+
+            {/* JOURNEY CHECKLIST MODAL */}
+            {checklistMember && (() => {
+                const currentIndex = allNewcomerStages.indexOf(checklistMember.remarks);
+                const editable = canEditMember();
+                return (
+                    <div
+                        className="modal-overlay"
+                        style={{
+                            position: "fixed",
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            background: "rgba(0,0,0,0.5)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            zIndex: 1000,
+                            padding: "20px"
+                        }}
+                        onClick={(e) => { if (e.target === e.currentTarget) setChecklistMember(null); }}
+                    >
+                        <div style={{
+                            background: "#fff",
+                            borderRadius: "12px",
+                            width: "100%",
+                            maxWidth: "460px",
+                            maxHeight: "88vh",
+                            overflow: "auto",
+                            position: "relative"
+                        }}>
+                            <div style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                padding: "14px 18px",
+                                borderBottom: "1px solid #e5e7eb",
+                                position: "sticky",
+                                top: 0,
+                                background: "#fff",
+                                zIndex: 10,
+                                borderRadius: "12px 12px 0 0"
+                            }}>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>
+                                        {checklistMember.firstname} {checklistMember.lastname}
+                                    </h2>
+                                    <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
+                                        Currently: <strong style={{ color: getStageTextColor(checklistMember.remarks) }}>{checklistMember.remarks}</strong>
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                    {canDeleteNewcomer() && (
+                                        <button
+                                            onClick={() => handleDeleteMember(checklistMember)}
+                                            title="Delete this newcomer record"
+                                            style={{
+                                                background: "none",
+                                                border: "1px solid #fca5a5",
+                                                borderRadius: "6px",
+                                                color: "#dc2626",
+                                                fontSize: "11px",
+                                                fontWeight: 600,
+                                                cursor: "pointer",
+                                                padding: "5px 8px",
+                                                lineHeight: 1
+                                            }}
+                                        >
+                                            🗑 Delete
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setChecklistMember(null)}
+                                        style={{
+                                            background: "none",
+                                            border: "none",
+                                            fontSize: "18px",
+                                            cursor: "pointer",
+                                            color: "#6b7280",
+                                            padding: "4px",
+                                            lineHeight: 1
+                                        }}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ padding: "12px 18px 18px" }}>
+                                <p style={{ margin: "0 0 14px 0", fontSize: "11px", color: "#9ca3af" }}>
+                                    {editable
+                                        ? "Tap any step to set it as their current stage. Everything up to that step is marked done — tap an earlier step any time to correct a mistake."
+                                        : "Read-only — you don't have permission to change this newcomer's stage."}
+                                </p>
+
+                                {journeySections.map((section) => (
+                                    <div key={section.label} style={{ marginBottom: "14px" }}>
+                                        <p style={{
+                                            margin: "0 0 6px 0",
+                                            fontSize: "10px",
+                                            fontWeight: 700,
+                                            color: "#9ca3af",
+                                            textTransform: "uppercase",
+                                            letterSpacing: "0.5px"
+                                        }}>
+                                            {section.label}
+                                        </p>
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                            {section.stages.map((stage) => {
+                                                const stageIndex = allNewcomerStages.indexOf(stage);
+                                                const checked = currentIndex !== -1 && stageIndex <= currentIndex;
+                                                const isCurrent = stage === checklistMember.remarks;
+                                                const allowed = editable && canSetStage(stage);
+                                                return (
+                                                    <div
+                                                        key={stage}
+                                                        onClick={() => { if (allowed) setMemberStage(checklistMember, stage); }}
+                                                        style={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            gap: "8px",
+                                                            padding: "6px 8px",
+                                                            borderRadius: "6px",
+                                                            cursor: allowed ? "pointer" : "not-allowed",
+                                                            opacity: allowed ? 1 : 0.55,
+                                                            background: isCurrent ? "#fdf6e8" : "transparent",
+                                                            transition: "background 0.15s"
+                                                        }}
+                                                        onMouseEnter={(e) => { if (allowed && !isCurrent) e.currentTarget.style.background = "#f9fafb"; }}
+                                                        onMouseLeave={(e) => { if (allowed && !isCurrent) e.currentTarget.style.background = "transparent"; }}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            readOnly
+                                                            style={{ pointerEvents: "none", width: "14px", height: "14px", flexShrink: 0 }}
+                                                        />
+                                                        <span style={{
+                                                            fontSize: "12px",
+                                                            fontWeight: isCurrent ? 700 : 500,
+                                                            color: checked ? "#111827" : "#9ca3af",
+                                                            flex: 1
+                                                        }}>
+                                                            {stage}
+                                                        </span>
+                                                        {isCurrent && (
+                                                            <span style={{
+                                                                fontSize: "9px",
+                                                                fontWeight: 700,
+                                                                color: "#c9a45c",
+                                                                letterSpacing: "0.3px",
+                                                                flexShrink: 0
+                                                            }}>
+                                                                CURRENT
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 }
