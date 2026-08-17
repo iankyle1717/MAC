@@ -29,6 +29,12 @@ export const ministries = [
     "PASTOR",
     "DISCIPLESHIP JOURNEY",
     "EVENT ORGANIZER",
+    "CHURCH SERVICE DIRECTOR",
+    "KIDS MINISTRY",
+    "SOD",
+    "DIRECTOR SUNDAY",
+    "DIRECTOR PW",
+    "DIRECTOR FRIDAY",
     "NONE"
 ];
 

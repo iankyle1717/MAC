@@ -5,7 +5,6 @@ import { supabase } from "../lib/supabase";
 import {
     tribes,
     allNewcomerStages,
-    isReadyForConversion,
     usheringStages,
     soulWinningStages,
     soakingStages,
@@ -56,6 +55,31 @@ const journeySections = [
     { label: "Soaking", stages: soakingStages },
     { label: "Schooling", stages: schoolingStages },
 ];
+
+// All DJ-owned stages, tracked as an INDEPENDENT checklist (not sequential).
+// A member can have "Make Disciple Class" done without "Foundation Class"
+// yet — real-world attendance doesn't always happen in a strict order, so
+// checking one item must never auto-check or auto-clear another.
+const DJ_STAGES = [...soulWinningStages, ...soakingStages, ...schoolingStages];
+
+// tblNewMembers needs a `completed_stages` column (jsonb / text[], default
+// '[]') to store this independent checklist. Conso stages stay sequential
+// on the existing `remarks` column, since Attendance-driven 1st->2nd->3rd
+// Timer progress is genuinely linear.
+const getCompletedStages = (member) => {
+    if (Array.isArray(member?.completed_stages)) return member.completed_stages;
+    // Legacy fallback ONLY: if this member has never had completed_stages
+    // set, but `remarks` already points at a DJ stage from the old
+    // sequential system, treat everything up to that point as done so
+    // existing progress isn't lost on the switch-over. This reads old data
+    // once for display — it never writes it back and never auto-fills
+    // anything going forward once completed_stages exists.
+    if (member?.remarks && !consoStages.includes(member.remarks)) {
+        const idx = DJ_STAGES.indexOf(member.remarks);
+        if (idx !== -1) return DJ_STAGES.slice(0, idx + 1);
+    }
+    return [];
+};
 
 function Assimilation() {
     const navigate = useNavigate();
@@ -162,10 +186,10 @@ function Assimilation() {
     // (Used to decide whether the checklist opens read-only or editable.)
     const canEditMember = () => admin || ushering || discipleship;
 
-    // Tap-to-set: directly write the exact stage tapped. No "next", no
-    // multi-step chain — one write, and it's always reversible by tapping
-    // an earlier stage.
-    const setMemberStage = async (member, stage) => {
+    // CONSO stages (1st/2nd/3rd Timer -> Regular Attendee) stay sequential —
+    // tap any step to jump straight to it. This part really is linear
+    // (Attendance-driven), so tap-to-set + auto-fill-before is correct here.
+    const setConsoStage = async (member, stage) => {
         if (!canSetStage(stage)) {
             alert("You don't have permission to set this stage.");
             return;
@@ -183,6 +207,45 @@ function Assimilation() {
 
         setMembers(prev => prev.map(m => (m.id === member.id ? { ...m, remarks: stage } : m)));
         setChecklistMember(prev => (prev && prev.id === member.id ? { ...prev, remarks: stage } : prev));
+    };
+
+    // DJ stages (Soul Winning / Soaking / Schooling) are an INDEPENDENT
+    // checklist — tapping one only toggles that one item. Nothing else gets
+    // auto-checked or auto-cleared, because these processes don't happen in
+    // a guaranteed order in real life.
+    const toggleDjStage = async (member, stage) => {
+        if (!canSetStage(stage)) {
+            alert("You don't have permission to set this stage.");
+            return;
+        }
+
+        const current = getCompletedStages(member);
+        const nextCompleted = current.includes(stage)
+            ? current.filter(s => s !== stage)
+            : [...current, stage];
+
+        const { error } = await supabase
+            .from("tblNewMembers")
+            .update({ completed_stages: nextCompleted })
+            .eq("id", member.id);
+
+        if (error) {
+            console.log(error);
+            alert("Failed to update checklist. (If this is the first time, make sure the 'completed_stages' column exists on tblNewMembers.)");
+            return;
+        }
+
+        setMembers(prev => prev.map(m => (m.id === member.id ? { ...m, completed_stages: nextCompleted } : m)));
+        setChecklistMember(prev => (prev && prev.id === member.id ? { ...prev, completed_stages: nextCompleted } : prev));
+    };
+
+    // Ready to convert: EVERY Soul Winning / Soaking / Schooling item must
+    // be individually checked — not just "reached Life Group Class". A
+    // member who did Make Disciple Class but skipped Foundation Class is
+    // NOT ready, even though they're "further along" in the old linear sense.
+    const isFullyDiscipled = (member) => {
+        const completed = getCompletedStages(member);
+        return DJ_STAGES.every(stage => completed.includes(stage));
     };
 
     // Who can delete a newcomer record? Same people who can add one, plus
@@ -233,7 +296,7 @@ function Assimilation() {
             } else if (filterStage === "SCHOOLING") {
                 matchesStage = schoolingStages.includes(member.remarks);
             } else if (filterStage === "READY") {
-                matchesStage = isReadyForConversion(member.remarks);
+                matchesStage = isFullyDiscipled(member);
             } else {
                 matchesStage = member.remarks === filterStage;
             }
@@ -438,7 +501,7 @@ function Assimilation() {
                         }}
                     >
                         <h3 style={{ fontSize: "11px", margin: "0 0 4px 0", color: "#16a34a", fontWeight: 500 }}>Ready to Convert</h3>
-                        <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>{countByExactStage("Life Group Class")}</h1>
+                        <h1 style={{ fontSize: "22px", margin: 0, color: "#16a34a" }}>{members.filter(isFullyDiscipled).length}</h1>
                     </div>
                 </div>
 
@@ -604,7 +667,7 @@ function Assimilation() {
                                                     📋 Checklist
                                                 </button>
 
-                                                {canConvert && isReadyForConversion(member.remarks) && (
+                                                {canConvert && isFullyDiscipled(member) && (
                                                     <button
                                                         onClick={() => navigate("/add-leader", { state: { newcomer: member } })}
                                                         style={{
@@ -622,7 +685,7 @@ function Assimilation() {
                                                     </button>
                                                 )}
 
-                                                {!canConvert && isReadyForConversion(member.remarks) && (
+                                                {!canConvert && isFullyDiscipled(member) && (
                                                     <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "10px" }}>
                                                         Ready
                                                     </span>
@@ -787,7 +850,11 @@ function Assimilation() {
 
             {/* JOURNEY CHECKLIST MODAL */}
             {checklistMember && (() => {
-                const currentIndex = allNewcomerStages.indexOf(checklistMember.remarks);
+                const consoIndex = allNewcomerStages.indexOf(checklistMember.remarks);
+                const consoInProgress = consoStages.includes(checklistMember.remarks);
+                const completedDj = getCompletedStages(checklistMember);
+                const djDoneCount = DJ_STAGES.filter(s => completedDj.includes(s)).length;
+                const fullyDiscipled = djDoneCount === DJ_STAGES.length;
                 const editable = canEditMember();
                 return (
                     <div
@@ -830,7 +897,11 @@ function Assimilation() {
                                         {checklistMember.firstname} {checklistMember.lastname}
                                     </h2>
                                     <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
-                                        Currently: <strong style={{ color: getStageTextColor(checklistMember.remarks) }}>{checklistMember.remarks}</strong>
+                                        Conso stage: <strong style={{ color: getStageTextColor(checklistMember.remarks) }}>{checklistMember.remarks}</strong>
+                                    </p>
+                                    <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: fullyDiscipled ? "#16a34a" : "#6b7280" }}>
+                                        Discipleship checklist: <strong>{djDoneCount}/{DJ_STAGES.length} done</strong>
+                                        {fullyDiscipled && " — ✅ Fully discipled"}
                                     </p>
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -871,79 +942,94 @@ function Assimilation() {
                             </div>
 
                             <div style={{ padding: "12px 18px 18px" }}>
-                                <p style={{ margin: "0 0 14px 0", fontSize: "11px", color: "#9ca3af" }}>
-                                    {editable
-                                        ? "Tap any step to set it as their current stage. Everything up to that step is marked done — tap an earlier step any time to correct a mistake."
-                                        : "Read-only — you don't have permission to change this newcomer's stage."}
-                                </p>
-
-                                {journeySections.map((section) => (
-                                    <div key={section.label} style={{ marginBottom: "14px" }}>
-                                        <p style={{
-                                            margin: "0 0 6px 0",
-                                            fontSize: "10px",
-                                            fontWeight: 700,
-                                            color: "#9ca3af",
-                                            textTransform: "uppercase",
-                                            letterSpacing: "0.5px"
-                                        }}>
-                                            {section.label}
-                                        </p>
-                                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                            {section.stages.map((stage) => {
-                                                const stageIndex = allNewcomerStages.indexOf(stage);
-                                                const checked = currentIndex !== -1 && stageIndex <= currentIndex;
-                                                const isCurrent = stage === checklistMember.remarks;
-                                                const allowed = editable && canSetStage(stage);
-                                                return (
-                                                    <div
-                                                        key={stage}
-                                                        onClick={() => { if (allowed) setMemberStage(checklistMember, stage); }}
-                                                        style={{
-                                                            display: "flex",
-                                                            alignItems: "center",
-                                                            gap: "8px",
-                                                            padding: "6px 8px",
-                                                            borderRadius: "6px",
-                                                            cursor: allowed ? "pointer" : "not-allowed",
-                                                            opacity: allowed ? 1 : 0.55,
-                                                            background: isCurrent ? "#fdf6e8" : "transparent",
-                                                            transition: "background 0.15s"
-                                                        }}
-                                                        onMouseEnter={(e) => { if (allowed && !isCurrent) e.currentTarget.style.background = "#f9fafb"; }}
-                                                        onMouseLeave={(e) => { if (allowed && !isCurrent) e.currentTarget.style.background = "transparent"; }}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            readOnly
-                                                            style={{ pointerEvents: "none", width: "14px", height: "14px", flexShrink: 0 }}
-                                                        />
-                                                        <span style={{
-                                                            fontSize: "12px",
-                                                            fontWeight: isCurrent ? 700 : 500,
-                                                            color: checked ? "#111827" : "#9ca3af",
-                                                            flex: 1
-                                                        }}>
-                                                            {stage}
-                                                        </span>
-                                                        {isCurrent && (
+                                {journeySections.map((section) => {
+                                    const isConsoSection = section.label === "Conso (Ushering)";
+                                    return (
+                                        <div key={section.label} style={{ marginBottom: "14px" }}>
+                                            <p style={{
+                                                margin: "0 0 4px 0",
+                                                fontSize: "10px",
+                                                fontWeight: 700,
+                                                color: "#9ca3af",
+                                                textTransform: "uppercase",
+                                                letterSpacing: "0.5px"
+                                            }}>
+                                                {section.label}
+                                            </p>
+                                            <p style={{ margin: "0 0 6px 0", fontSize: "10px", color: "#c9c9c9" }}>
+                                                {isConsoSection
+                                                    ? "Sequential — tap a step to jump straight to it."
+                                                    : "Independent checklist — tap to check/uncheck each item on its own, in any order."}
+                                            </p>
+                                            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                                                {section.stages.map((stage) => {
+                                                    let checked;
+                                                    let isCurrent = false;
+                                                    if (isConsoSection) {
+                                                        const stageIndex = allNewcomerStages.indexOf(stage);
+                                                        checked = consoInProgress
+                                                            ? (consoIndex !== -1 && stageIndex <= consoIndex)
+                                                            : true; // already handed off to DJ -> conso is fully done
+                                                        isCurrent = consoInProgress && stage === checklistMember.remarks;
+                                                    } else {
+                                                        checked = completedDj.includes(stage);
+                                                    }
+                                                    const allowed = editable && canSetStage(stage);
+                                                    const handleClick = () => {
+                                                        if (!allowed) return;
+                                                        if (isConsoSection) setConsoStage(checklistMember, stage);
+                                                        else toggleDjStage(checklistMember, stage);
+                                                    };
+                                                    return (
+                                                        <div
+                                                            key={stage}
+                                                            onClick={handleClick}
+                                                            style={{
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                gap: "8px",
+                                                                padding: "6px 8px",
+                                                                borderRadius: "6px",
+                                                                cursor: allowed ? "pointer" : "not-allowed",
+                                                                opacity: allowed ? 1 : 0.55,
+                                                                background: isCurrent ? "#fdf6e8" : "transparent",
+                                                                transition: "background 0.15s"
+                                                            }}
+                                                            onMouseEnter={(e) => { if (allowed && !isCurrent) e.currentTarget.style.background = "#f9fafb"; }}
+                                                            onMouseLeave={(e) => { if (allowed && !isCurrent) e.currentTarget.style.background = "transparent"; }}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={checked}
+                                                                readOnly
+                                                                style={{ pointerEvents: "none", width: "14px", height: "14px", flexShrink: 0 }}
+                                                            />
                                                             <span style={{
-                                                                fontSize: "9px",
-                                                                fontWeight: 700,
-                                                                color: "#c9a45c",
-                                                                letterSpacing: "0.3px",
-                                                                flexShrink: 0
+                                                                fontSize: "12px",
+                                                                fontWeight: isCurrent ? 700 : 500,
+                                                                color: checked ? "#111827" : "#9ca3af",
+                                                                flex: 1
                                                             }}>
-                                                                CURRENT
+                                                                {stage}
                                                             </span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
+                                                            {isCurrent && (
+                                                                <span style={{
+                                                                    fontSize: "9px",
+                                                                    fontWeight: 700,
+                                                                    color: "#c9a45c",
+                                                                    letterSpacing: "0.3px",
+                                                                    flexShrink: 0
+                                                                }}>
+                                                                    CURRENT
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
