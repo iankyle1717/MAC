@@ -15,6 +15,7 @@ import AddLeader from "./pages/AddLeader";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getCurrentUser, getNewcomer } from "./utils/auth";
 import { startHeartbeat, stopHeartbeat } from "./utils/heartbeat";
+import { ThemeProvider } from "./context/ThemeContext";   // ← added
 import "./styles/global.css";
 import "./styles/login.css";
 import Newsfeed from "./pages/Newsfeed";
@@ -30,7 +31,6 @@ const RoleBasedRedirect = () => {
 };
 
 function App() {
-    // Heartbeat: track online status
     useEffect(() => {
         const user = getCurrentUser();
         if (user) startHeartbeat();
@@ -47,124 +47,30 @@ function App() {
     }, []);
 
     return (
-        <BrowserRouter>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={<RoleBasedRedirect />} />
-                <Route path="/newsfeed" element={<Newsfeed />} />
+        <ThemeProvider>   {/* ← wrap everything */}
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/" element={<RoleBasedRedirect />} />
+                    <Route path="/newsfeed" element={<Newsfeed />} />
 
-                <Route
-                    path="/dashboard"
-                    element={
-                        <ProtectedRoute>
-                            <Dashboard />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/messages"
-                    element={
-                        <ProtectedRoute>
-                            <Messages />
-                        </ProtectedRoute>
-                    }
-                />
+                    <Route path="/dashboard" element={ <ProtectedRoute><Dashboard /></ProtectedRoute> } />
+                    <Route path="/messages"  element={ <ProtectedRoute><Messages /></ProtectedRoute> } />
+                    <Route path="/leaders"   element={ <ProtectedRoute><Leaders /></ProtectedRoute> } />
+                    <Route path="/leader/:id" element={ <ProtectedRoute checkProfileAccess={true}><LeaderProfile /></ProtectedRoute> } />
+                    <Route path="/newcomer/:id" element={ <ProtectedRoute isNewcomerRoute={true}><NewcomerProfile /></ProtectedRoute> } />
+                    <Route path="/attendance" element={ <ProtectedRoute requireAttendance={true}><Attendance /></ProtectedRoute> } />
+                    <Route path="/tithes"     element={ <ProtectedRoute requireTithes={true}><Tithes /></ProtectedRoute> } />
+                    <Route path="/devotion"   element={ <ProtectedRoute requireDevotion={true}><Devotion /></ProtectedRoute> } />
+                    <Route path="/lifegroup"  element={ <ProtectedRoute requireLifeGroup={true}><LifeGroup /></ProtectedRoute> } />
+                    <Route path="/edit-leader/:id" element={ <ProtectedRoute requireEditAccess={true}><EditLeader /></ProtectedRoute> } />
+                    <Route path="/assimilation" element={ <ProtectedRoute requireAssimilation={true}><Assimilation /></ProtectedRoute> } />
+                    <Route path="/add-leader" element={ <ProtectedRoute requireConvertAccess={true}><AddLeader /></ProtectedRoute> } />
 
-                <Route
-                    path="/leaders"
-                    element={
-                        <ProtectedRoute>
-                            <Leaders />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/leader/:id"
-                    element={
-                        <ProtectedRoute checkProfileAccess={true}>
-                            <LeaderProfile />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/newcomer/:id"
-                    element={
-                        <ProtectedRoute isNewcomerRoute={true}>
-                            <NewcomerProfile />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/attendance"
-                    element={
-                        <ProtectedRoute requireAttendance={true}>
-                            <Attendance />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/tithes"
-                    element={
-                        <ProtectedRoute requireTithes={true}>
-                            <Tithes />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/devotion"
-                    element={
-                        <ProtectedRoute requireDevotion={true}>
-                            <Devotion />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/lifegroup"
-                    element={
-                        <ProtectedRoute requireLifeGroup={true}>
-                            <LifeGroup />
-                        </ProtectedRoute>
-                    }
-                />
-
-                {/* Edit Leader - ADMIN ONLY now */}
-                <Route
-                    path="/edit-leader/:id"
-                    element={
-                        <ProtectedRoute requireEditAccess={true}>
-                            <EditLeader />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    path="/assimilation"
-                    element={
-                        <ProtectedRoute requireAssimilation={true}>
-                            <Assimilation />
-                        </ProtectedRoute>
-                    }
-                />
-
-                {/* Add Leader - Admin & Discipleship only */}
-                <Route
-                    path="/add-leader"
-                    element={
-                        <ProtectedRoute requireConvertAccess={true}>
-                            <AddLeader />
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route path="*" element={<RoleBasedRedirect />} />
-            </Routes>
-        </BrowserRouter>
+                    <Route path="*" element={<RoleBasedRedirect />} />
+                </Routes>
+            </BrowserRouter>
+        </ThemeProvider>
     );
 }
 

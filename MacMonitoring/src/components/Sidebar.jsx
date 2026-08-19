@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getCurrentUser, getNewcomer, logout, getVisibleRoutes, isAdmin, getUserMinistries } from "../utils/auth";
 import { getOnlineUsersCount, getOnlineUsers, subscribeOnlineCount } from "../utils/heartbeat";
+import { useTheme } from "../context/ThemeContext";   // ← added
 import logo from "../assets/logo.png";
 
 function Sidebar() {
     const location = useLocation();
+    const { theme, toggleTheme } = useTheme();   // ← added
     const [authVersion, setAuthVersion] = useState(0);
     const [hoveredLink, setHoveredLink] = useState(null);
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -26,12 +28,10 @@ function Sidebar() {
         return () => window.removeEventListener("ems-auth-change", handleAuthChange);
     }, []);
 
-    // Close mobile menu on route change
     useEffect(() => {
         setMobileOpen(false);
     }, [location.pathname]);
 
-    // Handle escape key and body scroll lock
     useEffect(() => {
         const handleEscape = (e) => {
             if (e.key === "Escape") {
@@ -54,37 +54,25 @@ function Sidebar() {
         };
     }, [mobileOpen, showOnlinePanel]);
 
-    // Subscribe to online user count (admin only)
     useEffect(() => {
         if (!admin) return;
-
-        const unsubscribe = subscribeOnlineCount((count) => {
-            setOnlineCount(count);
-        });
-
+        const unsubscribe = subscribeOnlineCount((count) => setOnlineCount(count));
         return unsubscribe;
     }, [admin]);
 
-    // Fetch online users list when panel opens
     useEffect(() => {
         if (!showOnlinePanel || !admin) return;
-
         const fetchUsers = async () => {
             setLoadingOnline(true);
-            const users = await getOnlineUsers(2); // 2 minute threshold
+            const users = await getOnlineUsers(2);
             setOnlineUsers(users);
             setLoadingOnline(false);
         };
-
         fetchUsers();
-        const interval = setInterval(fetchUsers, 10000); // Refresh every 10s
+        const interval = setInterval(fetchUsers, 10000);
         return () => clearInterval(interval);
     }, [showOnlinePanel, admin]);
 
-    // ── Fullscreen / Maximize toggle ──────────────────────────────────────
-    // Tracks the browser's actual fullscreen state (covers vendor-prefixed
-    // events so this stays accurate even if the user exits fullscreen via
-    // Esc or a browser control instead of clicking the button again).
     useEffect(() => {
         const handleFullscreenChange = () => {
             const fsElement = document.fullscreenElement
@@ -128,12 +116,9 @@ function Sidebar() {
             if (exit) exit.call(document);
         }
     };
-    // ───────────────────────────────────────────────────────────────────────
 
     const isActive = (path) => location.pathname === path;
-
     const handleLogout = () => logout();
-
     if (!user && !newcomer) return null;
 
     const getRouteIcon = (label) => {
@@ -153,10 +138,8 @@ function Sidebar() {
         return icons[label] || "•";
     };
 
-    // Build navigation links
     const navLinks = [];
     let newsfeedAdded = false;
-
     for (const route of visibleRoutes) {
         navLinks.push(route);
         if (route.label === "Dashboard" && !newsfeedAdded) {
@@ -165,7 +148,6 @@ function Sidebar() {
             newsfeedAdded = true;
         }
     }
-
     if (!newsfeedAdded) {
         navLinks.unshift({ path: "/newsfeed", label: "Newsfeed" });
         navLinks.splice(1, 0, { path: "/messages", label: "MAC-MESSAGE" });
@@ -174,28 +156,22 @@ function Sidebar() {
     const sidebarContent = (
         <>
             {/* LOGO */}
-            <div 
-                style={{
-                    padding: "16px 12px 12px",
-                    textAlign: "center",
-                    borderBottom: "1px solid rgba(201, 164, 92, 0.15)",
-                    flexShrink: 0
-                }}
-            >
-                <img 
-                    src={logo} 
-                    alt="MAC" 
-                    style={{
-                        width: "80px",
-                        height: "80px",
-                        objectFit: "contain",
-                        marginBottom: "8px",
-                        filter: "drop-shadow(0 2px 4px rgba(201, 164, 92, 0.3))"
-                    }}
-                />
+            <div style={{
+                padding: "16px 12px 12px",
+                textAlign: "center",
+                borderBottom: "1px solid var(--gold-transparent-15)",
+                flexShrink: 0
+            }}>
+                <img src={logo} alt="MAC" style={{
+                    width: "80px",
+                    height: "80px",
+                    objectFit: "contain",
+                    marginBottom: "8px",
+                    filter: "drop-shadow(0 2px 4px rgba(201, 164, 92, 0.3))"
+                }} />
                 <h2 style={{
                     fontSize: "12px",
-                    color: "#c9a45c",
+                    color: "var(--gold)",
                     fontWeight: "800",
                     margin: "0 0 2px 0",
                     letterSpacing: "1px"
@@ -204,7 +180,7 @@ function Sidebar() {
                 </h2>
                 <p style={{
                     fontSize: "11px",
-                    color: "#c9a45c",
+                    color: "var(--gold)",
                     textTransform: "uppercase",
                     letterSpacing: "2px",
                     margin: 0,
@@ -216,30 +192,27 @@ function Sidebar() {
 
             {/* ADMIN: Online Users Badge */}
             {admin && (
-                <div 
-                    onClick={() => setShowOnlinePanel(true)}
-                    style={{
-                        margin: "10px 10px 6px",
-                        padding: "10px 12px",
-                        borderRadius: "10px",
-                        background: "rgba(34, 197, 94, 0.1)",
-                        border: "1px solid rgba(34, 197, 94, 0.25)",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        transition: "all 0.2s ease",
-                        flexShrink: 0
-                    }}
-                    onMouseEnter={e => {
-                        e.currentTarget.style.background = "rgba(34, 197, 94, 0.18)";
-                        e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.4)";
-                    }}
-                    onMouseLeave={e => {
-                        e.currentTarget.style.background = "rgba(34, 197, 94, 0.1)";
-                        e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.25)";
-                    }}
-                >
+                <div onClick={() => setShowOnlinePanel(true)} style={{
+                    margin: "10px 10px 6px",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    background: "rgba(34, 197, 94, 0.1)",
+                    border: "1px solid rgba(34, 197, 94, 0.25)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    transition: "all 0.2s ease",
+                    flexShrink: 0
+                }}
+                onMouseEnter={e => {
+                    e.currentTarget.style.background = "rgba(34, 197, 94, 0.18)";
+                    e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.4)";
+                }}
+                onMouseLeave={e => {
+                    e.currentTarget.style.background = "rgba(34, 197, 94, 0.1)";
+                    e.currentTarget.style.borderColor = "rgba(34, 197, 94, 0.25)";
+                }}>
                     <div style={{
                         width: "10px",
                         height: "10px",
@@ -261,43 +234,38 @@ function Sidebar() {
                         <p style={{
                             margin: "1px 0 0 0",
                             fontSize: "9px",
-                            color: "rgba(255,255,255,0.5)"
+                            color: "var(--text-faint)"
                         }}>
                             Tap to view
                         </p>
                     </div>
-                    <span style={{
-                        fontSize: "16px",
-                        color: "#4ade80"
-                    }}>👥</span>
+                    <span style={{ fontSize: "16px", color: "#4ade80" }}>👥</span>
                 </div>
             )}
 
             {/* USER */}
-            <div 
-                style={{
-                    margin: "10px 10px 6px",
-                    padding: "10px",
-                    borderRadius: "10px",
-                    background: "rgba(201, 164, 92, 0.08)",
-                    border: "1px solid rgba(201, 164, 92, 0.15)",
-                    textAlign: "center",
-                    flexShrink: 0
-                }}
-            >
+            <div style={{
+                margin: "10px 10px 6px",
+                padding: "10px",
+                borderRadius: "10px",
+                background: "var(--card-bg)",
+                border: "1px solid var(--gold-transparent-15)",
+                textAlign: "center",
+                flexShrink: 0
+            }}>
                 {user ? (
                     <>
                         <h3 style={{
                             fontSize: "14px",
                             fontWeight: "700",
-                            color: "#fff",
+                            color: "var(--text-main)",
                             margin: "0 0 2px 0"
                         }}>
                             {user.firstname} {user.lastname}
                         </h3>
                         <p style={{
                             fontSize: "12px",
-                            color: "rgba(255,255,255,0.6)",
+                            color: "var(--text-muted)",
                             margin: "0 0 4px 0"
                         }}>
                             {user.type} • {user.tribe}
@@ -316,8 +284,8 @@ function Sidebar() {
                                         display: "inline-block",
                                         padding: "2px 8px",
                                         borderRadius: "10px",
-                                        background: "rgba(201, 164, 92, 0.2)",
-                                        color: "#c9a45c",
+                                        background: "var(--gold-transparent-20)",
+                                        color: "var(--gold)",
                                         fontSize: "9px",
                                         fontWeight: "700",
                                         textTransform: "uppercase",
@@ -334,7 +302,7 @@ function Sidebar() {
                                 display: "inline-block",
                                 padding: "2px 8px",
                                 borderRadius: "10px",
-                                background: "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)",
+                                background: "linear-gradient(135deg, var(--gold) 0%, var(--gold-hover) 100%)",
                                 color: "#fff",
                                 fontSize: "11px",
                                 fontWeight: "700",
@@ -350,14 +318,14 @@ function Sidebar() {
                         <h3 style={{
                             fontSize: "12px",
                             fontWeight: "700",
-                            color: "#fff",
+                            color: "var(--text-main)",
                             margin: "0 0 2px 0"
                         }}>
                             {newcomer.firstname} {newcomer.lastname}
                         </h3>
                         <p style={{
                             fontSize: "10px",
-                            color: "rgba(255,255,255,0.6)",
+                            color: "var(--text-muted)",
                             margin: "0 0 4px 0"
                         }}>
                             Newcomer • {newcomer.tribe}
@@ -378,8 +346,8 @@ function Sidebar() {
             </div>
 
             {/* NAV LINKS */}
-            <div style={{ 
-                flex: "1 1 auto", 
+            <div style={{
+                flex: "1 1 auto",
                 padding: "4px 8px",
                 display: "flex",
                 flexDirection: "column",
@@ -407,11 +375,11 @@ function Sidebar() {
                                 textDecoration: "none",
                                 fontSize: "12px",
                                 fontWeight: active ? "700" : "500",
-                                color: active ? "#1a1a2e" : "rgba(255,255,255,0.8)",
-                                background: active 
-                                    ? "linear-gradient(135deg, #c9a45c 0%, #b8934a 100%)"
-                                    : hoveredLink === index 
-                                        ? "rgba(201, 164, 92, 0.15)"
+                                color: active ? "var(--text-active-nav)" : "var(--text-secondary)",
+                                background: active
+                                    ? "linear-gradient(135deg, var(--gold) 0%, var(--gold-hover) 100%)"
+                                    : hoveredLink === index
+                                        ? "var(--gold-transparent-15)"
                                         : "transparent",
                                 transition: "all 0.2s ease",
                                 boxShadow: active ? "0 2px 8px rgba(201, 164, 92, 0.3)" : "none",
@@ -429,7 +397,7 @@ function Sidebar() {
                                     width: "4px",
                                     height: "4px",
                                     borderRadius: "50%",
-                                    background: "#1a1a2e"
+                                    background: "var(--text-active-nav)"
                                 }} />
                             )}
                         </Link>
@@ -437,10 +405,10 @@ function Sidebar() {
                 })}
             </div>
 
-            {/* MAXIMIZE / LOGOUT */}
-            <div style={{ 
+            {/* MAXIMIZE / THEME / LOGOUT */}
+            <div style={{
                 padding: "10px",
-                borderTop: "1px solid rgba(201, 164, 92, 0.15)",
+                borderTop: "1px solid var(--gold-transparent-15)",
                 flexShrink: 0,
                 display: "flex",
                 flexDirection: "column",
@@ -452,9 +420,9 @@ function Sidebar() {
                         width: "100%",
                         padding: "10px",
                         borderRadius: "8px",
-                        border: "1px solid rgba(201, 164, 92, 0.3)",
-                        background: "rgba(201, 164, 92, 0.1)",
-                        color: "#c9a45c",
+                        border: "1px solid var(--gold-transparent-30)",
+                        background: "var(--card-bg)",
+                        color: "var(--gold)",
                         fontSize: "12px",
                         fontWeight: "600",
                         cursor: "pointer",
@@ -464,20 +432,46 @@ function Sidebar() {
                         justifyContent: "center",
                         gap: "6px"
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(201, 164, 92, 0.2)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(201, 164, 92, 0.1)"; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gold-transparent-15)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card-bg)"; }}
                 >
                     {isFullscreen ? "🗗 Exit Full Screen" : "⛶ Maximize View"}
                 </button>
-                <button 
+
+                {/* THEME TOGGLE */}
+                <button
+                    onClick={toggleTheme}
+                    style={{
+                        width: "100%",
+                        padding: "10px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--gold-transparent-30)",
+                        background: "var(--card-bg)",
+                        color: "var(--gold)",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px"
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gold-transparent-15)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card-bg)"; }}
+                >
+                    {theme === "dark" ? "☀ Light Mode" : "🌙 Dark Mode"}
+                </button>
+
+                <button
                     onClick={handleLogout}
                     style={{
                         width: "100%",
                         padding: "10px",
                         borderRadius: "8px",
-                        border: "1px solid rgba(220, 38, 38, 0.3)",
-                        background: "rgba(220, 38, 38, 0.1)",
-                        color: "#fca5a5",
+                        border: "1px solid var(--danger-border)",
+                        background: "var(--danger-bg)",
+                        color: "var(--danger-text)",
                         fontSize: "12px",
                         fontWeight: "600",
                         cursor: "pointer",
@@ -491,7 +485,7 @@ function Sidebar() {
                         e.currentTarget.style.background = "rgba(220, 38, 38, 0.2)";
                     }}
                     onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "rgba(220, 38, 38, 0.1)";
+                        e.currentTarget.style.background = "var(--danger-bg)";
                     }}
                 >
                     🚪 Logout
@@ -511,7 +505,7 @@ function Sidebar() {
 
     return (
         <>
-            {/* Mobile Hamburger Button */}
+            {/* Mobile Hamburger */}
             <button
                 onClick={() => setMobileOpen(!mobileOpen)}
                 className="mobile-menu-btn"
@@ -524,9 +518,9 @@ function Sidebar() {
                     width: "44px",
                     height: "44px",
                     borderRadius: "10px",
-                    border: "1px solid rgba(201, 164, 92, 0.3)",
-                    background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
-                    color: "#c9a45c",
+                    border: "1px solid var(--gold-transparent-30)",
+                    background: "var(--fab-bg)",
+                    color: "var(--gold)",
                     fontSize: "20px",
                     cursor: "pointer",
                     alignItems: "center",
@@ -538,7 +532,7 @@ function Sidebar() {
                 {mobileOpen ? "✕" : "☰"}
             </button>
 
-            {/* Floating Maximize Button (always available, mirrors the hamburger) */}
+            {/* Floating Maximize Button */}
             <button
                 onClick={toggleFullscreen}
                 className="maximize-fab-btn"
@@ -552,9 +546,9 @@ function Sidebar() {
                     width: "44px",
                     height: "44px",
                     borderRadius: "10px",
-                    border: "1px solid rgba(201, 164, 92, 0.3)",
-                    background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
-                    color: "#c9a45c",
+                    border: "1px solid var(--gold-transparent-30)",
+                    background: "var(--fab-bg)",
+                    color: "var(--gold)",
                     fontSize: "18px",
                     cursor: "pointer",
                     display: "flex",
@@ -575,7 +569,7 @@ function Sidebar() {
                     style={{
                         position: "fixed",
                         inset: 0,
-                        background: "rgba(0, 0, 0, 0.6)",
+                        background: "var(--overlay-bg)",
                         backdropFilter: "blur(4px)",
                         zIndex: 998,
                         animation: "fadeIn 0.2s ease"
@@ -590,7 +584,7 @@ function Sidebar() {
                     style={{
                         position: "fixed",
                         inset: 0,
-                        background: "rgba(0, 0, 0, 0.7)",
+                        background: "var(--overlay-bg)",
                         backdropFilter: "blur(6px)",
                         zIndex: 1000,
                         animation: "fadeIn 0.2s ease",
@@ -603,9 +597,9 @@ function Sidebar() {
                     <div
                         onClick={e => e.stopPropagation()}
                         style={{
-                            background: "linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)",
+                            background: "var(--panel-bg)",
                             borderRadius: "16px",
-                            border: "1px solid rgba(201, 164, 92, 0.25)",
+                            border: "1px solid var(--gold-transparent-25)",
                             width: "100%",
                             maxWidth: "360px",
                             maxHeight: "80vh",
@@ -618,7 +612,7 @@ function Sidebar() {
                         {/* Panel Header */}
                         <div style={{
                             padding: "16px 20px",
-                            borderBottom: "1px solid rgba(201, 164, 92, 0.15)",
+                            borderBottom: "1px solid var(--gold-transparent-15)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between"
@@ -635,7 +629,7 @@ function Sidebar() {
                                     margin: 0,
                                     fontSize: "15px",
                                     fontWeight: "700",
-                                    color: "#fff"
+                                    color: "var(--text-main)"
                                 }}>
                                     Online Users
                                 </h3>
@@ -655,7 +649,7 @@ function Sidebar() {
                                 style={{
                                     background: "none",
                                     border: "none",
-                                    color: "rgba(255,255,255,0.5)",
+                                    color: "var(--text-faint)",
                                     fontSize: "20px",
                                     cursor: "pointer",
                                     width: "32px",
@@ -666,7 +660,7 @@ function Sidebar() {
                                     justifyContent: "center",
                                     transition: "all 0.2s"
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                                onMouseEnter={e => e.currentTarget.style.background = "var(--item-bg)"}
                                 onMouseLeave={e => e.currentTarget.style.background = "none"}
                             >
                                 ✕
@@ -679,26 +673,26 @@ function Sidebar() {
                             overflowY: "auto",
                             padding: "10px",
                             scrollbarWidth: "thin",
-                            scrollbarColor: "rgba(201,164,92,0.3) transparent"
+                            scrollbarColor: "var(--gold-transparent-30) transparent"
                         }}>
                             {loadingOnline ? (
                                 <div style={{ textAlign: "center", padding: "30px" }}>
                                     <div style={{
                                         width: "24px",
                                         height: "24px",
-                                        border: "2px solid rgba(255,255,255,0.1)",
-                                        borderTopColor: "#c9a45c",
+                                        border: "2px solid var(--item-border)",
+                                        borderTopColor: "var(--gold)",
                                         borderRadius: "50%",
                                         margin: "0 auto 10px",
                                         animation: "spin 0.8s linear infinite"
                                     }} />
-                                    <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "12px" }}>
+                                    <p style={{ color: "var(--text-faint)", fontSize: "12px" }}>
                                         Loading...
                                     </p>
                                 </div>
                             ) : onlineUsers.length === 0 ? (
                                 <div style={{ textAlign: "center", padding: "30px" }}>
-                                    <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", margin: 0 }}>
+                                    <p style={{ color: "var(--text-muted)", fontSize: "13px", margin: 0 }}>
                                         No users online right now
                                     </p>
                                 </div>
@@ -713,17 +707,17 @@ function Sidebar() {
                                                 gap: "10px",
                                                 padding: "10px 12px",
                                                 borderRadius: "10px",
-                                                background: "rgba(255,255,255,0.03)",
-                                                border: "1px solid rgba(255,255,255,0.05)",
+                                                background: "var(--item-bg)",
+                                                border: "1px solid var(--item-border)",
                                                 transition: "all 0.2s"
                                             }}
                                             onMouseEnter={e => {
-                                                e.currentTarget.style.background = "rgba(201, 164, 92, 0.08)";
-                                                e.currentTarget.style.borderColor = "rgba(201, 164, 92, 0.2)";
+                                                e.currentTarget.style.background = "var(--gold-transparent-15)";
+                                                e.currentTarget.style.borderColor = "var(--gold-transparent-20)";
                                             }}
                                             onMouseLeave={e => {
-                                                e.currentTarget.style.background = "rgba(255,255,255,0.03)";
-                                                e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)";
+                                                e.currentTarget.style.background = "var(--item-bg)";
+                                                e.currentTarget.style.borderColor = "var(--item-border)";
                                             }}
                                         >
                                             <img
@@ -742,7 +736,7 @@ function Sidebar() {
                                                     margin: 0,
                                                     fontSize: "13px",
                                                     fontWeight: "600",
-                                                    color: "#fff",
+                                                    color: "var(--text-main)",
                                                     whiteSpace: "nowrap",
                                                     overflow: "hidden",
                                                     textOverflow: "ellipsis"
@@ -752,7 +746,7 @@ function Sidebar() {
                                                 <p style={{
                                                     margin: "2px 0 0 0",
                                                     fontSize: "10px",
-                                                    color: "rgba(255,255,255,0.5)"
+                                                    color: "var(--text-faint)"
                                                 }}>
                                                     {u.type} • {u.tribe}
                                                 </p>
@@ -774,13 +768,13 @@ function Sidebar() {
                         {/* Panel Footer */}
                         <div style={{
                             padding: "10px 16px",
-                            borderTop: "1px solid rgba(201, 164, 92, 0.1)",
+                            borderTop: "1px solid var(--gold-transparent-15)",
                             textAlign: "center"
                         }}>
                             <p style={{
                                 margin: 0,
                                 fontSize: "10px",
-                                color: "rgba(255,255,255,0.35)"
+                                color: "var(--text-very-faint)"
                             }}>
                                 Updates every 10 seconds • 2 min threshold
                             </p>
@@ -789,8 +783,8 @@ function Sidebar() {
                 </div>
             )}
 
-            {/* Sidebar - FIXED POSITION */}
-            <div 
+            {/* Sidebar */}
+            <div
                 className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}
                 key={authVersion}
                 style={{
@@ -798,8 +792,8 @@ function Sidebar() {
                     top: 0,
                     left: 0,
                     width: "min(270px, 85vw)",
-                    background: "linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-                    borderRight: "1px solid rgba(201, 164, 92, 0.2)",
+                    background: "linear-gradient(180deg, var(--sidebar-start) 0%, var(--sidebar-mid) 50%, var(--sidebar-end) 100%)",
+                    borderRight: "1px solid var(--gold-transparent-20)",
                     boxShadow: "4px 0 24px rgba(0, 0, 0, 0.3)",
                     overflow: "hidden",
                     display: "flex",
@@ -810,7 +804,7 @@ function Sidebar() {
                 {sidebarContent}
             </div>
 
-            {/* Spacer div to push content right of fixed sidebar (desktop only) */}
+            {/* Spacer */}
             <div className="sidebar-spacer" style={{ width: "270px", flexShrink: 0 }} />
 
             <style>{`
@@ -825,30 +819,16 @@ function Sidebar() {
                 @keyframes spin {
                     to { transform: rotate(360deg); }
                 }
-
-                /* ── Sidebar height: prefer dvh so mobile browser chrome
-                   (address bar showing/hiding) never pushes the logout
-                   button off-screen on iOS/Android. Falls back to vh on
-                   browsers without dvh support. ── */
                 .sidebar {
                     height: 100vh;
                     height: 100dvh;
                 }
-
-                /* ── Desktop default: sidebar always visible, hamburger
-                   hidden since there's room for a persistent sidebar. ── */
                 .mobile-menu-btn {
                     display: none !important;
                 }
                 .mobile-overlay {
                     display: none !important;
                 }
-
-                /* ── Tablet & phone (iPad included): sidebar becomes an
-                   off-canvas drawer that slides in, so it never competes
-                   with page content for width, and its own height is the
-                   full (dynamic) viewport height so Logout/Maximize are
-                   always reachable by scrolling the nav list, never cut off. ── */
                 @media (max-width: 1024px) {
                     .sidebar {
                         transform: translateX(-100%);
@@ -865,7 +845,6 @@ function Sidebar() {
                         width: 0 !important;
                     }
                 }
-
                 @media (min-width: 1025px) {
                     .sidebar {
                         transform: translateX(0) !important;

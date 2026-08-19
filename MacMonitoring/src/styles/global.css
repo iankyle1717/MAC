@@ -3985,3 +3985,91 @@ button:hover {
         content: "👆";
     }
 }
+/* =========================================================
+   THEME VARIABLES
+   ========================================================= */
+:root {
+  /* Sidebar / shell backgrounds */
+  --sidebar-start: #1a1a2e;
+  --sidebar-mid: #16213e;
+  --sidebar-end: #0f3460;
+
+  /* Gold accent scale */
+  --gold: #c9a45c;
+  --gold-hover: #b8934a;
+  --gold-transparent-15: rgba(201, 164, 92, 0.15);
+  --gold-transparent-20: rgba(201, 164, 92, 0.20);
+  --gold-transparent-25: rgba(201, 164, 92, 0.25);
+  --gold-transparent-30: rgba(201, 164, 92, 0.30);
+
+  /* Typography */
+  --text-main: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.8);
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --text-faint: rgba(255, 255, 255, 0.5);
+  --text-very-faint: rgba(255, 255, 255, 0.35);
+  --text-active-nav: #1a1a2e;   /* dark text on gold button */
+
+  /* Surfaces */
+  --card-bg: rgba(201, 164, 92, 0.08);
+  --item-bg: rgba(255, 255, 255, 0.03);
+  --item-border: rgba(255, 255, 255, 0.05);
+
+  /* Danger / logout */
+  --danger-text: #fca5a5;
+  --danger-bg: rgba(220, 38, 38, 0.10);
+  --danger-border: rgba(220, 38, 38, 0.30);
+
+  /* FABs & mobile buttons */
+  --fab-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+
+  /* Overlays & panels */
+  --panel-bg: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+
+  /* Page body */
+  --body-bg: #0f0f1a;
+}
+
+/* Light mode overrides */
+[data-theme="light"] {
+  --sidebar-start: #f8f9fa;
+  --sidebar-mid: #ffffff;
+  --sidebar-end: #e9ecef;
+
+  --gold: #b8934a;
+  --gold-hover: #a08240;
+  --gold-transparent-15: rgba(184, 147, 74, 0.15);
+  --gold-transparent-20: rgba(184, 147, 74, 0.20);
+  --gold-transparent-25: rgba(184, 147, 74, 0.25);
+  --gold-transparent-30: rgba(184, 147, 74, 0.30);
+
+  --text-main: #1a1a2e;
+  --text-secondary: rgba(0, 0, 0, 0.8);
+  --text-muted: rgba(0, 0, 0, 0.6);
+  --text-faint: rgba(0, 0, 0, 0.5);
+  --text-very-faint: rgba(0, 0, 0, 0.35);
+  --text-active-nav: #ffffff;   /* white text on gold button */
+
+  --card-bg: rgba(184, 147, 74, 0.08);
+  --item-bg: rgba(0, 0, 0, 0.03);
+  --item-border: rgba(0, 0, 0, 0.05);
+
+  --danger-text: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.25);
+
+  --fab-bg: linear-gradient(135deg, #ffffff 0%, #f0f0f5 100%);
+
+  --panel-bg: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+  --overlay-bg: rgba(0, 0, 0, 0.4);
+
+  --body-bg: #f0f0f5;
+}
+
+/* Apply page background */
+body {
+  background-color: var(--body-bg);
+  color: var(--text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
