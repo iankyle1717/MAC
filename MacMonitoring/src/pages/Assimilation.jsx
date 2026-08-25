@@ -38,6 +38,68 @@ const ETD = (extra = {}) => ({
     ...extra,
 });
 
+// ── Pagination Bar (matches the one used on Attendance) ────────────────────
+const pagBtnStyle = (disabled) => ({
+    padding: "5px 9px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: disabled ? "#f3f4f6" : "#fff",
+    color: disabled ? "#d1d5db" : "#374151",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+});
+
+function PaginationBar({ page, totalPages, pageSize, onPageChange, onPageSizeChange, totalItems }) {
+    return (
+        <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 4px", flexWrap: "wrap", gap: "10px"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#6b7280" }}>
+                <span>Show</span>
+                <select
+                    value={pageSize}
+                    onChange={e => onPageSizeChange(Number(e.target.value))}
+                    style={{
+                        padding: "4px 8px", borderRadius: "6px", border: "1px solid #d1d5db",
+                        fontSize: "12px", fontWeight: 600, cursor: "pointer"
+                    }}
+                >
+                    {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span>per page · {totalItems} total</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button
+                    onClick={() => onPageChange(1)}
+                    disabled={page === 1}
+                    style={pagBtnStyle(page === 1)}
+                >«</button>
+                <button
+                    onClick={() => onPageChange(page - 1)}
+                    disabled={page === 1}
+                    style={pagBtnStyle(page === 1)}
+                >‹</button>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", padding: "0 6px" }}>
+                    Page {page} of {totalPages}
+                </span>
+                <button
+                    onClick={() => onPageChange(page + 1)}
+                    disabled={page === totalPages}
+                    style={pagBtnStyle(page === totalPages)}
+                >›</button>
+                <button
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={page === totalPages}
+                    style={pagBtnStyle(page === totalPages)}
+                >»</button>
+            </div>
+        </div>
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // JOURNEY CHECKLIST — replaces the old one-step-at-a-time "Next" button.
 //
@@ -96,6 +158,10 @@ function Assimilation() {
     const [filterTribe, setFilterTribe] = useState("ALL");
     const [filterStage, setFilterStage] = useState("ALL");
     const [checklistMember, setChecklistMember] = useState(null);
+
+    // ── Pagination state ────────────────────────────────────────────────────
+    const [pageSize, setPageSize] = useState(10);
+    const [page, setPage] = useState(1);
 
     // ── Edit Info modal state ───────────────────────────────────────────────
     // Separate from the Add form's state on purpose — editing an existing
@@ -372,6 +438,18 @@ function Assimilation() {
 
         return matchesSearch && matchesTribe && matchesStage;
     });
+
+    // ── Paginated slice used for rendering the table. Stats cards above use
+    // the FULL `members` list, and the "showing N results" text uses the
+    // full `filteredMembers` list — only the table body itself is sliced. ──
+    const totalPages = Math.max(1, Math.ceil(filteredMembers.length / pageSize));
+    const paginatedMembers = filteredMembers.slice((page - 1) * pageSize, page * pageSize);
+
+    // Reset back to page 1 whenever the filters/search/page size change, so
+    // users aren't stranded on a page that no longer has any results.
+    useEffect(() => {
+        setPage(1);
+    }, [search, filterTribe, filterStage, pageSize]);
 
     // Mentor options for the ADD form, scoped to the selected tribe.
     const filteredLeaders = leaders.filter((leader) => leader.tribe === tribe);
@@ -684,7 +762,7 @@ function Assimilation() {
                             ) : filteredMembers.length === 0 ? (
                                 <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No newcomers found.</td></tr>
                             ) : (
-                                filteredMembers.map((member) => (
+                                paginatedMembers.map((member) => (
                                     <tr key={member.id}>
                                         <td style={ETD({ textAlign: "left", padding: "4px 6px" })}>
                                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -815,6 +893,17 @@ function Assimilation() {
                         </tbody>
                     </table>
                 </div>
+
+                {!loading && filteredMembers.length > 0 && (
+                    <PaginationBar
+                        page={page}
+                        totalPages={totalPages}
+                        pageSize={pageSize}
+                        totalItems={filteredMembers.length}
+                        onPageChange={setPage}
+                        onPageSizeChange={setPageSize}
+                    />
+                )}
             </div>
 
             {/* ADD NEWCOMER MODAL */}
@@ -1276,5 +1365,4 @@ function Assimilation() {
         </div>
     );
 }
-
 export default Assimilation;

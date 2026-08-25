@@ -531,6 +531,68 @@ function TribeLeaderboard({ tribesList, leaders, attendanceMap, newcomers, newco
     );
 }
 
+// ── Pagination Bar (shared between Leaders and Newcomers tables) ──────────
+const pagBtnStyle = (disabled) => ({
+    padding: "5px 9px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: disabled ? "#f3f4f6" : "#fff",
+    color: disabled ? "#d1d5db" : "#374151",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+});
+
+function PaginationBar({ page, totalPages, pageSize, onPageChange, onPageSizeChange, totalItems }) {
+    return (
+        <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 4px", flexWrap: "wrap", gap: "10px"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#6b7280" }}>
+                <span>Show</span>
+                <select
+                    value={pageSize}
+                    onChange={e => onPageSizeChange(Number(e.target.value))}
+                    style={{
+                        padding: "4px 8px", borderRadius: "6px", border: "1px solid #d1d5db",
+                        fontSize: "12px", fontWeight: 600, cursor: "pointer"
+                    }}
+                >
+                    {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span>per page · {totalItems} total</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button
+                    onClick={() => onPageChange(1)}
+                    disabled={page === 1}
+                    style={pagBtnStyle(page === 1)}
+                >«</button>
+                <button
+                    onClick={() => onPageChange(page - 1)}
+                    disabled={page === 1}
+                    style={pagBtnStyle(page === 1)}
+                >‹</button>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", padding: "0 6px" }}>
+                    Page {page} of {totalPages}
+                </span>
+                <button
+                    onClick={() => onPageChange(page + 1)}
+                    disabled={page === totalPages}
+                    style={pagBtnStyle(page === totalPages)}
+                >›</button>
+                <button
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={page === totalPages}
+                    style={pagBtnStyle(page === totalPages)}
+                >»</button>
+            </div>
+        </div>
+    );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 function Attendance() {
     const navigate = useNavigate();
@@ -555,6 +617,11 @@ function Attendance() {
     const [newcomersLoading, setNewcomersLoading] = useState(false);
     const [newcomerSearch, setNewcomerSearch] = useState("");
     const [showAddNewcomer, setShowAddNewcomer] = useState(false);
+
+    // ── Pagination state (shared page size, per-tab page position) ────────
+    const [pageSize, setPageSize] = useState(10);
+    const [leaderPage, setLeaderPage] = useState(1);
+    const [newcomerPage, setNewcomerPage] = useState(1);
 
     // The detected category (PRAYER WORKS / YOUTH GIG / SUNDAY SERVICE / null)
     // for the currently typed serviceType.
@@ -611,6 +678,21 @@ function Attendance() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [attendanceMap, newcomerAttendanceMap, selectedTribe, sortOrder, newcomerSearch, recordTab, newcomers]);
+
+    // Reset pagination back to page 1 whenever the underlying filters/sort/tab
+    // change, so users aren't stranded on an empty page.
+    useEffect(() => {
+        setLeaderPage(1);
+    }, [selectedTribe, sortOrder, pageSize]);
+
+    useEffect(() => {
+        setNewcomerPage(1);
+    }, [newcomerSearch, pageSize]);
+
+    useEffect(() => {
+        setLeaderPage(1);
+        setNewcomerPage(1);
+    }, [recordTab]);
 
     const fetchLeaders = async () => {
         const { data } = await supabase
@@ -1130,6 +1212,16 @@ function Attendance() {
         return fullName.includes(newcomerSearch.toLowerCase());
     });
 
+    // ── Paginated slices used for rendering the tables ─────────────────────
+    // Note: `stats` above intentionally uses the FULL `sorted` /
+    // `filteredNewcomers` lists (not these slices) so Present/Absent/Total
+    // counts always reflect the whole filtered set, not just the current page.
+    const leaderTotalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+    const paginatedLeaders = sorted.slice((leaderPage - 1) * pageSize, leaderPage * pageSize);
+
+    const newcomerTotalPages = Math.max(1, Math.ceil(filteredNewcomers.length / pageSize));
+    const paginatedNewcomers = filteredNewcomers.slice((newcomerPage - 1) * pageSize, newcomerPage * pageSize);
+
     if (!isRecording) {
         return (
             <div className="attendance-layout">
@@ -1231,7 +1323,7 @@ function Attendance() {
                                     {sorted.length === 0 ? (
                                         <tr><td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No leaders found.</td></tr>
                                     ) : (
-                                        sorted.map(leader => {
+                                        paginatedLeaders.map(leader => {
                                             const status = attendanceMap[leader.id] || "Absent";
                                             return (
                                                 <tr key={leader.id}>
@@ -1294,6 +1386,17 @@ function Attendance() {
                                 </tbody>
                             </table>
                         </div>
+
+                        {sorted.length > 0 && (
+                            <PaginationBar
+                                page={leaderPage}
+                                totalPages={leaderTotalPages}
+                                pageSize={pageSize}
+                                totalItems={sorted.length}
+                                onPageChange={setLeaderPage}
+                                onPageSizeChange={setPageSize}
+                            />
+                        )}
                     </>
                 )}
 
@@ -1335,7 +1438,7 @@ function Attendance() {
                                     ) : filteredNewcomers.length === 0 ? (
                                         <tr><td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No newcomers found.</td></tr>
                                     ) : (
-                                        filteredNewcomers.map(member => {
+                                        paginatedNewcomers.map(member => {
                                             const ncStatus = member.status || "ACTIVE";
                                             const ncStyle = getNewcomerStatusStyle(ncStatus);
                                             const present = newcomerAttendanceMap[member.id] === "Present";
@@ -1434,6 +1537,17 @@ function Attendance() {
                                 </tbody>
                             </table>
                         </div>
+
+                        {filteredNewcomers.length > 0 && (
+                            <PaginationBar
+                                page={newcomerPage}
+                                totalPages={newcomerTotalPages}
+                                pageSize={pageSize}
+                                totalItems={filteredNewcomers.length}
+                                onPageChange={setNewcomerPage}
+                                onPageSizeChange={setPageSize}
+                            />
+                        )}
                     </>
                 )}
                 </div>
