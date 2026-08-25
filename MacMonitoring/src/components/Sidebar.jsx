@@ -256,7 +256,7 @@ function Sidebar() {
                 {user ? (
                     <>
                         <h3 style={{
-                            fontSize: "14px",
+                            fontSize: "10px",
                             fontWeight: "700",
                             color: "var(--text-main)",
                             margin: "0 0 2px 0"
@@ -264,7 +264,7 @@ function Sidebar() {
                             {user.firstname} {user.lastname}
                         </h3>
                         <p style={{
-                            fontSize: "12px",
+                            fontSize: "8px",
                             color: "var(--text-muted)",
                             margin: "0 0 4px 0"
                         }}>
@@ -286,7 +286,7 @@ function Sidebar() {
                                         borderRadius: "10px",
                                         background: "var(--gold-transparent-20)",
                                         color: "var(--gold)",
-                                        fontSize: "9px",
+                                        fontSize: "8px",
                                         fontWeight: "700",
                                         textTransform: "uppercase",
                                         letterSpacing: "0.5px"
@@ -297,21 +297,21 @@ function Sidebar() {
                             </div>
                         )}
 
-                        {isAdmin() && (
+                        {/* {isAdmin() && (
                             <span style={{
                                 display: "inline-block",
                                 padding: "2px 8px",
                                 borderRadius: "10px",
                                 background: "linear-gradient(135deg, var(--gold) 0%, var(--gold-hover) 100%)",
                                 color: "#fff",
-                                fontSize: "11px",
+                                fontSize: "8px",
                                 fontWeight: "700",
                                 textTransform: "uppercase",
                                 letterSpacing: "1px"
                             }}>
                                 Admin
                             </span>
-                        )}
+                        )} */}
                     </>
                 ) : newcomer ? (
                     <>
@@ -406,91 +406,80 @@ function Sidebar() {
             </div>
 
             {/* MAXIMIZE / THEME / LOGOUT */}
-            <div style={{
-                padding: "10px",
-                borderTop: "1px solid var(--gold-transparent-15)",
-                flexShrink: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px"
-            }}>
-                <button
-                    onClick={toggleFullscreen}
+                <div
+                    className="sidebar-bottom-actions"
                     style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--gold-transparent-30)",
-                        background: "var(--card-bg)",
-                        color: "var(--gold)",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px"
+                        padding: "8px",
+                        borderTop: "1px solid var(--gold-transparent-15)",
+                        flexShrink: 0,
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gap: "5px"
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gold-transparent-15)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card-bg)"; }}
                 >
-                    {isFullscreen ? "🗗 Exit Full Screen" : "⛶ Maximize View"}
-                </button>
+                    <button
+                        onClick={toggleFullscreen}
+                        title={isFullscreen ? "Exit Full Screen" : "Maximize View"}
+                        style={{
+                            padding: "8px 4px",
+                            borderRadius: "7px",
+                            border: "1px solid var(--gold-transparent-30)",
+                            background: "var(--card-bg)",
+                            color: "var(--gold)",
+                            fontSize: "10px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "3px"
+                        }}
+                    >
+                        {isFullscreen ? "🗗" : "⛶"}
+                    </button>
 
-                {/* THEME TOGGLE */}
-                <button
-                    onClick={toggleTheme}
-                    style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--gold-transparent-30)",
-                        background: "var(--card-bg)",
-                        color: "var(--gold)",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px"
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = "var(--gold-transparent-15)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "var(--card-bg)"; }}
-                >
-                    {theme === "dark" ? "☀ Light Mode" : "🌙 Dark Mode"}
-                </button>
+                    <button
+                        onClick={toggleTheme}
+                        title={theme === "dark" ? "Light Mode" : "Dark Mode"}
+                        style={{
+                            padding: "8px 4px",
+                            borderRadius: "7px",
+                            border: "1px solid var(--gold-transparent-30)",
+                            background: "var(--card-bg)",
+                            color: "var(--gold)",
+                            fontSize: "10px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "3px"
+                        }}
+                    >
+                        {theme === "dark" ? "☀" : "🌙"}
+                    </button>
 
-                <button
-                    onClick={handleLogout}
-                    style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "8px",
-                        border: "1px solid var(--danger-border)",
-                        background: "var(--danger-bg)",
-                        color: "var(--danger-text)",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "6px"
-                    }}
-                    onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "rgba(220, 38, 38, 0.2)";
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "var(--danger-bg)";
-                    }}
-                >
-                    🚪 Logout
-                </button>
-            </div>
+                    <button
+                        onClick={handleLogout}
+                        title="Logout"
+                        style={{
+                            padding: "8px 4px",
+                            borderRadius: "7px",
+                            border: "1px solid var(--danger-border)",
+                            background: "var(--danger-bg)",
+                            color: "var(--danger-text)",
+                            fontSize: "10px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "3px"
+                        }}
+                    >
+                        🚪
+                    </button>
+                </div>
         </>
     );
 
