@@ -32,9 +32,7 @@ export const ministries = [
     "CHURCH SERVICE DIRECTOR",
     "KIDS MINISTRY",
     "SOD",
-    "DIRECTOR SUNDAY",
-    "DIRECTOR PW",
-    "DIRECTOR FRIDAY",
+    "DEPARTMENT HEAD",
     "NONE"
 ];
 

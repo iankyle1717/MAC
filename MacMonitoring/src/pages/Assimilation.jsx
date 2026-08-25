@@ -97,6 +97,16 @@ function Assimilation() {
     const [filterStage, setFilterStage] = useState("ALL");
     const [checklistMember, setChecklistMember] = useState(null);
 
+    // ── Edit Info modal state ───────────────────────────────────────────────
+    // Separate from the Add form's state on purpose — editing an existing
+    // record and filling out a new one shouldn't ever share state, or
+    // closing one half-filled form could silently corrupt the other.
+    const [editMember, setEditMember] = useState(null);
+    const [editFirstname, setEditFirstname] = useState("");
+    const [editLastname, setEditLastname] = useState("");
+    const [editTribe, setEditTribe] = useState("");
+    const [editInvitedBy, setEditInvitedBy] = useState("");
+
     // Permission flags
     // ────────────────────────────────────────────────────────────────────────
     // Two separate ministries share this list, each owning a different part
@@ -104,7 +114,9 @@ function Assimilation() {
     //   • Ushering — only 1st Timer -> 2nd Timer -> 3rd Timer -> Regular
     //     Attendee. Their job is recording attendance (done on the
     //     Attendance page); here they can still correct the Conso stage
-    //     manually via the checklist if needed.
+    //     manually via the checklist if needed. They also own who a
+    //     newcomer's tribe/mentor is, since that's captured at intake —
+    //     see canEditInfo below.
     //   • Discipleship Journey (DJ) — everything from Soul Winning
     //     onward. Only DJ/Admin decide that path forward.
     // ────────────────────────────────────────────────────────────────────────
@@ -113,6 +125,12 @@ function Assimilation() {
     const discipleship = isDiscipleship();
     const canAddNewcomer = admin || ushering;
     const canConvert = canConvertNewcomer();
+
+    // Who can edit a newcomer's basic info (name / tribe / mentor)? Same
+    // people who can add one — this is intake data, not stage progression,
+    // and it's expected to change as a newcomer gets a tribe or a new
+    // mentor assigned after the fact.
+    const canEditInfo = () => admin || ushering;
 
     useEffect(() => {
         fetchMembers();
@@ -137,11 +155,15 @@ function Assimilation() {
         setLeaders(data || []);
     };
 
+    // Tribe is intentionally OPTIONAL here: a walk-in newcomer might not
+    // have a tribe or a mentor assigned yet. They get added as "Not yet
+    // assigned" and Ushering/Admin can fill that in later via Edit Info
+    // once it's known — see handleEditSubmit below.
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!firstname || !lastname || !tribe) {
-            alert("Complete all fields.");
+        if (!firstname || !lastname) {
+            alert("First name and last name are required.");
             return;
         }
 
@@ -150,9 +172,9 @@ function Assimilation() {
             .insert([{
                 firstname,
                 lastname,
-                tribe,
+                tribe: tribe || null,
                 remarks,
-                invited_by: invitedBy
+                invited_by: invitedBy || null
             }]);
 
         if (error) {
@@ -168,6 +190,52 @@ function Assimilation() {
             fetchMembers();
             setShowForm(false);
         }
+    };
+
+    // Opens the Edit Info modal pre-filled with this member's current data.
+    const openEditModal = (member) => {
+        setEditMember(member);
+        setEditFirstname(member.firstname || "");
+        setEditLastname(member.lastname || "");
+        setEditTribe(member.tribe || "");
+        setEditInvitedBy(member.invited_by || "");
+    };
+
+    const closeEditModal = () => setEditMember(null);
+
+    // Saves changes to a newcomer's name / tribe / mentor. Tribe and mentor
+    // are free to change independently of each other and of stage progress
+    // — e.g. Ian starts with no tribe, later gets assigned to Danali under
+    // mentor RH, then later still moves to a different tribe/mentor. None
+    // of that touches his journey stage.
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        if (!editFirstname || !editLastname) {
+            alert("First name and last name are required.");
+            return;
+        }
+
+        const updates = {
+            firstname: editFirstname,
+            lastname: editLastname,
+            tribe: editTribe || null,
+            invited_by: editInvitedBy || null,
+        };
+
+        const { error } = await supabase
+            .from("tblNewMembers")
+            .update(updates)
+            .eq("id", editMember.id);
+
+        if (error) {
+            console.log(error);
+            alert("Failed to update newcomer info.");
+            return;
+        }
+
+        setMembers(prev => prev.map(m => (m.id === editMember.id ? { ...m, ...updates } : m)));
+        setChecklistMember(prev => (prev && prev.id === editMember.id ? { ...prev, ...updates } : prev));
+        setEditMember(null);
     };
 
     // Can the CURRENT user set a newcomer's stage TO this target stage?
@@ -305,7 +373,10 @@ function Assimilation() {
         return matchesSearch && matchesTribe && matchesStage;
     });
 
+    // Mentor options for the ADD form, scoped to the selected tribe.
     const filteredLeaders = leaders.filter((leader) => leader.tribe === tribe);
+    // Same, but for the EDIT form's own selected tribe.
+    const editFilteredLeaders = leaders.filter((leader) => leader.tribe === editTribe);
 
     // Get stage color for badge
     const getStageColor = (stage) => {
@@ -390,7 +461,9 @@ function Assimilation() {
                     <span style={{ fontWeight: 700, color: "#166534" }}>Discipleship Journey (DJ)</span>
                     <span>team decides the next step (Life Track, Life Retreat, Schooling, etc.). Tap</span>
                     <span style={{ fontWeight: 700, color: "#c9a45c" }}>📋 Checklist</span>
-                    <span>on any row to see and correct exactly where someone is in the journey.</span>
+                    <span>on any row to see and correct exactly where someone is in the journey, or</span>
+                    <span style={{ fontWeight: 700, color: "#374151" }}>✏️ Edit</span>
+                    <span>to fix their tribe or mentor once that's known.</span>
                 </div>
 
                 {/* COMPACT STATS CARDS */}
@@ -602,7 +675,7 @@ function Assimilation() {
                                 <th style={ETH({ width: "100px" })}>TRIBE</th>
                                 <th style={ETH({ textAlign: "left", width: "140px" })}>INVITED BY</th>
                                 <th style={ETH({ width: "140px" })}>STAGE</th>
-                                <th style={ETH({ width: "130px" })}>ACTION</th>
+                                <th style={ETH({ width: "170px" })}>ACTION</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -633,7 +706,11 @@ function Assimilation() {
                                                 <span style={{ fontWeight: 600, color: "#111827" }}>{member.firstname} {member.lastname}</span>
                                             </div>
                                         </td>
-                                        <td style={ETD()}>{member.tribe}</td>
+                                        <td style={ETD()}>
+                                            {member.tribe
+                                                ? member.tribe
+                                                : <span style={{ color: "#c9a45c", fontWeight: 600 }}>Unassigned</span>}
+                                        </td>
                                         <td style={ETD({ textAlign: "left", padding: "4px 6px", color: "#6b7280", fontSize: "11px" })}>{member.invited_by || "—"}</td>
                                         <td style={ETD()}>
                                             <span style={{
@@ -648,7 +725,7 @@ function Assimilation() {
                                             </span>
                                         </td>
                                         <td style={ETD()}>
-                                            <div style={{ display: "flex", gap: "6px", justifyContent: "center", alignItems: "center" }}>
+                                            <div style={{ display: "flex", gap: "6px", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
                                                 <button
                                                     onClick={() => setChecklistMember(member)}
                                                     title="View / update journey checklist"
@@ -666,6 +743,26 @@ function Assimilation() {
                                                 >
                                                     📋 Checklist
                                                 </button>
+
+                                                {canEditInfo() && (
+                                                    <button
+                                                        onClick={() => openEditModal(member)}
+                                                        title="Edit tribe / mentor / name"
+                                                        style={{
+                                                            padding: "4px 10px",
+                                                            borderRadius: "6px",
+                                                            border: "1px solid #d1d5db",
+                                                            background: "#f9fafb",
+                                                            color: "#374151",
+                                                            fontSize: "10px",
+                                                            fontWeight: 600,
+                                                            cursor: "pointer",
+                                                            whiteSpace: "nowrap"
+                                                        }}
+                                                    >
+                                                        ✏️ Edit
+                                                    </button>
+                                                )}
 
                                                 {canConvert && isFullyDiscipled(member) && (
                                                     <button
@@ -785,6 +882,9 @@ function Assimilation() {
                                 Ushering adds newcomers on their Conso stage only (1st/2nd/3rd Timer or
                                 Regular Attendee). Anything further along their journey is set by the
                                 Discipleship Journey team.
+                                <strong style={{ color: "#b8934a" }}> Tribe and mentor are optional</strong> —
+                                it's normal for a fresh walk-in not to have either yet. Leave them
+                                blank and fill them in later from the ✏️ Edit button once known.
                             </p>
                             <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 <input
@@ -810,7 +910,7 @@ function Assimilation() {
                                     }}
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                                 >
-                                    <option value="">Select Tribe</option>
+                                    <option value="">Not yet assigned</option>
                                     {tribes.map((tribe) => (
                                         <option key={tribe} value={tribe}>{tribe}</option>
                                     ))}
@@ -819,9 +919,10 @@ function Assimilation() {
                                 <select
                                     value={invitedBy}
                                     onChange={(e) => setInvitedBy(e.target.value)}
-                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                    disabled={!tribe}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db", opacity: tribe ? 1 : 0.6 }}
                                 >
-                                    <option value="">Select Inviter</option>
+                                    <option value="">{tribe ? "Select Inviter (optional)" : "Select a tribe first"}</option>
                                     {filteredLeaders.map((leader) => (
                                         <option key={leader.id} value={`${leader.firstname} ${leader.lastname}`}>
                                             {leader.firstname} {leader.lastname}
@@ -841,6 +942,120 @@ function Assimilation() {
 
                                 <button type="submit" style={{ marginTop: "4px", padding: "8px", fontSize: "13px" }}>
                                     Add Newcomer
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* EDIT INFO MODAL — change tribe / mentor / name after the fact */}
+            {editMember && (
+                <div
+                    className="modal-overlay"
+                    style={{
+                        position: "fixed",
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: "rgba(0,0,0,0.5)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 1000,
+                        padding: "20px"
+                    }}
+                    onClick={(e) => { if (e.target === e.currentTarget) closeEditModal(); }}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            borderRadius: "12px",
+                            width: "100%",
+                            maxWidth: "500px",
+                            maxHeight: "90vh",
+                            overflow: "auto",
+                            position: "relative"
+                        }}
+                    >
+                        <div style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "14px 18px",
+                            borderBottom: "1px solid #e5e7eb",
+                            position: "sticky",
+                            top: 0,
+                            background: "#fff",
+                            zIndex: 10,
+                            borderRadius: "12px 12px 0 0"
+                        }}>
+                            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>Edit Newcomer Info</h2>
+                            <button
+                                onClick={closeEditModal}
+                                style={{
+                                    background: "none",
+                                    border: "none",
+                                    fontSize: "18px",
+                                    cursor: "pointer",
+                                    color: "#6b7280",
+                                    padding: "4px",
+                                    lineHeight: 1
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{ padding: "14px 18px 18px" }}>
+                            <p style={{ margin: "0 0 12px 0", fontSize: "11px", color: "#9ca3af" }}>
+                                Use this whenever a newcomer's tribe or mentor changes — e.g. they
+                                didn't have one yet and now do, or they moved to a different tribe
+                                with a new mentor. This never touches their journey stage or checklist.
+                            </p>
+                            <form className="leader-form" onSubmit={handleEditSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                <input
+                                    type="text"
+                                    placeholder="First Name"
+                                    value={editFirstname}
+                                    onChange={(e) => setEditFirstname(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Last Name"
+                                    value={editLastname}
+                                    onChange={(e) => setEditLastname(e.target.value)}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                />
+
+                                <select
+                                    value={editTribe}
+                                    onChange={(e) => {
+                                        setEditTribe(e.target.value);
+                                        setEditInvitedBy("");
+                                    }}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
+                                >
+                                    <option value="">Not yet assigned</option>
+                                    {tribes.map((t) => (
+                                        <option key={t} value={t}>{t}</option>
+                                    ))}
+                                </select>
+
+                                <select
+                                    value={editInvitedBy}
+                                    onChange={(e) => setEditInvitedBy(e.target.value)}
+                                    disabled={!editTribe}
+                                    style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db", opacity: editTribe ? 1 : 0.6 }}
+                                >
+                                    <option value="">{editTribe ? "Select Mentor (optional)" : "Select a tribe first"}</option>
+                                    {editFilteredLeaders.map((leader) => (
+                                        <option key={leader.id} value={`${leader.firstname} ${leader.lastname}`}>
+                                            {leader.firstname} {leader.lastname}
+                                        </option>
+                                    ))}
+                                </select>
+
+                                <button type="submit" style={{ marginTop: "4px", padding: "8px", fontSize: "13px" }}>
+                                    Save Changes
                                 </button>
                             </form>
                         </div>
@@ -897,6 +1112,10 @@ function Assimilation() {
                                         {checklistMember.firstname} {checklistMember.lastname}
                                     </h2>
                                     <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
+                                        Tribe: <strong>{checklistMember.tribe || "Not yet assigned"}</strong>
+                                        {checklistMember.invited_by ? <> · Mentor: <strong>{checklistMember.invited_by}</strong></> : null}
+                                    </p>
+                                    <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
                                         Conso stage: <strong style={{ color: getStageTextColor(checklistMember.remarks) }}>{checklistMember.remarks}</strong>
                                     </p>
                                     <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: fullyDiscipled ? "#16a34a" : "#6b7280" }}>
@@ -905,6 +1124,25 @@ function Assimilation() {
                                     </p>
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                    {canEditInfo() && (
+                                        <button
+                                            onClick={() => openEditModal(checklistMember)}
+                                            title="Edit tribe / mentor / name"
+                                            style={{
+                                                background: "none",
+                                                border: "1px solid #d1d5db",
+                                                borderRadius: "6px",
+                                                color: "#374151",
+                                                fontSize: "11px",
+                                                fontWeight: 600,
+                                                cursor: "pointer",
+                                                padding: "5px 8px",
+                                                lineHeight: 1
+                                            }}
+                                        >
+                                            ✏️ Edit
+                                        </button>
+                                    )}
                                     {canDeleteNewcomer() && (
                                         <button
                                             onClick={() => handleDeleteMember(checklistMember)}
