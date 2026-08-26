@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { BookOpen, CalendarDays, Clock3, ArrowLeft, Image as ImageIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import "../styles/global.css";
-
+import '../styles/Comics.css';
+import bbleCover from '../assets/bbleee.jpg';
 // ═══════════════════════════════════════════════════════════════════════════
 // 66 BOOKS OF THE BIBLE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -968,11 +969,21 @@ function Comics() {
             </div>
           </div>
 
-          <div className="genesis-cover">
-            <ImageIcon size={55} />
-            <span>Bible Collection Cover</span>
-            <small>Comics style</small>
-          </div>
+               {/* COVER PHOTO */}
+       {/* COVER PHOTO */}
+      <div className="genesis-cover">
+        <img 
+          src={bbleCover} 
+          alt="Bible Collection Cover" 
+          className="cover-image"
+        />
+        
+        {/* Aesthetic label overlaid on the bottom of the image */}
+        <div className="comic-label">
+          <span>BIBLE</span>
+          <small>Comics style</small>
+        </div>
+      </div>
         </section>
 
         {/* FILTER TABS */}
