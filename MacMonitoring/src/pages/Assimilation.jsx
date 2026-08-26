@@ -102,14 +102,6 @@ function PaginationBar({ page, totalPages, pageSize, onPageChange, onPageSizeCha
 
 // ═══════════════════════════════════════════════════════════════════════════
 // JOURNEY CHECKLIST — replaces the old one-step-at-a-time "Next" button.
-//
-// Why: clicking "Next" repeatedly is easy to fumble (double-click, wrong
-// row) and there was no way back once a stage was set — a mis-click stuck a
-// newcomer on the wrong stage permanently. Instead, the whole journey is
-// shown as a checklist grouped by phase. Tapping ANY stage sets the
-// newcomer's current stage to exactly that one: everything up to and
-// including it is marked done, everything after is not. So correcting a
-// mistake is just tapping the right (earlier) stage — no separate "undo".
 // ═══════════════════════════════════════════════════════════════════════════
 const journeySections = [
     { label: "Conso (Ushering)", stages: consoStages },
@@ -118,29 +110,40 @@ const journeySections = [
     { label: "Schooling", stages: schoolingStages },
 ];
 
-// All DJ-owned stages, tracked as an INDEPENDENT checklist (not sequential).
-// A member can have "Make Disciple Class" done without "Foundation Class"
-// yet — real-world attendance doesn't always happen in a strict order, so
-// checking one item must never auto-check or auto-clear another.
 const DJ_STAGES = [...soulWinningStages, ...soakingStages, ...schoolingStages];
 
-// tblNewMembers needs a `completed_stages` column (jsonb / text[], default
-// '[]') to store this independent checklist. Conso stages stay sequential
-// on the existing `remarks` column, since Attendance-driven 1st->2nd->3rd
-// Timer progress is genuinely linear.
 const getCompletedStages = (member) => {
     if (Array.isArray(member?.completed_stages)) return member.completed_stages;
-    // Legacy fallback ONLY: if this member has never had completed_stages
-    // set, but `remarks` already points at a DJ stage from the old
-    // sequential system, treat everything up to that point as done so
-    // existing progress isn't lost on the switch-over. This reads old data
-    // once for display — it never writes it back and never auto-fills
-    // anything going forward once completed_stages exists.
     if (member?.remarks && !consoStages.includes(member.remarks)) {
         const idx = DJ_STAGES.indexOf(member.remarks);
         if (idx !== -1) return DJ_STAGES.slice(0, idx + 1);
     }
     return [];
+};
+
+// ── Effective stage for table badge / avatar / filters ─────────────────────
+// remarks only tracks the Conso stage (and legacy DJ stages). Once a
+// newcomer is handed off to DJ, completed_stages is the source of truth.
+// This helper derives the single stage to show in the table so the badge
+// never stays stuck on an old remarks value.
+const getEffectiveStage = (member) => {
+    if (!member) return "";
+    // Still in conso — remarks is authoritative
+    if (consoStages.includes(member.remarks)) {
+        return member.remarks;
+    }
+
+    const completed = getCompletedStages(member);
+
+    // Handed off to DJ — show the most advanced completed stage
+    for (let i = DJ_STAGES.length - 1; i >= 0; i--) {
+        if (completed.includes(DJ_STAGES[i])) {
+            return DJ_STAGES[i];
+        }
+    }
+
+    // Fallback to remarks (legacy) or Regular Attendee if nothing checked yet
+    return member.remarks || "Regular Attendee";
 };
 
 function Assimilation() {
@@ -164,38 +167,17 @@ function Assimilation() {
     const [page, setPage] = useState(1);
 
     // ── Edit Info modal state ───────────────────────────────────────────────
-    // Separate from the Add form's state on purpose — editing an existing
-    // record and filling out a new one shouldn't ever share state, or
-    // closing one half-filled form could silently corrupt the other.
     const [editMember, setEditMember] = useState(null);
     const [editFirstname, setEditFirstname] = useState("");
     const [editLastname, setEditLastname] = useState("");
     const [editTribe, setEditTribe] = useState("");
     const [editInvitedBy, setEditInvitedBy] = useState("");
 
-    // Permission flags
-    // ────────────────────────────────────────────────────────────────────────
-    // Two separate ministries share this list, each owning a different part
-    // of the journey:
-    //   • Ushering — only 1st Timer -> 2nd Timer -> 3rd Timer -> Regular
-    //     Attendee. Their job is recording attendance (done on the
-    //     Attendance page); here they can still correct the Conso stage
-    //     manually via the checklist if needed. They also own who a
-    //     newcomer's tribe/mentor is, since that's captured at intake —
-    //     see canEditInfo below.
-    //   • Discipleship Journey (DJ) — everything from Soul Winning
-    //     onward. Only DJ/Admin decide that path forward.
-    // ────────────────────────────────────────────────────────────────────────
     const admin = isAdmin();
     const ushering = isUshering();
     const discipleship = isDiscipleship();
     const canAddNewcomer = admin || ushering;
     const canConvert = canConvertNewcomer();
-
-    // Who can edit a newcomer's basic info (name / tribe / mentor)? Same
-    // people who can add one — this is intake data, not stage progression,
-    // and it's expected to change as a newcomer gets a tribe or a new
-    // mentor assigned after the fact.
     const canEditInfo = () => admin || ushering;
 
     useEffect(() => {
@@ -221,10 +203,6 @@ function Assimilation() {
         setLeaders(data || []);
     };
 
-    // Tribe is intentionally OPTIONAL here: a walk-in newcomer might not
-    // have a tribe or a mentor assigned yet. They get added as "Not yet
-    // assigned" and Ushering/Admin can fill that in later via Edit Info
-    // once it's known — see handleEditSubmit below.
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -258,7 +236,6 @@ function Assimilation() {
         }
     };
 
-    // Opens the Edit Info modal pre-filled with this member's current data.
     const openEditModal = (member) => {
         setEditMember(member);
         setEditFirstname(member.firstname || "");
@@ -269,11 +246,6 @@ function Assimilation() {
 
     const closeEditModal = () => setEditMember(null);
 
-    // Saves changes to a newcomer's name / tribe / mentor. Tribe and mentor
-    // are free to change independently of each other and of stage progress
-    // — e.g. Ian starts with no tribe, later gets assigned to Danali under
-    // mentor RH, then later still moves to a different tribe/mentor. None
-    // of that touches his journey stage.
     const handleEditSubmit = async (e) => {
         e.preventDefault();
         if (!editFirstname || !editLastname) {
@@ -304,11 +276,6 @@ function Assimilation() {
         setEditMember(null);
     };
 
-    // Can the CURRENT user set a newcomer's stage TO this target stage?
-    // - Target still inside Ushering's own 1st/2nd/3rd Timer -> Regular
-    //   Attendee range -> Admin or Ushering.
-    // - Target is Soul Winning / Soaking / Schooling (handed to DJ) ->
-    //   Admin or Discipleship.
     const canSetStage = (targetStage) => {
         if (usheringStages.includes(targetStage) || targetStage === REGULAR_ATTENDEE) {
             return admin || ushering;
@@ -316,13 +283,8 @@ function Assimilation() {
         return admin || discipleship;
     };
 
-    // Does the CURRENT user have ANY edit rights over this member at all?
-    // (Used to decide whether the checklist opens read-only or editable.)
     const canEditMember = () => admin || ushering || discipleship;
 
-    // CONSO stages (1st/2nd/3rd Timer -> Regular Attendee) stay sequential —
-    // tap any step to jump straight to it. This part really is linear
-    // (Attendance-driven), so tap-to-set + auto-fill-before is correct here.
     const setConsoStage = async (member, stage) => {
         if (!canSetStage(stage)) {
             alert("You don't have permission to set this stage.");
@@ -343,10 +305,6 @@ function Assimilation() {
         setChecklistMember(prev => (prev && prev.id === member.id ? { ...prev, remarks: stage } : prev));
     };
 
-    // DJ stages (Soul Winning / Soaking / Schooling) are an INDEPENDENT
-    // checklist — tapping one only toggles that one item. Nothing else gets
-    // auto-checked or auto-cleared, because these processes don't happen in
-    // a guaranteed order in real life.
     const toggleDjStage = async (member, stage) => {
         if (!canSetStage(stage)) {
             alert("You don't have permission to set this stage.");
@@ -373,18 +331,11 @@ function Assimilation() {
         setChecklistMember(prev => (prev && prev.id === member.id ? { ...prev, completed_stages: nextCompleted } : prev));
     };
 
-    // Ready to convert: EVERY Soul Winning / Soaking / Schooling item must
-    // be individually checked — not just "reached Life Group Class". A
-    // member who did Make Disciple Class but skipped Foundation Class is
-    // NOT ready, even though they're "further along" in the old linear sense.
     const isFullyDiscipled = (member) => {
         const completed = getCompletedStages(member);
         return DJ_STAGES.every(stage => completed.includes(stage));
     };
 
-    // Who can delete a newcomer record? Same people who can add one, plus
-    // admin always — this is for typos or someone who's no longer around,
-    // not a stage-progression action, so it doesn't need Discipleship perms.
     const canDeleteNewcomer = () => admin || ushering;
 
     const handleDeleteMember = async (member) => {
@@ -409,9 +360,9 @@ function Assimilation() {
         if (checklistMember?.id === member.id) setChecklistMember(null);
     };
 
-    // Filter helpers
-    const countByStage = (stageList) => members.filter((m) => stageList.includes(m.remarks)).length;
-    const countByExactStage = (stage) => members.filter((m) => m.remarks === stage).length;
+    // Filter helpers — now use effective stage so stats match the table
+    const countByStage = (stageList) => members.filter((m) => stageList.includes(getEffectiveStage(m))).length;
+    const countByExactStage = (stage) => members.filter((m) => getEffectiveStage(m) === stage).length;
 
     // Apply all filters
     const filteredMembers = members.filter((member) => {
@@ -422,41 +373,33 @@ function Assimilation() {
         let matchesStage = true;
         if (filterStage !== "ALL") {
             if (filterStage === "CONSO") {
-                matchesStage = consoStages.includes(member.remarks);
+                matchesStage = consoStages.includes(getEffectiveStage(member));
             } else if (filterStage === "SOUL WINNING") {
-                matchesStage = soulWinningStages.includes(member.remarks);
+                matchesStage = soulWinningStages.includes(getEffectiveStage(member));
             } else if (filterStage === "SOAKING") {
-                matchesStage = soakingStages.includes(member.remarks);
+                matchesStage = soakingStages.includes(getEffectiveStage(member));
             } else if (filterStage === "SCHOOLING") {
-                matchesStage = schoolingStages.includes(member.remarks);
+                matchesStage = schoolingStages.includes(getEffectiveStage(member));
             } else if (filterStage === "READY") {
                 matchesStage = isFullyDiscipled(member);
             } else {
-                matchesStage = member.remarks === filterStage;
+                matchesStage = getEffectiveStage(member) === filterStage;
             }
         }
 
         return matchesSearch && matchesTribe && matchesStage;
     });
 
-    // ── Paginated slice used for rendering the table. Stats cards above use
-    // the FULL `members` list, and the "showing N results" text uses the
-    // full `filteredMembers` list — only the table body itself is sliced. ──
     const totalPages = Math.max(1, Math.ceil(filteredMembers.length / pageSize));
     const paginatedMembers = filteredMembers.slice((page - 1) * pageSize, page * pageSize);
 
-    // Reset back to page 1 whenever the filters/search/page size change, so
-    // users aren't stranded on a page that no longer has any results.
     useEffect(() => {
         setPage(1);
     }, [search, filterTribe, filterStage, pageSize]);
 
-    // Mentor options for the ADD form, scoped to the selected tribe.
     const filteredLeaders = leaders.filter((leader) => leader.tribe === tribe);
-    // Same, but for the EDIT form's own selected tribe.
     const editFilteredLeaders = leaders.filter((leader) => leader.tribe === editTribe);
 
-    // Get stage color for badge
     const getStageColor = (stage) => {
         const category = getStageCategory(stage);
         switch (category) {
@@ -479,7 +422,6 @@ function Assimilation() {
         }
     };
 
-    // Quick filter by clicking a stats card
     const handleQuickFilter = (category) => {
         setFilterStage(category);
     };
@@ -518,7 +460,7 @@ function Assimilation() {
                     )}
                 </div>
 
-                {/* WORKFLOW LEGEND — keeps the Ushering / DJ hand-off clear for everyone */}
+                {/* WORKFLOW LEGEND */}
                 <div style={{
                     display: "flex",
                     alignItems: "center",
@@ -770,8 +712,8 @@ function Assimilation() {
                                                     width: "28px",
                                                     height: "28px",
                                                     borderRadius: "50%",
-                                                    background: getStageColor(member.remarks),
-                                                    color: getStageTextColor(member.remarks),
+                                                    background: getStageColor(getEffectiveStage(member)),
+                                                    color: getStageTextColor(getEffectiveStage(member)),
                                                     display: "flex",
                                                     alignItems: "center",
                                                     justifyContent: "center",
@@ -794,12 +736,12 @@ function Assimilation() {
                                             <span style={{
                                                 padding: "2px 8px",
                                                 borderRadius: "10px",
-                                                background: getStageColor(member.remarks),
-                                                color: getStageTextColor(member.remarks),
+                                                background: getStageColor(getEffectiveStage(member)),
+                                                color: getStageTextColor(getEffectiveStage(member)),
                                                 fontSize: "10px",
                                                 fontWeight: 700
                                             }}>
-                                                {member.remarks}
+                                                {getEffectiveStage(member)}
                                             </span>
                                         </td>
                                         <td style={ETD()}>
@@ -1038,7 +980,7 @@ function Assimilation() {
                 </div>
             )}
 
-            {/* EDIT INFO MODAL — change tribe / mentor / name after the fact */}
+            {/* EDIT INFO MODAL */}
             {editMember && (
                 <div
                     className="modal-overlay"
@@ -1205,7 +1147,7 @@ function Assimilation() {
                                         {checklistMember.invited_by ? <> · Mentor: <strong>{checklistMember.invited_by}</strong></> : null}
                                     </p>
                                     <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
-                                        Conso stage: <strong style={{ color: getStageTextColor(checklistMember.remarks) }}>{checklistMember.remarks}</strong>
+                                        Current stage: <strong style={{ color: getStageTextColor(getEffectiveStage(checklistMember)) }}>{getEffectiveStage(checklistMember)}</strong>
                                     </p>
                                     <p style={{ margin: "2px 0 0 0", fontSize: "11px", color: fullyDiscipled ? "#16a34a" : "#6b7280" }}>
                                         Discipleship checklist: <strong>{djDoneCount}/{DJ_STAGES.length} done</strong>
@@ -1296,7 +1238,7 @@ function Assimilation() {
                                                         const stageIndex = allNewcomerStages.indexOf(stage);
                                                         checked = consoInProgress
                                                             ? (consoIndex !== -1 && stageIndex <= consoIndex)
-                                                            : true; // already handed off to DJ -> conso is fully done
+                                                            : true;
                                                         isCurrent = consoInProgress && stage === checklistMember.remarks;
                                                     } else {
                                                         checked = completedDj.includes(stage);
