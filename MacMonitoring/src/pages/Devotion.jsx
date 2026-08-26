@@ -13,6 +13,68 @@ const ALL_MONTHS = [
     "July", "August", "September", "October", "November", "December"
 ];
 
+// ── Pagination Bar (shared by all tables on this page) ─────────────────────
+const pagBtnStyle = (disabled) => ({
+    padding: "5px 9px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: disabled ? "#f3f4f6" : "#fff",
+    color: disabled ? "#d1d5db" : "#374151",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+});
+
+function PaginationBar({ page, totalPages, pageSize, onPageChange, onPageSizeChange, totalItems }) {
+    return (
+        <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 4px", flexWrap: "wrap", gap: "8px"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#6b7280" }}>
+                <span>Show</span>
+                <select
+                    value={pageSize}
+                    onChange={e => onPageSizeChange(Number(e.target.value))}
+                    style={{
+                        padding: "3px 6px", borderRadius: "6px", border: "1px solid #d1d5db",
+                        fontSize: "11px", fontWeight: 600, cursor: "pointer"
+                    }}
+                >
+                    {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span>per page · {totalItems} total</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button
+                    onClick={() => onPageChange(1)}
+                    disabled={page === 1}
+                    style={pagBtnStyle(page === 1)}
+                >«</button>
+                <button
+                    onClick={() => onPageChange(page - 1)}
+                    disabled={page === 1}
+                    style={pagBtnStyle(page === 1)}
+                >‹</button>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#374151", padding: "0 6px" }}>
+                    Page {page} of {totalPages}
+                </span>
+                <button
+                    onClick={() => onPageChange(page + 1)}
+                    disabled={page === totalPages}
+                    style={pagBtnStyle(page === totalPages)}
+                >›</button>
+                <button
+                    onClick={() => onPageChange(totalPages)}
+                    disabled={page === totalPages}
+                    style={pagBtnStyle(page === totalPages)}
+                >»</button>
+            </div>
+        </div>
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TRIBE REPORT — per-month classification + overall status rules
 //
@@ -91,8 +153,17 @@ function Devotion() {
     const [wholeTribeRecords, setWholeTribeRecords] = useState([]);
     const [wholeTribeStats, setWholeTribeStats] = useState([]);
 
+    // ── Pagination state — one pageSize per table so switching one table's
+    // page size doesn't jolt the others, but all default/step through the
+    // same 5/10/15/20 options. ──────────────────────────────────────────────
     const [cardPage, setCardPage] = useState(1);
-    const CARDS_PER_PAGE = 10;
+    const [cardPageSize, setCardPageSize] = useState(10);
+
+    const [monthlyPage, setMonthlyPage] = useState(1);
+    const [monthlyPageSize, setMonthlyPageSize] = useState(5);
+
+    const [tribePage, setTribePage] = useState(1);
+    const [tribePageSize, setTribePageSize] = useState(10);
 
     const [activeTab, setActiveTab] = useState("records"); // "records" | "monthly"
 
@@ -116,7 +187,15 @@ function Devotion() {
 
     useEffect(() => {
         setCardPage(1);
-    }, [filterMonth, records.length, recordMode, selectedLeaderId]);
+    }, [filterMonth, records.length, recordMode, selectedLeaderId, cardPageSize]);
+
+    useEffect(() => {
+        setMonthlyPage(1);
+    }, [records.length, recordMode, selectedLeaderId, monthlyPageSize]);
+
+    useEffect(() => {
+        setTribePage(1);
+    }, [wholeTribeStats.length, tribePageSize]);
 
     // Default the report tribe once we know the user's context
     useEffect(() => {
@@ -363,10 +442,23 @@ function Devotion() {
     const wholeTribeConsistentCount = wholeTribeStats.filter(s => s.isConsistent).length;
     const wholeTribeTotalCount = wholeTribeStats.length;
 
-    const totalCardPages = Math.ceil(filteredRecords.length / CARDS_PER_PAGE) || 1;
+    // ── Paginated slices for each of the three tables ──────────────────────
+    const totalCardPages = Math.max(1, Math.ceil(filteredRecords.length / cardPageSize));
     const displayedCards = filteredRecords.slice(
-        (cardPage - 1) * CARDS_PER_PAGE,
-        cardPage * CARDS_PER_PAGE
+        (cardPage - 1) * cardPageSize,
+        cardPage * cardPageSize
+    );
+
+    const totalMonthlyPages = Math.max(1, Math.ceil(monthlyStats.length / monthlyPageSize));
+    const displayedMonthlyStats = monthlyStats.slice(
+        (monthlyPage - 1) * monthlyPageSize,
+        monthlyPage * monthlyPageSize
+    );
+
+    const totalTribePages = Math.max(1, Math.ceil(wholeTribeStats.length / tribePageSize));
+    const displayedTribeStats = wholeTribeStats.slice(
+        (tribePage - 1) * tribePageSize,
+        tribePage * tribePageSize
     );
 
     // ── Report: build the list of "Month Year" keys between start & end ───
@@ -715,33 +807,48 @@ function Devotion() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {wholeTribeStats.map((member) => (
-                                            <tr key={member.leaderId}
-                                                style={{ cursor: "pointer", transition: "background 0.15s" }}
-                                                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                                                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
-                                                <td style={{ padding: "6px 10px", fontWeight: 600 }}>{member.name}</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: 700, color: member.isConsistent ? "#16a34a" : "#dc2626" }}>{member.thisMonthTotal}</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{member.thisMonthEntries}</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#9ca3af" }}>25</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center" }}>
-                                                    <span style={{ padding: "2px 8px", borderRadius: "10px", background: member.statusBg, color: member.statusColor, fontSize: "10px", fontWeight: "700" }}>{member.status}</span>
-                                                </td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{member.totalEntries}</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#16a34a", fontWeight: 600 }}>{member.consistentMonths}</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center", color: "#dc2626" }}>{member.inconsistentMonths}</td>
-                                                <td style={{ padding: "6px 10px", textAlign: "center" }}>
-                                                    <button onClick={() => handleSelectLeaderFromTable(member.leaderId)}
-                                                        style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid #c9a45c", background: "#fff", color: "#92400e", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
-                                                        View / Record
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {wholeTribeStats.length === 0 ? (
+                                            <tr><td colSpan={9} style={{ padding: "30px", textAlign: "center", color: "#9ca3af" }}>No tribe members found.</td></tr>
+                                        ) : (
+                                            displayedTribeStats.map((member) => (
+                                                <tr key={member.leaderId}
+                                                    style={{ cursor: "pointer", transition: "background 0.15s" }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                                                    <td style={{ padding: "6px 10px", fontWeight: 600 }}>{member.name}</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: 700, color: member.isConsistent ? "#16a34a" : "#dc2626" }}>{member.thisMonthTotal}</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{member.thisMonthEntries}</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center", color: "#9ca3af" }}>25</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                                                        <span style={{ padding: "2px 8px", borderRadius: "10px", background: member.statusBg, color: member.statusColor, fontSize: "10px", fontWeight: "700" }}>{member.status}</span>
+                                                    </td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center", color: "#6b7280" }}>{member.totalEntries}</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center", color: "#16a34a", fontWeight: 600 }}>{member.consistentMonths}</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center", color: "#dc2626" }}>{member.inconsistentMonths}</td>
+                                                    <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                                                        <button onClick={() => handleSelectLeaderFromTable(member.leaderId)}
+                                                            style={{ padding: "3px 10px", borderRadius: "6px", border: "1px solid #c9a45c", background: "#fff", color: "#92400e", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>
+                                                            View / Record
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
+
+                        {wholeTribeStats.length > 0 && (
+                            <PaginationBar
+                                page={tribePage}
+                                totalPages={totalTribePages}
+                                pageSize={tribePageSize}
+                                totalItems={wholeTribeStats.length}
+                                onPageChange={setTribePage}
+                                onPageSizeChange={setTribePageSize}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -825,49 +932,59 @@ function Devotion() {
                                 maxHeight: "calc(100vh - 260px)"
                             }} className="column-left">
                                 {monthlyStats.length > 0 && (
-                                    <div className="excel-card" style={{ borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
-                                        <div className="excel-header" style={{ padding: "10px 14px" }}>
-                                            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
-                                                {recordMode === "tribe" && selectedLeaderName
-                                                    ? `${selectedLeaderName}'s Monthly Consistency Report`
-                                                    : "Monthly Devotion Consistency Report"}
-                                            </h2>
-                                        </div>
-                                        <div className="excel-wrapper" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                                            <table className="excel-table" style={{ fontSize: "12px", minWidth: "600px" }}>
-                                                <thead>
-                                                    <tr>
-                                                        <th style={{ padding: "8px 10px" }}>Month</th>
-                                                        <th style={{ padding: "8px 10px" }}>Entries</th>
-                                                        <th style={{ padding: "8px 10px" }}>Total Done</th>
-                                                        <th style={{ padding: "8px 10px" }}>Avg</th>
-                                                        <th style={{ padding: "8px 10px" }}>Target</th>
-                                                        <th style={{ padding: "8px 10px" }}>Status</th>
-                                                        <th style={{ padding: "8px 10px" }}>Details</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {monthlyStats.map((month) => (
-                                                        <tr key={month.key}>
-                                                            <td style={{ fontWeight: 600, padding: "6px 10px" }}>{month.monthName}</td>
-                                                            <td style={{ padding: "6px 10px" }}>{month.count}</td>
-                                                            <td style={{ padding: "6px 10px" }}>{month.totalCompleted} days</td>
-                                                            <td style={{ padding: "6px 10px" }}>{month.avgCompleted} days</td>
-                                                            <td style={{ padding: "6px 10px" }}>25</td>
-                                                            <td style={{ padding: "6px 10px" }}>
-                                                                <span style={{ padding: "2px 8px", borderRadius: "10px", background: month.statusBg, color: month.statusColor, fontSize: "10px", fontWeight: "700" }}>
-                                                                    {month.status}
-                                                                </span>
-                                                            </td>
-                                                            <td style={{ padding: "6px 10px", fontSize: "11px", color: "#6b7280" }}>
-                                                                {month.totalCompleted >= 25 ? "✅ Keep it up!" : `❌ ${25 - month.totalCompleted} days missing`}
-                                                            </td>
+                                    <>
+                                        <div className="excel-card" style={{ borderRadius: "8px", border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                                            <div className="excel-header" style={{ padding: "10px 14px" }}>
+                                                <h2 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>
+                                                    {recordMode === "tribe" && selectedLeaderName
+                                                        ? `${selectedLeaderName}'s Monthly Consistency Report`
+                                                        : "Monthly Devotion Consistency Report"}
+                                                </h2>
+                                            </div>
+                                            <div className="excel-wrapper" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                                                <table className="excel-table" style={{ fontSize: "12px", minWidth: "600px" }}>
+                                                    <thead>
+                                                        <tr>
+                                                            <th style={{ padding: "8px 10px" }}>Month</th>
+                                                            <th style={{ padding: "8px 10px" }}>Entries</th>
+                                                            <th style={{ padding: "8px 10px" }}>Total Done</th>
+                                                            <th style={{ padding: "8px 10px" }}>Avg</th>
+                                                            <th style={{ padding: "8px 10px" }}>Target</th>
+                                                            <th style={{ padding: "8px 10px" }}>Status</th>
+                                                            <th style={{ padding: "8px 10px" }}>Details</th>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                    </thead>
+                                                    <tbody>
+                                                        {displayedMonthlyStats.map((month) => (
+                                                            <tr key={month.key}>
+                                                                <td style={{ fontWeight: 600, padding: "6px 10px" }}>{month.monthName}</td>
+                                                                <td style={{ padding: "6px 10px" }}>{month.count}</td>
+                                                                <td style={{ padding: "6px 10px" }}>{month.totalCompleted} days</td>
+                                                                <td style={{ padding: "6px 10px" }}>{month.avgCompleted} days</td>
+                                                                <td style={{ padding: "6px 10px" }}>25</td>
+                                                                <td style={{ padding: "6px 10px" }}>
+                                                                    <span style={{ padding: "2px 8px", borderRadius: "10px", background: month.statusBg, color: month.statusColor, fontSize: "10px", fontWeight: "700" }}>
+                                                                        {month.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={{ padding: "6px 10px", fontSize: "11px", color: "#6b7280" }}>
+                                                                    {month.totalCompleted >= 25 ? "✅ Keep it up!" : `❌ ${25 - month.totalCompleted} days missing`}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
-                                    </div>
+                                        <PaginationBar
+                                            page={monthlyPage}
+                                            totalPages={totalMonthlyPages}
+                                            pageSize={monthlyPageSize}
+                                            totalItems={monthlyStats.length}
+                                            onPageChange={setMonthlyPage}
+                                            onPageSizeChange={setMonthlyPageSize}
+                                        />
+                                    </>
                                 )}
                             </div>
 
@@ -939,21 +1056,14 @@ function Devotion() {
                                             </div>
                                         ))}
 
-                                        {filteredRecords.length > CARDS_PER_PAGE && (
-                                            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "6px", padding: "8px 0", flexShrink: 0 }}>
-                                                <button onClick={() => setCardPage(p => Math.max(1, p - 1))} disabled={cardPage === 1}
-                                                    style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: cardPage === 1 ? "#f3f4f6" : "#fff", color: cardPage === 1 ? "#9ca3af" : "#374151", fontSize: "11px", fontWeight: 600, cursor: cardPage === 1 ? "not-allowed" : "pointer" }}>
-                                                    ← Prev
-                                                </button>
-                                                <span style={{ fontSize: "11px", color: "#6b7280", fontWeight: 500, minWidth: "60px", textAlign: "center" }}>
-                                                    Page {cardPage} of {totalCardPages}
-                                                </span>
-                                                <button onClick={() => setCardPage(p => Math.min(totalCardPages, p + 1))} disabled={cardPage === totalCardPages}
-                                                    style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #d1d5db", background: cardPage === totalCardPages ? "#f3f4f6" : "#fff", color: cardPage === totalCardPages ? "#9ca3af" : "#374151", fontSize: "11px", fontWeight: 600, cursor: cardPage === totalCardPages ? "not-allowed" : "pointer" }}>
-                                                    Next →
-                                                </button>
-                                            </div>
-                                        )}
+                                        <PaginationBar
+                                            page={cardPage}
+                                            totalPages={totalCardPages}
+                                            pageSize={cardPageSize}
+                                            totalItems={filteredRecords.length}
+                                            onPageChange={setCardPage}
+                                            onPageSizeChange={setCardPageSize}
+                                        />
                                     </div>
                                 )}
                             </div>
