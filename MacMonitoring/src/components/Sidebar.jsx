@@ -133,7 +133,8 @@ function Sidebar() {
             "Devotion": "✧",
             "Life Group": "⌂",
             "My Profile": "◎",
-            "My Journey": "➜"
+            "My Journey": "➜",
+            "Comics": "☰"
         };
         return icons[label] || "•";
     };
@@ -152,6 +153,9 @@ function Sidebar() {
         navLinks.unshift({ path: "/newsfeed", label: "Newsfeed" });
         navLinks.splice(1, 0, { path: "/messages", label: "MAC-MESSAGE" });
     }
+
+    // ADD COMICS TO SIDEBAR
+    navLinks.push({ path: "/comics", label: "Comics" });
 
     const sidebarContent = (
         <>

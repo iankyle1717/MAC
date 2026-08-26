@@ -49,6 +49,52 @@ const EIN = {
 const onCellFocus = (e) => { e.target.style.background = "#fef9c3"; };
 const onCellBlur = (e) => { e.target.style.background = "transparent"; };
 
+// ── Pagination Bar (shared by all tabs on this page) ───────────────────────
+const pagBtnStyle = (disabled) => ({
+    padding: "5px 9px",
+    borderRadius: "6px",
+    border: "1px solid #d1d5db",
+    background: disabled ? "#f3f4f6" : "#fff",
+    color: disabled ? "#d1d5db" : "#374151",
+    fontSize: "12px",
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+});
+
+function PaginationBar({ page, totalPages, pageSize, onPageChange, onPageSizeChange, totalItems }) {
+    return (
+        <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "10px 4px", flexWrap: "wrap", gap: "10px"
+        }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "#6b7280" }}>
+                <span>Show</span>
+                <select
+                    value={pageSize}
+                    onChange={e => onPageSizeChange(Number(e.target.value))}
+                    style={{
+                        padding: "4px 8px", borderRadius: "6px", border: "1px solid #d1d5db",
+                        fontSize: "12px", fontWeight: 600, cursor: "pointer"
+                    }}
+                >
+                    {[5, 10, 15, 20, 30, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span>per page · {totalItems} total</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <button onClick={() => onPageChange(1)} disabled={page === 1} style={pagBtnStyle(page === 1)}>«</button>
+                <button onClick={() => onPageChange(page - 1)} disabled={page === 1} style={pagBtnStyle(page === 1)}>‹</button>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "#374151", padding: "0 6px" }}>
+                    Page {page} of {totalPages}
+                </span>
+                <button onClick={() => onPageChange(page + 1)} disabled={page === totalPages} style={pagBtnStyle(page === totalPages)}>›</button>
+                <button onClick={() => onPageChange(totalPages)} disabled={page === totalPages} style={pagBtnStyle(page === totalPages)}>»</button>
+            </div>
+        </div>
+    );
+}
+
 // ── Controlled, per-slot input. Re-keyed by month in the parent so React
 //    always mounts a FRESH input when the month changes. ─────────────────────
 function WeekSlotInput({ tithe, leaderId, monthKey, weekIndex, onCommit }) {
@@ -160,6 +206,19 @@ function Tithes() {
     });
 
     const [monthlyGrossMap, setMonthlyGrossMap] = useState({});
+
+    // ── Pagination state — one pageSize/page per tab ───────────────────────
+    const [monthPage, setMonthPage] = useState(1);
+    const [monthPageSize, setMonthPageSize] = useState(10);
+
+    const [rangePage, setRangePage] = useState(1);
+    const [rangePageSize, setRangePageSize] = useState(10);
+
+    const [yearPage, setYearPage] = useState(1);
+    const [yearPageSize, setYearPageSize] = useState(10);
+
+    const [grossPage, setGrossPage] = useState(1);
+    const [grossPageSize, setGrossPageSize] = useState(10);
 
     useEffect(() => { fetchData(); }, []);
 
@@ -359,6 +418,18 @@ function Tithes() {
         return result;
     }, [leaders, filterTribe, search, sortOrder]);
 
+    // ── De-duplicated display list: drops the "second half" of a combined
+    // pair (same rule used everywhere else: skip when combined_with < id).
+    // Used by the Month and Gross tabs, which otherwise repeat this check
+    // inline while mapping — hoisting it here lets us paginate cleanly. ────
+    const displayLeaders = useMemo(
+        () => filteredLeaders.filter(l => {
+            const partner = getCombinedPartner(l);
+            return !(partner && l.combined_with < l.id);
+        }),
+        [filteredLeaders, leaders]
+    );
+
     const stats = useMemo(() => {
         const consistent = [], inconsistent = [];
         filteredLeaders.forEach(leader => {
@@ -376,6 +447,51 @@ function Tithes() {
         () => computeLeaderReport(rangeMonths),
         [filteredLeaders, tithes, rangeMonths, monthlyGrossMap]
     );
+
+    // ── Year tab rows, hoisted to a memo (was previously computed inline
+    // inside the render via an IIFE) so pagination can slice it cleanly.
+    // monthlyTotals/grandYearTotal are the FULL-list footer sums — they
+    // always reflect every filtered member, not just the current page. ────
+    const yearData = useMemo(() => {
+        const monthlyTotals = Array(12).fill(0);
+        let grandYearTotal = 0;
+        const rows = displayLeaders.map((leader) => {
+            const partner = getCombinedPartner(leader);
+            const yearly = getYearlyData(leader.id, selectedYear);
+            let consistentMonths = 0;
+            const monthTotals = yearly.map((y, i) => {
+                const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+                const t = y.total + (partner ? getMonthlyTotal(partner.id, mk) : 0);
+                if (isConsistent(leader, t, mk)) consistentMonths++;
+                monthlyTotals[i] += t;
+                return t;
+            });
+            const yearTotal = monthTotals.reduce((a, b) => a + b, 0);
+            grandYearTotal += yearTotal;
+            return { leader, monthTotals, yearTotal, consistentMonths };
+        });
+        return { rows, monthlyTotals, grandYearTotal };
+    }, [displayLeaders, tithes, selectedYear, monthlyGrossMap]);
+
+    // ── Reset each tab's page to 1 whenever its underlying data/filters
+    // change, so no one gets stranded on a now-empty page. ─────────────────
+    useEffect(() => { setMonthPage(1); }, [search, filterTribe, sortOrder, selectedMonth, monthPageSize]);
+    useEffect(() => { setRangePage(1); }, [search, filterTribe, sortOrder, rangeStart, rangeEnd, rangePageSize]);
+    useEffect(() => { setYearPage(1); }, [search, filterTribe, sortOrder, selectedYear, yearPageSize]);
+    useEffect(() => { setGrossPage(1); }, [search, filterTribe, sortOrder, selectedMonth, grossPageSize]);
+
+    // ── Paginated slices per tab ─────────────────────────────────────────
+    const monthTotalPages = Math.max(1, Math.ceil(displayLeaders.length / monthPageSize));
+    const paginatedMonthLeaders = displayLeaders.slice((monthPage - 1) * monthPageSize, monthPage * monthPageSize);
+
+    const rangeTotalPages = Math.max(1, Math.ceil(rangeRows.length / rangePageSize));
+    const paginatedRangeRows = rangeRows.slice((rangePage - 1) * rangePageSize, rangePage * rangePageSize);
+
+    const yearTotalPages = Math.max(1, Math.ceil(yearData.rows.length / yearPageSize));
+    const paginatedYearRows = yearData.rows.slice((yearPage - 1) * yearPageSize, yearPage * yearPageSize);
+
+    const grossTotalPages = Math.max(1, Math.ceil(displayLeaders.length / grossPageSize));
+    const paginatedGrossLeaders = displayLeaders.slice((grossPage - 1) * grossPageSize, grossPage * grossPageSize);
 
     const handleExport = () => {
         const wb = XLSX.utils.book_new();
@@ -782,11 +898,10 @@ function Tithes() {
                                 <tbody>
                                     {loading ? (
                                         <tr><td colSpan={SLOT_COUNT + 5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading…</td></tr>
-                                    ) : filteredLeaders.length === 0 ? (
+                                    ) : displayLeaders.length === 0 ? (
                                         <tr><td colSpan={SLOT_COUNT + 5} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No members found.</td></tr>
-                                    ) : filteredLeaders.map((leader, idx) => {
+                                    ) : paginatedMonthLeaders.map((leader, idx) => {
                                         const partner = getCombinedPartner(leader);
-                                        if (partner && leader.combined_with < leader.id) return null;
                                         const monthlyTithes = getMonthlyTithes(leader.id, selectedMonth);
                                         let displayTotal = getMonthlyTotal(leader.id, selectedMonth);
                                         if (partner) displayTotal += getMonthlyTotal(partner.id, selectedMonth);
@@ -795,7 +910,7 @@ function Tithes() {
                                         const slots = Array.from({ length: SLOT_COUNT }, (_, i) => monthlyTithes.find(t => t.week_number === i + 1) ?? null);
                                         return (
                                             <tr key={leader.id}>
-                                                <td style={ETD({ fontWeight: 700 })}>{idx + 1}</td>
+                                                <td style={ETD({ fontWeight: 700 })}>{(monthPage - 1) * monthPageSize + idx + 1}</td>
                                                 <td style={ETD({ textAlign: "left", padding: "4px 6px", fontWeight: 600 })}>
                                                     {getDisplayName(leader)}
                                                     {partner && <span style={{ display: "block", fontSize: "9px", color: "#6b7280", fontWeight: 400 }}>Combined tithing</span>}
@@ -824,6 +939,17 @@ function Tithes() {
                                 </tbody>
                             </table>
                         </div>
+
+                        {!loading && displayLeaders.length > 0 && (
+                            <PaginationBar
+                                page={monthPage}
+                                totalPages={monthTotalPages}
+                                pageSize={monthPageSize}
+                                totalItems={displayLeaders.length}
+                                onPageChange={setMonthPage}
+                                onPageSizeChange={setMonthPageSize}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -856,49 +982,62 @@ function Tithes() {
                                 "To" month must be the same as or after "From" month.
                             </div>
                         ) : (
-                            <div style={{ overflowX: "auto", border: "1px solid #000" }}>
-                                <table style={{ width: "100%", fontSize: "11px", borderCollapse: "collapse", minWidth: `${400 + rangeMonths.length * 80}px` }}>
-                                    <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-                                        <tr>
-                                            <th style={ETH({ textAlign: "left", width: "40px" })}>NO.</th>
-                                            <th style={ETH({ textAlign: "left", width: "220px" })}>FULL NAME</th>
-                                            {rangeMonths.map((mk) => (
-                                                <th key={mk} style={ETH({ minWidth: "80px" })}>{formatMonthLabel(mk)}</th>
-                                            ))}
-                                            <th style={ETH({ width: "90px" })}>TOTAL</th>
-                                            <th style={ETH({ width: "110px" })}>CONSISTENT</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {loading ? (
-                                            <tr><td colSpan={rangeMonths.length + 4} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading…</td></tr>
-                                        ) : rangeRows.length === 0 ? (
-                                            <tr><td colSpan={rangeMonths.length + 4} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No members found.</td></tr>
-                                        ) : rangeRows.map(({ leader, monthTotals, total, consistentCount, totalMonths }, idx) => (
-                                            <tr key={leader.id}>
-                                                <td style={ETD({ fontWeight: 700 })}>{idx + 1}</td>
-                                                <td style={ETD({ textAlign: "left", padding: "4px 6px", fontWeight: 600 })}>{getDisplayName(leader)}</td>
-                                                {monthTotals.map((amt, i) => {
-                                                    const mc = isConsistent(leader, amt, rangeMonths[i]);
-                                                    return (
-                                                        <td key={i} style={ETD({
-                                                            fontWeight: amt > 0 ? 700 : 400,
-                                                            color: amt > 0 ? "#000" : "#9ca3af",
-                                                            background: amt > 0 && !mc ? "#fee2e2" : "#fff"
-                                                        })}>{amt > 0 ? amt.toLocaleString() : "—"}</td>
-                                                    );
-                                                })}
-                                                <td style={ETD({ fontWeight: 800, fontSize: "12px" })}>{total > 0 ? total.toLocaleString() : "—"}</td>
-                                                <td style={ETD({
-                                                    background: consistentCount === totalMonths ? "#dcfce7" : consistentCount >= totalMonths / 2 ? "#fef3c7" : "#fee2e2",
-                                                    color: consistentCount === totalMonths ? "#16a34a" : consistentCount >= totalMonths / 2 ? "#92400e" : "#dc2626",
-                                                    fontWeight: 700
-                                                })}>{consistentCount}/{totalMonths}</td>
+                            <>
+                                <div style={{ overflowX: "auto", border: "1px solid #000" }}>
+                                    <table style={{ width: "100%", fontSize: "11px", borderCollapse: "collapse", minWidth: `${400 + rangeMonths.length * 80}px` }}>
+                                        <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                                            <tr>
+                                                <th style={ETH({ textAlign: "left", width: "40px" })}>NO.</th>
+                                                <th style={ETH({ textAlign: "left", width: "220px" })}>FULL NAME</th>
+                                                {rangeMonths.map((mk) => (
+                                                    <th key={mk} style={ETH({ minWidth: "80px" })}>{formatMonthLabel(mk)}</th>
+                                                ))}
+                                                <th style={ETH({ width: "90px" })}>TOTAL</th>
+                                                <th style={ETH({ width: "110px" })}>CONSISTENT</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {loading ? (
+                                                <tr><td colSpan={rangeMonths.length + 4} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading…</td></tr>
+                                            ) : rangeRows.length === 0 ? (
+                                                <tr><td colSpan={rangeMonths.length + 4} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No members found.</td></tr>
+                                            ) : paginatedRangeRows.map(({ leader, monthTotals, total, consistentCount, totalMonths }, idx) => (
+                                                <tr key={leader.id}>
+                                                    <td style={ETD({ fontWeight: 700 })}>{(rangePage - 1) * rangePageSize + idx + 1}</td>
+                                                    <td style={ETD({ textAlign: "left", padding: "4px 6px", fontWeight: 600 })}>{getDisplayName(leader)}</td>
+                                                    {monthTotals.map((amt, i) => {
+                                                        const mc = isConsistent(leader, amt, rangeMonths[i]);
+                                                        return (
+                                                            <td key={i} style={ETD({
+                                                                fontWeight: amt > 0 ? 700 : 400,
+                                                                color: amt > 0 ? "#000" : "#9ca3af",
+                                                                background: amt > 0 && !mc ? "#fee2e2" : "#fff"
+                                                            })}>{amt > 0 ? amt.toLocaleString() : "—"}</td>
+                                                        );
+                                                    })}
+                                                    <td style={ETD({ fontWeight: 800, fontSize: "12px" })}>{total > 0 ? total.toLocaleString() : "—"}</td>
+                                                    <td style={ETD({
+                                                        background: consistentCount === totalMonths ? "#dcfce7" : consistentCount >= totalMonths / 2 ? "#fef3c7" : "#fee2e2",
+                                                        color: consistentCount === totalMonths ? "#16a34a" : consistentCount >= totalMonths / 2 ? "#92400e" : "#dc2626",
+                                                        fontWeight: 700
+                                                    })}>{consistentCount}/{totalMonths}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {!loading && rangeRows.length > 0 && (
+                                    <PaginationBar
+                                        page={rangePage}
+                                        totalPages={rangeTotalPages}
+                                        pageSize={rangePageSize}
+                                        totalItems={rangeRows.length}
+                                        onPageChange={setRangePage}
+                                        onPageSizeChange={setRangePageSize}
+                                    />
+                                )}
+                            </>
                         )}
                     </div>
                 )}
@@ -938,68 +1077,58 @@ function Tithes() {
                                 <tbody>
                                     {loading ? (
                                         <tr><td colSpan={16} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading…</td></tr>
-                                    ) : filteredLeaders.length === 0 ? (
+                                    ) : yearData.rows.length === 0 ? (
                                         <tr><td colSpan={16} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No members found.</td></tr>
-                                    ) : (() => {
-                                        const monthlyTotals = Array(12).fill(0);
-                                        let grandYearTotal = 0;
-                                        const rows = filteredLeaders.map((leader, idx) => {
-                                            const partner = getCombinedPartner(leader);
-                                            if (partner && leader.combined_with < leader.id) return null;
-                                            const yearly = getYearlyData(leader.id, selectedYear);
-                                            let consistentMonths = 0;
-                                            const monthTotals = yearly.map((y, i) => {
-                                                const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
-                                                const t = y.total + (partner ? getMonthlyTotal(partner.id, mk) : 0);
-                                                if (isConsistent(leader, t, mk)) consistentMonths++;
-                                                monthlyTotals[i] += t;
-                                                return t;
-                                            });
-                                            const yearTotal = monthTotals.reduce((a, b) => a + b, 0);
-                                            grandYearTotal += yearTotal;
-                                            return { leader, monthTotals, yearTotal, consistentMonths, idx };
-                                        }).filter(Boolean);
-
-                                        return (
-                                            <>
-                                                {rows.map(({ leader, monthTotals, yearTotal, consistentMonths, idx }) => (
-                                                    <tr key={leader.id}>
-                                                        <td style={ETD({ fontWeight: 700 })}>{idx + 1}</td>
-                                                        <td style={ETD({ textAlign: "left", padding: "4px 6px", fontWeight: 600 })}>{getDisplayName(leader)}</td>
-                                                        {monthTotals.map((total, i) => {
-                                                            const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
-                                                            const mc = isConsistent(leader, total, mk);
-                                                            return (
-                                                                <td key={i} style={ETD({
-                                                                    fontWeight: total > 0 ? 700 : 400,
-                                                                    color: total > 0 ? "#000" : "#9ca3af",
-                                                                    background: total > 0 && !mc ? "#fee2e2" : "#fff"
-                                                                })}>{total > 0 ? total.toLocaleString() : "—"}</td>
-                                                            );
-                                                        })}
-                                                        <td style={ETD({ fontWeight: 800, fontSize: "12px" })}>{yearTotal > 0 ? yearTotal.toLocaleString() : "—"}</td>
-                                                        <td style={ETD({
-                                                            background: consistentMonths >= 6 ? "#dcfce7" : consistentMonths >= 3 ? "#fef3c7" : "#fee2e2",
-                                                            color: consistentMonths >= 6 ? "#16a34a" : consistentMonths >= 3 ? "#92400e" : "#dc2626",
-                                                            fontWeight: 700
-                                                        })}>{consistentMonths}/12</td>
-                                                    </tr>
-                                                ))}
-                                                <tr style={{ background: "#f3f4f6", fontWeight: 700 }}>
-                                                    <td style={ETD({ fontWeight: 700 })}></td>
-                                                    <td style={ETD({ textAlign: "left", padding: "4px 6px" })}>TOTAL</td>
-                                                    {monthlyTotals.map((total, i) => (
-                                                        <td key={i} style={ETD({ color: total > 0 ? "#000" : "#9ca3af" })}>{total > 0 ? total.toLocaleString() : "—"}</td>
-                                                    ))}
-                                                    <td style={ETD({ fontWeight: 800, fontSize: "12px" })}>{grandYearTotal > 0 ? grandYearTotal.toLocaleString() : "—"}</td>
-                                                    <td style={ETD()}></td>
+                                    ) : (
+                                        <>
+                                            {paginatedYearRows.map(({ leader, monthTotals, yearTotal, consistentMonths }, idx) => (
+                                                <tr key={leader.id}>
+                                                    <td style={ETD({ fontWeight: 700 })}>{(yearPage - 1) * yearPageSize + idx + 1}</td>
+                                                    <td style={ETD({ textAlign: "left", padding: "4px 6px", fontWeight: 600 })}>{getDisplayName(leader)}</td>
+                                                    {monthTotals.map((total, i) => {
+                                                        const mk = `${selectedYear}-${String(i + 1).padStart(2, "0")}`;
+                                                        const mc = isConsistent(leader, total, mk);
+                                                        return (
+                                                            <td key={i} style={ETD({
+                                                                fontWeight: total > 0 ? 700 : 400,
+                                                                color: total > 0 ? "#000" : "#9ca3af",
+                                                                background: total > 0 && !mc ? "#fee2e2" : "#fff"
+                                                            })}>{total > 0 ? total.toLocaleString() : "—"}</td>
+                                                        );
+                                                    })}
+                                                    <td style={ETD({ fontWeight: 800, fontSize: "12px" })}>{yearTotal > 0 ? yearTotal.toLocaleString() : "—"}</td>
+                                                    <td style={ETD({
+                                                        background: consistentMonths >= 6 ? "#dcfce7" : consistentMonths >= 3 ? "#fef3c7" : "#fee2e2",
+                                                        color: consistentMonths >= 6 ? "#16a34a" : consistentMonths >= 3 ? "#92400e" : "#dc2626",
+                                                        fontWeight: 700
+                                                    })}>{consistentMonths}/12</td>
                                                 </tr>
-                                            </>
-                                        );
-                                    })()}
+                                            ))}
+                                            <tr style={{ background: "#f3f4f6", fontWeight: 700 }}>
+                                                <td style={ETD({ fontWeight: 700 })}></td>
+                                                <td style={ETD({ textAlign: "left", padding: "4px 6px" })}>TOTAL (all {yearData.rows.length})</td>
+                                                {yearData.monthlyTotals.map((total, i) => (
+                                                    <td key={i} style={ETD({ color: total > 0 ? "#000" : "#9ca3af" })}>{total > 0 ? total.toLocaleString() : "—"}</td>
+                                                ))}
+                                                <td style={ETD({ fontWeight: 800, fontSize: "12px" })}>{yearData.grandYearTotal > 0 ? yearData.grandYearTotal.toLocaleString() : "—"}</td>
+                                                <td style={ETD()}></td>
+                                            </tr>
+                                        </>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {!loading && yearData.rows.length > 0 && (
+                            <PaginationBar
+                                page={yearPage}
+                                totalPages={yearTotalPages}
+                                pageSize={yearPageSize}
+                                totalItems={yearData.rows.length}
+                                onPageChange={setYearPage}
+                                onPageSizeChange={setYearPageSize}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -1035,17 +1164,16 @@ function Tithes() {
                                 <tbody>
                                     {loading ? (
                                         <tr><td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>Loading…</td></tr>
-                                    ) : filteredLeaders.length === 0 ? (
+                                    ) : displayLeaders.length === 0 ? (
                                         <tr><td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "#9ca3af", border: "1px solid #000" }}>No members found.</td></tr>
-                                    ) : filteredLeaders.map((leader, idx) => {
+                                    ) : paginatedGrossLeaders.map((leader, idx) => {
                                         const partner = getCombinedPartner(leader);
-                                        if (partner && leader.combined_with < leader.id) return null;
                                         const defaultGross = leader.gross_income || 0;
                                         const effectiveGross = getEffectiveGross(leader, selectedMonth);
                                         const hasOverride = monthlyGrossMap[`${leader.id}-${selectedMonth}`] !== undefined;
                                         return (
                                             <tr key={leader.id}>
-                                                <td style={ETD({ fontWeight: 700 })}>{idx + 1}</td>
+                                                <td style={ETD({ fontWeight: 700 })}>{(grossPage - 1) * grossPageSize + idx + 1}</td>
                                                 <td style={ETD({ textAlign: "left", padding: "4px 6px", fontWeight: 600 })}>
                                                     {getDisplayName(leader)}
                                                     {partner && <span style={{ display: "block", fontSize: "9px", color: "#6b7280", fontWeight: 400 }}>Combined tithing</span>}
@@ -1066,6 +1194,17 @@ function Tithes() {
                                 </tbody>
                             </table>
                         </div>
+
+                        {!loading && displayLeaders.length > 0 && (
+                            <PaginationBar
+                                page={grossPage}
+                                totalPages={grossTotalPages}
+                                pageSize={grossPageSize}
+                                totalItems={displayLeaders.length}
+                                onPageChange={setGrossPage}
+                                onPageSizeChange={setGrossPageSize}
+                            />
+                        )}
 
                         <div style={{ padding: "10px 12px", background: "#f9fafb", border: "1px solid #000", borderTop: "none", fontSize: "11px", color: "#6b7280" }}>
                             <strong style={{ color: "#374151" }}>How it works:</strong> The "Default Gross" comes from the leader's profile.

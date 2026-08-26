@@ -4073,3 +4073,387 @@ body {
   color: var(--text-main);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+
+
+/* =========================================================
+   BIBLE COMICS
+   ========================================================= */
+
+.comics-page {
+  min-height: 100vh;
+  width: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  background: var(--bg-primary, #0b1015);
+  color: var(--text-primary, #f4f7f8);
+}
+
+/* TOP BAR */
+
+.comics-topbar {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.books-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.025);
+  color: #e8eeee;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.books-button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* =========================================================
+   GENESIS HERO
+   ========================================================= */
+
+.genesis-hero {
+  width: 100%;
+  min-height: 265px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 1.05fr);
+  gap: 28px;
+  padding: 28px;
+  box-sizing: border-box;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(18, 29, 38, 0.98),
+      rgba(11, 18, 25, 0.98)
+    );
+
+  overflow: hidden;
+}
+
+.genesis-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.genesis-title h1 {
+  margin: 0;
+  font-size: clamp(36px, 4vw, 54px);
+  font-weight: 700;
+  letter-spacing: -1.5px;
+}
+
+.genesis-title span {
+  display: block;
+  margin-top: 3px;
+  color: #61d49a;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.genesis-description {
+  max-width: 680px;
+  margin: 15px 0 22px;
+  color: #aeb9c1;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* STATS */
+
+.genesis-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.stat-card {
+  min-width: 135px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 14px;
+
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.stat-card svg {
+  color: #61d49a;
+  flex-shrink: 0;
+}
+
+.stat-card div {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card small {
+  color: #7f8c95;
+  font-size: 11px;
+}
+
+.stat-card strong {
+  margin-top: 2px;
+  color: #e9eeee;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* COVER */
+
+.genesis-cover {
+  min-height: 210px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+
+  color: #66737d;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.genesis-cover svg {
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.genesis-cover span {
+  color: #aab4ba;
+  font-size: 14px;
+}
+
+.genesis-cover small {
+  margin-top: 5px;
+  color: #68747d;
+  font-size: 11px;
+}
+
+/* =========================================================
+   CHAPTER SECTION
+   ========================================================= */
+
+.chapters-section {
+  margin-top: 18px;
+  padding: 20px;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 15px;
+
+  background: rgba(13, 21, 28, 0.85);
+}
+
+.chapters-heading {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.chapters-heading h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.chapters-heading span {
+  color: #61d49a;
+}
+
+/* =========================================================
+   CHAPTER GRID
+   ========================================================= */
+
+.chapters-grid {
+  display: grid;
+
+  /*
+    Automatically uses as much horizontal space as possible.
+    On a large monitor you get more cards per row.
+    On smaller screens it automatically reduces.
+  */
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(165px, 1fr)
+  );
+
+  gap: 13px;
+}
+
+/* CARD */
+
+.chapter-card {
+  min-width: 0;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+
+  background: #111a21;
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+
+  cursor: pointer;
+}
+
+.chapter-card:hover {
+  transform: translateY(-3px);
+
+  border-color: rgba(97, 212, 154, 0.35);
+
+  background: #152029;
+}
+
+/* IMAGE AREA */
+
+.chapter-image {
+  position: relative;
+
+  width: 100%;
+  aspect-ratio: 16 / 10;
+
+  background:
+    linear-gradient(
+      145deg,
+      #17232b,
+      #0e151b
+    );
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #53616b;
+}
+
+/* CHAPTER NUMBER */
+
+.chapter-number {
+  position: absolute;
+
+  top: 8px;
+  left: 8px;
+
+  padding: 4px 8px;
+
+  border-radius: 7px;
+
+  background: rgba(27, 94, 64, 0.95);
+
+  color: #d9f8e8;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  z-index: 2;
+}
+
+/* CARD CONTENT */
+
+.chapter-content {
+  padding: 11px;
+}
+
+.chapter-content h3 {
+  margin: 0;
+
+  color: #e7eded;
+
+  font-size: 13px;
+  line-height: 1.35;
+
+  font-weight: 600;
+}
+
+.chapter-content p {
+  margin: 6px 0 0;
+
+  color: #7f8c95;
+
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+  .genesis-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .genesis-cover {
+    min-height: 180px;
+  }
+
+}
+
+@media (max-width: 700px) {
+
+  .comics-page {
+    padding: 14px;
+  }
+
+  .genesis-hero {
+    padding: 20px;
+  }
+
+  .genesis-stats {
+    flex-direction: column;
+  }
+
+  .stat-card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .chapters-section {
+    padding: 14px;
+  }
+
+  .chapters-grid {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    );
+  }
+
+}
+
+@media (max-width: 450px) {
+
+  .chapters-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
