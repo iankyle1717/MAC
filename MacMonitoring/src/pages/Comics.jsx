@@ -1,140 +1,186 @@
-import React, { useState } from "react";
-import { BookOpen, CalendarDays, Clock3, ArrowLeft, Image as ImageIcon } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  BookOpen,
+  CalendarDays,
+  Clock3,
+  ArrowLeft,
+  ArrowRight,
+  Image as ImageIcon,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
 import "../styles/global.css";
-import '../styles/Comics.css';
-import bbleCover from '../assets/bbleee.jpg';
-// ═══════════════════════════════════════════════════════════════════════════
-// 66 BOOKS OF THE BIBLE
-// ═══════════════════════════════════════════════════════════════════════════
+import "../styles/Comics.css";
+
+import bbleCover from "../assets/bbleee.jpg";
+
+/* ════════════════════════════════════════════════════════════════════════
+   GENESIS COMIC IMAGE AUTO-LOADER
+
+   Naming system:
+     ge1.png  = Genesis Chapter 1
+     ge2.png  = Genesis Chapter 2
+     ge3.png  = Genesis Chapter 3
+     ...
+     ge50.png = Genesis Chapter 50
+
+   Drop new files into src/assets/comics/genesis/ and they show up
+   automatically — nothing else in this file needs to change.
+   ════════════════════════════════════════════════════════════════════════ */
+
+const genesisImageFiles = import.meta.glob("../assets/comics/genesis/ge*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+const genesisImages = {};
+Object.entries(genesisImageFiles).forEach(([path, imageUrl]) => {
+  const match = path.match(/ge(\d+)\.png$/i);
+  if (match) {
+    genesisImages[Number(match[1])] = imageUrl;
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+   66 BOOKS OF THE BIBLE
+   ════════════════════════════════════════════════════════════════════════ */
+
 const bibleBooks = [
-  // ── Old Testament ──
-  { name: "Genesis",          testament: "OT", chapters: 50,  category: "Law",            desc: "The book of beginnings.", longDesc: "The book of beginnings. It tells how God created the world, brought life, chose a people, and started His plan of redemption." },
-  { name: "Exodus",           testament: "OT", chapters: 40,  category: "Law",            desc: "Israel's deliverance from Egypt.", longDesc: "The story of Israel's deliverance from slavery in Egypt and the giving of the Law at Sinai." },
-  { name: "Leviticus",        testament: "OT", chapters: 27,  category: "Law",            desc: "Laws for holiness and worship.", longDesc: "God gives Moses the laws for sacrifices, priesthood, and holy living for His people." },
-  { name: "Numbers",          testament: "OT", chapters: 36,  category: "Law",            desc: "Israel in the wilderness.", longDesc: "The census and wandering of Israel in the wilderness before entering the Promised Land." },
-  { name: "Deuteronomy",      testament: "OT", chapters: 34,  category: "Law",            desc: "Moses restates the Law.", longDesc: "Moses reviews the Law for the new generation about to enter Canaan." },
-  { name: "Joshua",           testament: "OT", chapters: 24,  category: "History",        desc: "Conquest of the Promised Land.", longDesc: "Joshua leads Israel into Canaan and divides the land among the tribes." },
-  { name: "Judges",           testament: "OT", chapters: 21,  category: "History",        desc: "Cycles of sin and deliverance.", longDesc: "Israel repeatedly falls into sin, is oppressed, and is rescued by judges." },
-  { name: "Ruth",             testament: "OT", chapters: 4,   category: "History",        desc: "Loyalty and redemption.", longDesc: "The story of Ruth, Boaz, and the lineage leading to King David." },
-  { name: "1 Samuel",         testament: "OT", chapters: 31,  category: "History",        desc: "The life of King Saul and David's rise.", longDesc: "The birth of Samuel, the reign of Saul, and the anointing of David." },
-  { name: "2 Samuel",         testament: "OT", chapters: 24,  category: "History",        desc: "King David's reign.", longDesc: "David becomes king, unites Israel, and establishes the kingdom." },
-  { name: "1 Kings",          testament: "OT", chapters: 22,  category: "History",        desc: "Solomon and the divided kingdom.", longDesc: "The reign of Solomon, the building of the temple, and the division of the kingdom." },
-  { name: "2 Kings",          testament: "OT", chapters: 25,  category: "History",        desc: "The fall of Israel and Judah.", longDesc: "The history of the kings of Israel and Judah leading to exile." },
-  { name: "1 Chronicles",     testament: "OT", chapters: 29,  category: "History",        desc: "Genealogy and David's reign.", longDesc: "Genealogies from Adam to David and the reign of King David." },
-  { name: "2 Chronicles",     testament: "OT", chapters: 36,  category: "History",        desc: "History of the kings of Judah.", longDesc: "The history of the kings of Judah from Solomon to the exile." },
-  { name: "Ezra",             testament: "OT", chapters: 10,  category: "History",        desc: "Return from Babylonian exile.", longDesc: "The return of the Jews to Jerusalem and the rebuilding of the temple." },
-  { name: "Nehemiah",         testament: "OT", chapters: 13,  category: "History",        desc: "Rebuilding Jerusalem's walls.", longDesc: "Nehemiah leads the effort to rebuild the walls of Jerusalem." },
-  { name: "Esther",           testament: "OT", chapters: 10,  category: "History",        desc: "God's protection of His people.", longDesc: "Esther becomes queen and saves the Jews from destruction in Persia." },
-  { name: "Job",              testament: "OT", chapters: 42,  category: "Poetry",         desc: "Suffering and faith.", longDesc: "A righteous man suffers and wrestles with questions of justice and God's sovereignty." },
-  { name: "Psalms",           testament: "OT", chapters: 150, category: "Poetry",         desc: "Songs of worship and prayer.", longDesc: "A collection of songs, prayers, and poems expressing every human emotion before God." },
-  { name: "Proverbs",         testament: "OT", chapters: 31,  category: "Poetry",         desc: "Wisdom for daily living.", longDesc: "Practical wisdom for life, relationships, and righteousness." },
-  { name: "Ecclesiastes",     testament: "OT", chapters: 12,  category: "Poetry",         desc: "Meaning of life.", longDesc: "Reflections on the meaning of life apart from God—vanity and purpose." },
-  { name: "Song of Solomon",  testament: "OT", chapters: 8,   category: "Poetry",         desc: "A love song.", longDesc: "A poetic celebration of love, marriage, and devotion." },
-  { name: "Isaiah",           testament: "OT", chapters: 66,  category: "Major Prophets", desc: "Salvation through the Messiah.", longDesc: "Prophecies of judgment and hope, pointing to the coming Messiah." },
-  { name: "Jeremiah",         testament: "OT", chapters: 52,  category: "Major Prophets", desc: "Warnings before the fall.", longDesc: "Jeremiah warns Judah of coming judgment and the new covenant." },
-  { name: "Lamentations",     testament: "OT", chapters: 5,   category: "Major Prophets", desc: "Grief over Jerusalem.", longDesc: "Poems mourning the destruction of Jerusalem." },
-  { name: "Ezekiel",          testament: "OT", chapters: 48,  category: "Major Prophets", desc: "Visions of restoration.", longDesc: "Ezekiel prophesies to the exiles about judgment and future restoration." },
-  { name: "Daniel",           testament: "OT", chapters: 12,  category: "Major Prophets", desc: "Faith in a foreign land.", longDesc: "Daniel serves God in Babylon and receives apocalyptic visions." },
-  { name: "Hosea",            testament: "OT", chapters: 14,  category: "Minor Prophets", desc: "Unfailing love.", longDesc: "Hosea's life mirrors God's persistent love for unfaithful Israel." },
-  { name: "Joel",             testament: "OT", chapters: 3,   category: "Minor Prophets", desc: "The day of the Lord.", longDesc: "A prophecy of locust plague and the promise of the Spirit's outpouring." },
-  { name: "Amos",             testament: "OT", chapters: 9,   category: "Minor Prophets", desc: "Justice and righteousness.", longDesc: "Amos condemns social injustice and calls for true worship." },
-  { name: "Obadiah",          testament: "OT", chapters: 1,   category: "Minor Prophets", desc: "Judgment on Edom.", longDesc: "The shortest book, pronouncing judgment on Edom." },
-  { name: "Jonah",            testament: "OT", chapters: 4,   category: "Minor Prophets", desc: "Mercy for Nineveh.", longDesc: "Jonah flees from God, yet God shows mercy to Nineveh." },
-  { name: "Micah",            testament: "OT", chapters: 7,   category: "Minor Prophets", desc: "Justice, mercy, humility.", longDesc: "Micah prophesies judgment and the birthplace of the Messiah in Bethlehem." },
-  { name: "Nahum",            testament: "OT", chapters: 3,   category: "Minor Prophets", desc: "Nineveh's destruction.", longDesc: "The fall of Nineveh is declared as God's vengeance." },
-  { name: "Habakkuk",         testament: "OT", chapters: 3,   category: "Minor Prophets", desc: "Faith amidst confusion.", longDesc: "Habakkuk questions God and learns to trust Him regardless." },
-  { name: "Zephaniah",        testament: "OT", chapters: 3,   category: "Minor Prophets", desc: "The great day of the Lord.", longDesc: "Warnings of judgment and promises of restoration for the remnant." },
-  { name: "Haggai",           testament: "OT", chapters: 2,   category: "Minor Prophets", desc: "Rebuild the temple.", longDesc: "Haggai urges the returned exiles to rebuild the temple." },
-  { name: "Zechariah",        testament: "OT", chapters: 14,  category: "Minor Prophets", desc: "Messianic prophecies.", longDesc: "Visions of hope and prophecies about the coming Messiah." },
-  { name: "Malachi",          testament: "OT", chapters: 4,   category: "Minor Prophets", desc: "A call to faithfulness.", longDesc: "Malachi confronts spiritual apathy before 400 years of silence." },
-
-  // ── New Testament ──
-  { name: "Matthew",          testament: "NT", chapters: 28,  category: "Gospels",        desc: "Jesus the King.", longDesc: "The Gospel of Jesus Christ, presenting Him as the promised Messiah and King." },
-  { name: "Mark",             testament: "NT", chapters: 16,  category: "Gospels",        desc: "Jesus the Servant.", longDesc: "A fast-paced account of Jesus' ministry, suffering, and sacrifice." },
-  { name: "Luke",             testament: "NT", chapters: 24,  category: "Gospels",        desc: "Jesus the Savior of all.", longDesc: "A detailed Gospel emphasizing Jesus' compassion for all people." },
-  { name: "John",             testament: "NT", chapters: 21,  category: "Gospels",        desc: "Jesus the Son of God.", longDesc: "The theological Gospel proving Jesus is the divine Son of God." },
-  { name: "Acts",             testament: "NT", chapters: 28,  category: "History",        desc: "The early church.", longDesc: "The birth and spread of the early church through the apostles." },
-  { name: "Romans",           testament: "NT", chapters: 16,  category: "Pauline Epistles", desc: "The Gospel explained.", longDesc: "Paul's systematic explanation of the Gospel and righteousness by faith." },
-  { name: "1 Corinthians",    testament: "NT", chapters: 16,  category: "Pauline Epistles", desc: "Problems in the church.", longDesc: "Paul addresses divisions, immorality, and spiritual gifts in Corinth." },
-  { name: "2 Corinthians",    testament: "NT", chapters: 13,  category: "Pauline Epistles", desc: "Paul's defense and appeal.", longDesc: "Paul defends his ministry and urges reconciliation." },
-  { name: "Galatians",        testament: "NT", chapters: 6,   category: "Pauline Epistles", desc: "Freedom from the Law.", longDesc: "Paul defends salvation by faith and freedom from legalism." },
-  { name: "Ephesians",        testament: "NT", chapters: 6,   category: "Pauline Epistles", desc: "Unity in Christ.", longDesc: "The believer's position in Christ and the call to unity and spiritual warfare." },
-  { name: "Philippians",      testament: "NT", chapters: 4,   category: "Pauline Epistles", desc: "Joy in Christ.", longDesc: "A letter of joy, encouragement, and contentment in every circumstance." },
-  { name: "Colossians",       testament: "NT", chapters: 4,   category: "Pauline Epistles", desc: "Christ is supreme.", longDesc: "Paul exalts the supremacy of Christ over all creation and philosophy." },
-  { name: "1 Thessalonians",  testament: "NT", chapters: 5,   category: "Pauline Epistles", desc: "Hope and readiness.", longDesc: "Encouragement for the church and teaching on Christ's return." },
-  { name: "2 Thessalonians",  testament: "NT", chapters: 3,   category: "Pauline Epistles", desc: "The man of lawlessness.", longDesc: "Clarification about the Day of the Lord and exhortation to work." },
-  { name: "1 Timothy",        testament: "NT", chapters: 6,   category: "Pauline Epistles", desc: "Leadership in the church.", longDesc: "Instructions for church leadership, doctrine, and godly living." },
-  { name: "2 Timothy",        testament: "NT", chapters: 4,   category: "Pauline Epistles", desc: "Finish the race.", longDesc: "Paul's final letter urging Timothy to remain faithful." },
-  { name: "Titus",            testament: "NT", chapters: 3,   category: "Pauline Epistles", desc: "Sound doctrine.", longDesc: "Guidelines for church order and godly living in Crete." },
-  { name: "Philemon",         testament: "NT", chapters: 1,   category: "Pauline Epistles", desc: "Forgiveness and reconciliation.", longDesc: "Paul appeals for the forgiveness of the runaway slave Onesimus." },
-  { name: "Hebrews",          testament: "NT", chapters: 13,  category: "General Epistles", desc: "Christ is greater.", longDesc: "Jesus is shown as superior to all Old Testament types and institutions." },
-  { name: "James",            testament: "NT", chapters: 5,   category: "General Epistles", desc: "Faith that works.", longDesc: "Practical teaching on living out genuine faith through good works." },
-  { name: "1 Peter",          testament: "NT", chapters: 5,   category: "General Epistles", desc: "Hope in suffering.", longDesc: "Encouragement for believers suffering persecution." },
-  { name: "2 Peter",          testament: "NT", chapters: 3,   category: "General Epistles", desc: "Beware of false teachers.", longDesc: "Warnings against false teachers and the promise of Christ's return." },
-  { name: "1 John",           testament: "NT", chapters: 5,   category: "General Epistles", desc: "God is love.", longDesc: "Assurance of salvation, love for one another, and truth." },
-  { name: "2 John",           testament: "NT", chapters: 1,   category: "General Epistles", desc: "Walk in truth.", longDesc: "A brief letter urging love and warning against deceivers." },
-  { name: "3 John",           testament: "NT", chapters: 1,   category: "General Epistles", desc: "Support the truth.", longDesc: "Commending hospitality and supporting faithful workers." },
-  { name: "Jude",             testament: "NT", chapters: 1,   category: "General Epistles", desc: "Contend for the faith.", longDesc: "A call to defend the faith against godless teachers." },
-  { name: "Revelation",       testament: "NT", chapters: 22,  category: "Prophecy",       desc: "The end of all things.", longDesc: "The revelation of Jesus Christ—His return, judgment, and the new creation." },
+  { name: "Genesis", testament: "OT", chapters: 50, category: "Law", desc: "The book of beginnings.", longDesc: "The book of beginnings. It tells how God created the world, brought life, chose a people, and started His plan of redemption." },
+  { name: "Exodus", testament: "OT", chapters: 40, category: "Law", desc: "Israel's deliverance from Egypt.", longDesc: "The story of Israel's deliverance from slavery in Egypt and the giving of the Law at Sinai." },
+  { name: "Leviticus", testament: "OT", chapters: 27, category: "Law", desc: "Laws for holiness and worship.", longDesc: "God gives Moses the laws for sacrifices, priesthood, and holy living for His people." },
+  { name: "Numbers", testament: "OT", chapters: 36, category: "Law", desc: "Israel in the wilderness.", longDesc: "The census and wandering of Israel in the wilderness before entering the Promised Land." },
+  { name: "Deuteronomy", testament: "OT", chapters: 34, category: "Law", desc: "Moses restates the Law.", longDesc: "Moses reviews the Law for the new generation about to enter Canaan." },
+  { name: "Joshua", testament: "OT", chapters: 24, category: "History", desc: "Conquest of the Promised Land.", longDesc: "Joshua leads Israel into Canaan and divides the land among the tribes." },
+  { name: "Judges", testament: "OT", chapters: 21, category: "History", desc: "Cycles of sin and deliverance.", longDesc: "Israel repeatedly falls into sin, is oppressed, and is rescued by judges." },
+  { name: "Ruth", testament: "OT", chapters: 4, category: "History", desc: "Loyalty and redemption.", longDesc: "The story of Ruth, Boaz, and the lineage leading to King David." },
+  { name: "1 Samuel", testament: "OT", chapters: 31, category: "History", desc: "Samuel, Saul, and David.", longDesc: "The birth of Samuel, the reign of Saul, and the rise of David." },
+  { name: "2 Samuel", testament: "OT", chapters: 24, category: "History", desc: "King David's reign.", longDesc: "David becomes king, unites Israel, and establishes the kingdom." },
+  { name: "1 Kings", testament: "OT", chapters: 22, category: "History", desc: "Solomon and the divided kingdom.", longDesc: "The reign of Solomon, the building of the temple, and the division of the kingdom." },
+  { name: "2 Kings", testament: "OT", chapters: 25, category: "History", desc: "The fall of Israel and Judah.", longDesc: "The history of the kings of Israel and Judah leading to exile." },
+  { name: "1 Chronicles", testament: "OT", chapters: 29, category: "History", desc: "Genealogy and David's reign.", longDesc: "Genealogies from Adam to David and the reign of King David." },
+  { name: "2 Chronicles", testament: "OT", chapters: 36, category: "History", desc: "History of Judah.", longDesc: "The history of the kings of Judah from Solomon to the exile." },
+  { name: "Ezra", testament: "OT", chapters: 10, category: "History", desc: "Return from exile.", longDesc: "The return of the Jews to Jerusalem and the rebuilding of the temple." },
+  { name: "Nehemiah", testament: "OT", chapters: 13, category: "History", desc: "Rebuilding Jerusalem's walls.", longDesc: "Nehemiah leads the effort to rebuild the walls of Jerusalem." },
+  { name: "Esther", testament: "OT", chapters: 10, category: "History", desc: "Protection of God's people.", longDesc: "Esther becomes queen and saves the Jews from destruction in Persia." },
+  { name: "Job", testament: "OT", chapters: 42, category: "Poetry", desc: "Suffering and faith.", longDesc: "A righteous man suffers and wrestles with questions of justice and God's sovereignty." },
+  { name: "Psalms", testament: "OT", chapters: 150, category: "Poetry", desc: "Songs of worship and prayer.", longDesc: "A collection of songs, prayers, and poems expressing every human emotion before God." },
+  { name: "Proverbs", testament: "OT", chapters: 31, category: "Poetry", desc: "Wisdom for daily living.", longDesc: "Practical wisdom for life, relationships, and righteousness." },
+  { name: "Ecclesiastes", testament: "OT", chapters: 12, category: "Poetry", desc: "The meaning of life.", longDesc: "Reflections on the meaning of life and the importance of God." },
+  { name: "Song of Solomon", testament: "OT", chapters: 8, category: "Poetry", desc: "A love song.", longDesc: "A poetic celebration of love, marriage, and devotion." },
+  { name: "Isaiah", testament: "OT", chapters: 66, category: "Major Prophets", desc: "Salvation through the Messiah.", longDesc: "Prophecies of judgment and hope, pointing to the coming Messiah." },
+  { name: "Jeremiah", testament: "OT", chapters: 52, category: "Major Prophets", desc: "Warnings before the fall.", longDesc: "Jeremiah warns Judah of coming judgment and the new covenant." },
+  { name: "Lamentations", testament: "OT", chapters: 5, category: "Major Prophets", desc: "Grief over Jerusalem.", longDesc: "Poems mourning the destruction of Jerusalem." },
+  { name: "Ezekiel", testament: "OT", chapters: 48, category: "Major Prophets", desc: "Visions of restoration.", longDesc: "Ezekiel prophesies to the exiles about judgment and future restoration." },
+  { name: "Daniel", testament: "OT", chapters: 12, category: "Major Prophets", desc: "Faith in a foreign land.", longDesc: "Daniel serves God in Babylon and receives apocalyptic visions." },
+  { name: "Hosea", testament: "OT", chapters: 14, category: "Minor Prophets", desc: "Unfailing love.", longDesc: "Hosea's life mirrors God's persistent love for unfaithful Israel." },
+  { name: "Joel", testament: "OT", chapters: 3, category: "Minor Prophets", desc: "The day of the Lord.", longDesc: "A prophecy of judgment and the promise of the Spirit's outpouring." },
+  { name: "Amos", testament: "OT", chapters: 9, category: "Minor Prophets", desc: "Justice and righteousness.", longDesc: "Amos condemns social injustice and calls for true worship." },
+  { name: "Obadiah", testament: "OT", chapters: 1, category: "Minor Prophets", desc: "Judgment on Edom.", longDesc: "The shortest book, pronouncing judgment on Edom." },
+  { name: "Jonah", testament: "OT", chapters: 4, category: "Minor Prophets", desc: "Mercy for Nineveh.", longDesc: "Jonah flees from God, yet God shows mercy to Nineveh." },
+  { name: "Micah", testament: "OT", chapters: 7, category: "Minor Prophets", desc: "Justice, mercy, and humility.", longDesc: "Micah prophesies judgment and the birthplace of the Messiah." },
+  { name: "Nahum", testament: "OT", chapters: 3, category: "Minor Prophets", desc: "Nineveh's destruction.", longDesc: "The fall of Nineveh is declared as God's vengeance." },
+  { name: "Habakkuk", testament: "OT", chapters: 3, category: "Minor Prophets", desc: "Faith amidst confusion.", longDesc: "Habakkuk questions God and learns to trust Him regardless." },
+  { name: "Zephaniah", testament: "OT", chapters: 3, category: "Minor Prophets", desc: "The great day of the Lord.", longDesc: "Warnings of judgment and promises of restoration." },
+  { name: "Haggai", testament: "OT", chapters: 2, category: "Minor Prophets", desc: "Rebuild the temple.", longDesc: "Haggai urges the returned exiles to rebuild the temple." },
+  { name: "Zechariah", testament: "OT", chapters: 14, category: "Minor Prophets", desc: "Messianic prophecies.", longDesc: "Visions of hope and prophecies about the coming Messiah." },
+  { name: "Malachi", testament: "OT", chapters: 4, category: "Minor Prophets", desc: "A call to faithfulness.", longDesc: "Malachi confronts spiritual apathy before the New Testament era." },
+  { name: "Matthew", testament: "NT", chapters: 28, category: "Gospels", desc: "Jesus the King.", longDesc: "The Gospel of Jesus Christ, presenting Him as the promised Messiah and King." },
+  { name: "Mark", testament: "NT", chapters: 16, category: "Gospels", desc: "Jesus the Servant.", longDesc: "A fast-paced account of Jesus' ministry, suffering, and sacrifice." },
+  { name: "Luke", testament: "NT", chapters: 24, category: "Gospels", desc: "Jesus the Savior of all.", longDesc: "A detailed Gospel emphasizing Jesus' compassion for all people." },
+  { name: "John", testament: "NT", chapters: 21, category: "Gospels", desc: "Jesus the Son of God.", longDesc: "The Gospel presenting Jesus as the divine Son of God." },
+  { name: "Acts", testament: "NT", chapters: 28, category: "History", desc: "The early church.", longDesc: "The birth and spread of the early church through the apostles." },
+  { name: "Romans", testament: "NT", chapters: 16, category: "Pauline Epistles", desc: "The Gospel explained.", longDesc: "Paul's systematic explanation of the Gospel and righteousness by faith." },
+  { name: "1 Corinthians", testament: "NT", chapters: 16, category: "Pauline Epistles", desc: "Problems in the church.", longDesc: "Paul addresses divisions, immorality, and spiritual gifts in Corinth." },
+  { name: "2 Corinthians", testament: "NT", chapters: 13, category: "Pauline Epistles", desc: "Paul's defense and appeal.", longDesc: "Paul defends his ministry and urges reconciliation." },
+  { name: "Galatians", testament: "NT", chapters: 6, category: "Pauline Epistles", desc: "Freedom from the Law.", longDesc: "Paul defends salvation by faith and freedom from legalism." },
+  { name: "Ephesians", testament: "NT", chapters: 6, category: "Pauline Epistles", desc: "Unity in Christ.", longDesc: "The believer's position in Christ and the call to unity." },
+  { name: "Philippians", testament: "NT", chapters: 4, category: "Pauline Epistles", desc: "Joy in Christ.", longDesc: "A letter of joy, encouragement, and contentment." },
+  { name: "Colossians", testament: "NT", chapters: 4, category: "Pauline Epistles", desc: "Christ is supreme.", longDesc: "Paul exalts the supremacy of Christ over all creation." },
+  { name: "1 Thessalonians", testament: "NT", chapters: 5, category: "Pauline Epistles", desc: "Hope and readiness.", longDesc: "Encouragement for the church and teaching on Christ's return." },
+  { name: "2 Thessalonians", testament: "NT", chapters: 3, category: "Pauline Epistles", desc: "The Day of the Lord.", longDesc: "Teaching concerning the Day of the Lord and faithful living." },
+  { name: "1 Timothy", testament: "NT", chapters: 6, category: "Pauline Epistles", desc: "Leadership in the church.", longDesc: "Instructions for church leadership, doctrine, and godly living." },
+  { name: "2 Timothy", testament: "NT", chapters: 4, category: "Pauline Epistles", desc: "Finish the race.", longDesc: "Paul's final letter urging Timothy to remain faithful." },
+  { name: "Titus", testament: "NT", chapters: 3, category: "Pauline Epistles", desc: "Sound doctrine.", longDesc: "Guidelines for church order and godly living." },
+  { name: "Philemon", testament: "NT", chapters: 1, category: "Pauline Epistles", desc: "Forgiveness and reconciliation.", longDesc: "Paul appeals for forgiveness and reconciliation." },
+  { name: "Hebrews", testament: "NT", chapters: 13, category: "General Epistles", desc: "Christ is greater.", longDesc: "Jesus is shown as superior to all Old Testament types and institutions." },
+  { name: "James", testament: "NT", chapters: 5, category: "General Epistles", desc: "Faith that works.", longDesc: "Practical teaching on living out genuine faith." },
+  { name: "1 Peter", testament: "NT", chapters: 5, category: "General Epistles", desc: "Hope in suffering.", longDesc: "Encouragement for believers suffering persecution." },
+  { name: "2 Peter", testament: "NT", chapters: 3, category: "General Epistles", desc: "Beware of false teachers.", longDesc: "Warnings against false teachers and the promise of Christ's return." },
+  { name: "1 John", testament: "NT", chapters: 5, category: "General Epistles", desc: "God is love.", longDesc: "Assurance of salvation, love, and truth." },
+  { name: "2 John", testament: "NT", chapters: 1, category: "General Epistles", desc: "Walk in truth.", longDesc: "A brief letter urging love and truth." },
+  { name: "3 John", testament: "NT", chapters: 1, category: "General Epistles", desc: "Support the truth.", longDesc: "Commending hospitality and faithful workers." },
+  { name: "Jude", testament: "NT", chapters: 1, category: "General Epistles", desc: "Contend for the faith.", longDesc: "A call to defend the faith against false teachers." },
+  { name: "Revelation", testament: "NT", chapters: 22, category: "Prophecy", desc: "The end of all things.", longDesc: "The revelation of Jesus Christ, His return, judgment, and the new creation." },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════
-// OLD TESTAMENT CHAPTERS
-// ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════
+   GENESIS CHAPTER TITLES & DESCRIPTIONS (1–50, matches ge1.png–ge50.png)
+   ════════════════════════════════════════════════════════════════════════ */
 
-const genesisChapters = [
-  { number: 1, title: "In the Beginning", description: "God creates the heavens and the earth." },
-  { number: 2, title: "The Garden of Eden", description: "God creates man and places him in Eden." },
-  { number: 3, title: "The Fall of Man", description: "Disobedience enters the world." },
-  { number: 4, title: "Cain and Abel", description: "The first family and the first sin." },
-  { number: 5, title: "The Genealogy", description: "The record of Adam's descendants." },
-  { number: 6, title: "The Sons of God", description: "Wickedness fills the earth. Noah finds favor." },
-  { number: 7, title: "The Great Flood", description: "The waters rise and cover the earth." },
-  { number: 8, title: "The Waters Recede", description: "The floodwaters go down and hope appears." },
-  { number: 9, title: "God's Covenant", description: "God promises never to destroy the earth again." },
-  { number: 10, title: "The Nations", description: "The table of nations after the flood." },
-  { number: 11, title: "The Tower of Babel", description: "Pride leads to the confusion of languages." },
-  { number: 12, title: "The Call of Abram", description: "God calls Abram to leave and promises blessings." },
-  { number: 13, title: "Abram and Lot", description: "A separation to avoid conflict." },
-  { number: 14, title: "Abram Rescues Lot", description: "Abram rescues Lot and is blessed by Melchizedek." },
-  { number: 15, title: "God's Promise", description: "God's covenant with Abram is confirmed." },
-  { number: 16, title: "Hagar and Ishmael", description: "Sarai gives Hagar to Abram as a servant." },
-  { number: 17, title: "The Covenant of Circumcision", description: "Abram's name is changed to Abraham." },
-  { number: 18, title: "The Visitors", description: "The Lord visits Abraham with a promise." },
-  { number: 19, title: "Sodom and Gomorrah", description: "Lot is rescued and the cities are destroyed." },
-  { number: 20, title: "Abraham and Abimelech", description: "Abraham sojourns in Gerar and God protects him." },
-  { number: 21, title: "The Birth of Isaac", description: "God fulfills His promise; Isaac is born." },
-  { number: 22, title: "Abraham Tested", description: "Abraham is tested and trusts God." },
-  { number: 23, title: "Sarah's Death", description: "Abraham mourns Sarah and purchases a burial place." },
-  { number: 24, title: "Isaac and Rebekah", description: "A wife is found for Isaac." },
-  { number: 25, title: "Esau and Jacob", description: "The sons of Isaac are born." },
-  { number: 26, title: "Isaac and Abimelech", description: "God blesses Isaac in the land." },
-  { number: 27, title: "Jacob Receives the Blessing", description: "Jacob receives Isaac's blessing." },
-  { number: 28, title: "Jacob's Ladder", description: "God speaks to Jacob in a dream." },
-  { number: 29, title: "Jacob Marries Leah and Rachel", description: "Jacob begins his family in Haran." },
-  { number: 30, title: "Jacob's Children", description: "Jacob's family continues to grow." },
-  { number: 31, title: "Jacob Leaves Laban", description: "Jacob returns toward his homeland." },
-  { number: 32, title: "Jacob Wrestles With God", description: "Jacob encounters God and receives a new name." },
-  { number: 33, title: "Jacob Meets Esau", description: "Jacob and Esau reconcile." },
-  { number: 34, title: "Dinah and Shechem", description: "A conflict arises involving Dinah." },
-  { number: 35, title: "Jacob Returns to Bethel", description: "God renews His covenant with Jacob." },
-  { number: 36, title: "The Descendants of Esau", description: "The family line of Esau is recorded." },
-  { number: 37, title: "Joseph's Dreams", description: "Joseph dreams of his future." },
-  { number: 38, title: "Judah and Tamar", description: "The story of Judah and Tamar." },
-  { number: 39, title: "Joseph in Egypt", description: "Joseph serves in Potiphar's house." },
-  { number: 40, title: "Joseph Interprets Dreams", description: "Joseph interprets the dreams of Pharaoh's servants." },
-  { number: 41, title: "Joseph Becomes Governor", description: "Joseph rises to power in Egypt." },
-  { number: 42, title: "Joseph's Brothers Arrive", description: "Joseph's brothers come to Egypt for food." },
-  { number: 43, title: "Benjamin Goes to Egypt", description: "Joseph's brothers return with Benjamin." },
-  { number: 44, title: "Joseph Tests His Brothers", description: "Joseph tests whether his brothers have changed." },
-  { number: 45, title: "Joseph Reveals Himself", description: "Joseph reveals his identity to his brothers." },
-  { number: 46, title: "Jacob Goes to Egypt", description: "Jacob and his family travel to Egypt." },
-  { number: 47, title: "Jacob's Family in Egypt", description: "Joseph provides for his family during the famine." },
-  { number: 48, title: "Jacob Blesses Joseph's Sons", description: "Jacob blesses Ephraim and Manasseh." },
-  { number: 49, title: "Jacob Blesses His Sons", description: "Jacob speaks blessings over his sons." },
-  { number: 50, title: "Joseph's Death", description: "Joseph forgives his brothers and dies in Egypt." },
+const genesisChapterText = [
+  ["In the Beginning", "God creates the heavens and the earth."],
+  ["The Garden of Eden", "God creates man and places him in Eden."],
+  ["The Fall of Man", "Disobedience enters the world."],
+  ["Cain and Abel", "The first family and the first murder."],
+  ["The Genealogy", "The descendants of Adam are recorded."],
+  ["The Sons of God", "Wickedness fills the earth. Noah finds favor."],
+  ["The Great Flood", "The waters rise and cover the earth."],
+  ["The Waters Recede", "The floodwaters go down and hope appears."],
+  ["God's Covenant", "God promises never to destroy the earth by flood again."],
+  ["The Nations", "The nations descend from Noah's family."],
+  ["The Tower of Babel", "Human pride leads to the confusion of languages."],
+  ["The Call of Abram", "God calls Abram and promises to bless him."],
+  ["Abram and Lot", "Abram and Lot separate peacefully."],
+  ["Abram Rescues Lot", "Abram rescues Lot and meets Melchizedek."],
+  ["God's Promise", "God confirms His covenant with Abram."],
+  ["Hagar and Ishmael", "Abram and Sarai's family begins to grow."],
+  ["The Covenant of Circumcision", "God establishes His covenant with Abraham."],
+  ["The Visitors", "The Lord visits Abraham with a promise."],
+  ["Sodom and Gomorrah", "Lot is rescued and the cities are destroyed."],
+  ["Abraham and Abimelech", "God protects Abraham and Sarah."],
+  ["The Birth of Isaac", "God fulfills His promise and Isaac is born."],
+  ["Abraham Tested", "Abraham is tested and trusts God."],
+  ["Sarah's Death", "Abraham mourns Sarah."],
+  ["Isaac and Rebekah", "A wife is found for Isaac."],
+  ["Esau and Jacob", "The sons of Isaac are born."],
+  ["Isaac and Abimelech", "God blesses Isaac in the land."],
+  ["Jacob Receives the Blessing", "Jacob receives Isaac's blessing."],
+  ["Jacob's Ladder", "God speaks to Jacob in a dream."],
+  ["Jacob Marries Leah and Rachel", "Jacob begins his family in Haran."],
+  ["Jacob's Children", "Jacob's family continues to grow."],
+  ["Jacob Leaves Laban", "Jacob returns toward his homeland."],
+  ["Jacob Wrestles With God", "Jacob encounters God and receives a new name."],
+  ["Jacob Meets Esau", "Jacob and Esau reconcile."],
+  ["Dinah and Shechem", "A conflict arises involving Dinah."],
+  ["Jacob Returns to Bethel", "God renews His covenant with Jacob."],
+  ["The Descendants of Esau", "The family line of Esau is recorded."],
+  ["Joseph's Dreams", "Joseph dreams of his future."],
+  ["Judah and Tamar", "The story of Judah and Tamar."],
+  ["Joseph in Egypt", "Joseph serves in Potiphar's house."],
+  ["Joseph Interprets Dreams", "Joseph interprets the dreams of Pharaoh's servants."],
+  ["Joseph Becomes Governor", "Joseph rises to power in Egypt."],
+  ["Joseph's Brothers Arrive", "Joseph's brothers come to Egypt for food."],
+  ["Benjamin Goes to Egypt", "Joseph's brothers return with Benjamin."],
+  ["Joseph Tests His Brothers", "Joseph tests whether his brothers have changed."],
+  ["Joseph Reveals Himself", "Joseph reveals his identity to his brothers."],
+  ["Jacob Goes to Egypt", "Jacob and his family travel to Egypt."],
+  ["Jacob's Family in Egypt", "Joseph provides for his family during the famine."],
+  ["Jacob Blesses Joseph's Sons", "Jacob blesses Ephraim and Manasseh."],
+  ["Jacob Blesses His Sons", "Jacob speaks blessings over his sons."],
+  ["Joseph's Death", "Joseph forgives his brothers and dies in Egypt."],
 ];
+
+const genesisChapterData = genesisChapterText.map(([title, description], index) => ({
+  number: index + 1,
+  title,
+  description,
+}));
+
+/* ════════════════════════════════════════════════════════════════════════
+   EXODUS, LEVITICUS, NUMBERS, DEUTERONOMY
+   ════════════════════════════════════════════════════════════════════════ */
 
 const exodusChapters = [
   { number: 1, title: "Israel Oppressed in Egypt", description: "A new Pharaoh enslaves the Israelites and orders the Hebrew baby boys to be killed." },
@@ -284,6 +330,10 @@ const deuteronomyChapters = [
   { number: 33, title: "Moses Blesses the Tribes", description: "Moses gives his final blessing to the tribes of Israel." },
   { number: 34, title: "The Death of Moses", description: "Moses sees the Promised Land from Mount Nebo and dies, and Joshua becomes Israel's leader." },
 ];
+
+/* ════════════════════════════════════════════════════════════════════════
+   HISTORICAL BOOKS (Joshua → 2 Chronicles)
+   ════════════════════════════════════════════════════════════════════════ */
 
 const historicalChapters = {
   Joshua: [
@@ -522,12 +572,12 @@ const historicalChapters = {
   ],
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// NEW TESTAMENT CHAPTERS
-// ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════
+   NEW TESTAMENT CHAPTERS
+   ════════════════════════════════════════════════════════════════════════ */
 
 const newTestamentChapters = {
-  "Matthew": [
+  Matthew: [
     { number: 1, title: "The Genealogy of Jesus", description: "Jesus' genealogy and His birth." },
     { number: 2, title: "The Visit of the Magi", description: "The wise men visit Jesus, and the family flees to Egypt." },
     { number: 3, title: "John the Baptist", description: "John prepares the way and Jesus is baptized." },
@@ -557,7 +607,7 @@ const newTestamentChapters = {
     { number: 27, title: "The Crucifixion", description: "Jesus is sentenced, crucified, and buried." },
     { number: 28, title: "The Resurrection", description: "Jesus rises from the dead and commissions His disciples." },
   ],
-  "Mark": [
+  Mark: [
     { number: 1, title: "John Prepares the Way", description: "John baptizes Jesus, and Jesus begins His ministry." },
     { number: 2, title: "Jesus Forgives and Heals", description: "Jesus heals a paralytic and calls Levi." },
     { number: 3, title: "Jesus Heals on the Sabbath", description: "Jesus chooses the Twelve and teaches about God's family." },
@@ -575,7 +625,7 @@ const newTestamentChapters = {
     { number: 15, title: "Jesus Is Crucified", description: "Jesus is condemned, crucified, and buried." },
     { number: 16, title: "Jesus Rises Again", description: "The women discover the empty tomb and Jesus is proclaimed risen." },
   ],
-  "Luke": [
+  Luke: [
     { number: 1, title: "The Births of John and Jesus Foretold", description: "The angel announces the births of John and Jesus." },
     { number: 2, title: "The Birth of Jesus", description: "Jesus is born in Bethlehem and presented at the temple." },
     { number: 3, title: "John the Baptist Prepares the Way", description: "John preaches repentance and Jesus is baptized." },
@@ -601,7 +651,7 @@ const newTestamentChapters = {
     { number: 23, title: "Jesus Is Crucified", description: "Jesus is sentenced, crucified, and buried." },
     { number: 24, title: "Jesus Is Risen", description: "Jesus rises and appears to His disciples." },
   ],
-  "John": [
+  John: [
     { number: 1, title: "The Word Became Flesh", description: "Jesus is revealed as the Word and the Lamb of God." },
     { number: 2, title: "Jesus Turns Water Into Wine", description: "Jesus performs His first sign at Cana." },
     { number: 3, title: "Jesus and Nicodemus", description: "Jesus teaches about being born again." },
@@ -624,7 +674,7 @@ const newTestamentChapters = {
     { number: 20, title: "Jesus Rises Again", description: "Jesus appears to Mary Magdalene and His disciples." },
     { number: 21, title: "Jesus Restores Peter", description: "Jesus appears to His disciples and restores Peter." },
   ],
-  "Acts": [
+  Acts: [
     { number: 1, title: "Jesus Ascends to Heaven", description: "Jesus commissions His disciples and ascends to heaven." },
     { number: 2, title: "The Holy Spirit Comes", description: "The Holy Spirit comes at Pentecost and the church begins." },
     { number: 3, title: "Peter Heals a Lame Man", description: "Peter heals a man and preaches about Jesus." },
@@ -654,7 +704,7 @@ const newTestamentChapters = {
     { number: 27, title: "Paul's Shipwreck", description: "Paul survives a dangerous storm and shipwreck." },
     { number: 28, title: "Paul Arrives in Rome", description: "Paul reaches Rome and continues preaching the gospel." },
   ],
-  "Romans": [
+  Romans: [
     { number: 1, title: "The Gospel and God's Righteousness", description: "Paul introduces the gospel and humanity's rebellion against God." },
     { number: 2, title: "God's Judgment", description: "God judges impartially and looks at the heart." },
     { number: 3, title: "All Have Sinned", description: "Everyone falls short, but righteousness comes through faith in Christ." },
@@ -705,7 +755,7 @@ const newTestamentChapters = {
     { number: 12, title: "Paul's Vision and Weakness", description: "Paul speaks about visions and God's strength in weakness." },
     { number: 13, title: "Final Warnings", description: "Paul calls the church to examine itself and pursue restoration." },
   ],
-  "Galatians": [
+  Galatians: [
     { number: 1, title: "No Other Gospel", description: "Paul defends the true gospel of grace." },
     { number: 2, title: "Justified by Faith", description: "Paul explains justification through faith in Christ." },
     { number: 3, title: "Faith or Works of the Law", description: "Believers receive God's promise through faith." },
@@ -713,7 +763,7 @@ const newTestamentChapters = {
     { number: 5, title: "Freedom in Christ", description: "Believers are called to live by the Spirit." },
     { number: 6, title: "Carry One Another's Burdens", description: "Paul teaches sowing, doing good, and living by the cross." },
   ],
-  "Ephesians": [
+  Ephesians: [
     { number: 1, title: "Blessings in Christ", description: "Paul celebrates spiritual blessings and God's plan in Christ." },
     { number: 2, title: "Saved by Grace", description: "Salvation is by grace and Christ creates one new people." },
     { number: 3, title: "The Mystery of Christ", description: "Paul explains God's plan to unite Jews and Gentiles." },
@@ -721,13 +771,13 @@ const newTestamentChapters = {
     { number: 5, title: "Walk in Love", description: "Paul teaches holy living, love, marriage, and wisdom." },
     { number: 6, title: "The Armor of God", description: "Believers are called to stand firm in spiritual warfare." },
   ],
-  "Philippians": [
+  Philippians: [
     { number: 1, title: "To Live Is Christ", description: "Paul rejoices that the gospel is advancing despite imprisonment." },
     { number: 2, title: "Christ's Humility", description: "Believers are called to humility and Christlike service." },
     { number: 3, title: "Knowing Christ", description: "Paul counts everything as loss compared with knowing Christ." },
     { number: 4, title: "Rejoice in the Lord", description: "Paul teaches contentment, prayer, and generosity." },
   ],
-  "Colossians": [
+  Colossians: [
     { number: 1, title: "The Supremacy of Christ", description: "Christ is supreme over creation and the church." },
     { number: 2, title: "Alive in Christ", description: "Believers are complete in Christ and warned against false teaching." },
     { number: 3, title: "New Life in Christ", description: "Believers are called to put off the old self and live in Christ." },
@@ -759,15 +809,15 @@ const newTestamentChapters = {
     { number: 3, title: "Godlessness in the Last Days", description: "Paul warns about false teachers and points Timothy to Scripture." },
     { number: 4, title: "Finish the Race", description: "Paul gives his final charge and reflects on his ministry." },
   ],
-  "Titus": [
+  Titus: [
     { number: 1, title: "Appointing Church Leaders", description: "Paul gives Titus instructions about elders and false teachers." },
     { number: 2, title: "Teach What Is Consistent With Sound Doctrine", description: "Believers are called to live godly lives." },
     { number: 3, title: "Devote Yourself to Good Works", description: "Paul teaches grace, renewal, and good works." },
   ],
-  "Philemon": [
+  Philemon: [
     { number: 1, title: "Paul Appeals for Onesimus", description: "Paul asks Philemon to receive Onesimus as a beloved brother." },
   ],
-  "Hebrews": [
+  Hebrews: [
     { number: 1, title: "The Son Is Greater Than Angels", description: "Jesus is God's supreme revelation and Son." },
     { number: 2, title: "Jesus Became Fully Human", description: "Jesus shares humanity to bring salvation." },
     { number: 3, title: "Jesus Is Greater Than Moses", description: "Believers are warned not to harden their hearts." },
@@ -782,7 +832,7 @@ const newTestamentChapters = {
     { number: 12, title: "Run the Race With Perseverance", description: "Believers are called to endure and pursue holiness." },
     { number: 13, title: "Final Exhortations", description: "Practical instructions for faithful Christian living." },
   ],
-  "James": [
+  James: [
     { number: 1, title: "Trials and Temptation", description: "James teaches about perseverance, wisdom, and genuine faith." },
     { number: 2, title: "Faith and Works", description: "True faith is demonstrated through action." },
     { number: 3, title: "Taming the Tongue", description: "James teaches about controlling speech and seeking wisdom." },
@@ -814,10 +864,10 @@ const newTestamentChapters = {
   "3 John": [
     { number: 1, title: "Support Faithful Workers", description: "John commends faithful hospitality and warns against harmful leadership." },
   ],
-  "Jude": [
+  Jude: [
     { number: 1, title: "Contend for the Faith", description: "Jude urges believers to defend the faith against false teachers." },
   ],
-  "Revelation": [
+  Revelation: [
     { number: 1, title: "The Revelation of Jesus Christ", description: "John receives a revelation of Jesus Christ." },
     { number: 2, title: "Messages to Four Churches", description: "Jesus speaks to the churches in Ephesus, Smyrna, Pergamum, and Thyatira." },
     { number: 3, title: "Messages to Three Churches", description: "Jesus speaks to the churches in Sardis, Philadelphia, and Laodicea." },
@@ -843,357 +893,552 @@ const newTestamentChapters = {
   ],
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// UNIFIED CHAPTER LOADER (OLD & NEW TESTAMENT)
-// ═══════════════════════════════════════════════════════════════════════════
+/* ════════════════════════════════════════════════════════════════════════
+   UNIFIED CHAPTER LOADER — the single source of truth for every book
+   ════════════════════════════════════════════════════════════════════════ */
 
 const getChaptersForBook = (bookName, chapterCount) => {
-
-  // 1. Check Old Testament Torah books (Arrays)
-  switch (bookName) {
-    case "Genesis": return genesisChapters;
-    case "Exodus": return exodusChapters;
-    case "Leviticus": return leviticusChapters;
-    case "Numbers": return numbersChapters;
-    case "Deuteronomy": return deuteronomyChapters;
+  // Genesis uses its own dedicated data (matches ge1.png–ge50.png)
+  if (bookName === "Genesis") {
+    return genesisChapterData;
   }
 
-  // 2. Check Old Testament Historical books (Object)
+  // Torah books with dedicated arrays
+  switch (bookName) {
+    case "Exodus":
+      return exodusChapters;
+    case "Leviticus":
+      return leviticusChapters;
+    case "Numbers":
+      return numbersChapters;
+    case "Deuteronomy":
+      return deuteronomyChapters;
+    default:
+      break;
+  }
+
+  // Historical books (Joshua → 2 Chronicles)
   if (historicalChapters[bookName]) {
     return historicalChapters[bookName];
   }
 
-  // 3. Check New Testament books (Object)
+  // New Testament books
   if (newTestamentChapters[bookName]) {
     return newTestamentChapters[bookName];
   }
 
-  // 4. Generic fallback for books that don't have custom data yet
-  return Array.from({ length: chapterCount }, (_, i) => ({
-    number: i + 1,
-    title: `Chapter ${i + 1}`,
+  // Fallback for any book without custom chapter text yet
+  // (Ezra, Nehemiah, Esther, Job, Psalms, Proverbs, the Prophets, etc.)
+  return Array.from({ length: chapterCount }, (_, index) => ({
+    number: index + 1,
+    title: `Chapter ${index + 1}`,
     description: "",
   }));
 };
-// Category badge colors
+
+// Category badge colors (used for the book-detail testament/category tags)
 const categoryColor = (cat) => {
   const map = {
-    "Law": "#dbeafe",
-    "History": "#fef3c7",
-    "Poetry": "#fce7f3",
+    Law: "#dbeafe",
+    History: "#fef3c7",
+    Poetry: "#fce7f3",
     "Major Prophets": "#dcfce7",
     "Minor Prophets": "#e0e7ff",
-    "Gospels": "#fee2e2",
+    Gospels: "#fee2e2",
     "Pauline Epistles": "#d1fae5",
     "General Epistles": "#ccfbf1",
-    "Prophecy": "#f3e8ff",
+    Prophecy: "#f3e8ff",
   };
   return map[cat] || "#f3f4f6";
 };
 
 const categoryTextColor = (cat) => {
   const map = {
-    "Law": "#1e40af",
-    "History": "#92400e",
-    "Poetry": "#9d174d",
+    Law: "#1e40af",
+    History: "#92400e",
+    Poetry: "#9d174d",
     "Major Prophets": "#166534",
     "Minor Prophets": "#3730a3",
-    "Gospels": "#991b1b",
+    Gospels: "#991b1b",
     "Pauline Epistles": "#065f46",
     "General Epistles": "#115e59",
-    "Prophecy": "#6b21a8",
+    Prophecy: "#6b21a8",
   };
   return map[cat] || "#374151";
 };
 
+/* ════════════════════════════════════════════════════════════════════════
+   COMPONENT (declared once)
+   ════════════════════════════════════════════════════════════════════════ */
+
 function Comics() {
   const navigate = useNavigate();
+
   const [selectedBook, setSelectedBook] = useState(null);
-  const [testamentFilter, setTestamentFilter] = useState("ALL"); // ALL | OT | NT
+  const [selectedChapter, setSelectedChapter] = useState(null);
+  const [testamentFilter, setTestamentFilter] = useState("ALL");
 
-  const handleSelectBook = (book) => setSelectedBook(book);
-  const handleBackToBooks = () => setSelectedBook(null);
+  const handleSelectBook = (book) => {
+    setSelectedBook(book);
+    setSelectedChapter(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-  const filteredBooks = testamentFilter === "ALL"
-    ? bibleBooks
-    : bibleBooks.filter((b) => b.testament === testamentFilter);
+  const handleOpenChapter = (chapter) => {
+    setSelectedChapter(chapter);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BOOKS LIST VIEW
-  // ═══════════════════════════════════════════════════════════════════════════
-  if (!selectedBook) {
+  const handleBackToBooks = () => {
+    setSelectedBook(null);
+    setSelectedChapter(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleBackToChapters = () => {
+    setSelectedChapter(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const chapters = selectedBook
+    ? getChaptersForBook(selectedBook.name, selectedBook.chapters)
+    : [];
+
+  const currentChapterIndex = selectedChapter
+    ? chapters.findIndex((chapter) => chapter.number === selectedChapter.number)
+    : -1;
+
+  const previousChapter =
+    currentChapterIndex > 0 ? chapters[currentChapterIndex - 1] : null;
+
+  const nextChapter =
+    currentChapterIndex >= 0 && currentChapterIndex < chapters.length - 1
+      ? chapters[currentChapterIndex + 1]
+      : null;
+
+  // Resolves the ge{N}.png image for the currently open Genesis chapter
+  const currentComicImage = useMemo(() => {
+    if (!selectedBook || !selectedChapter) return null;
+    if (selectedBook.name !== "Genesis") return null;
+    return genesisImages[selectedChapter.number] || null;
+  }, [selectedBook, selectedChapter]);
+
+  // Keyboard navigation: ← previous, → next, Esc back to chapter grid
+  useEffect(() => {
+    if (!selectedChapter) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "ArrowLeft" && previousChapter) {
+        setSelectedChapter(previousChapter);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      if (event.key === "ArrowRight" && nextChapter) {
+        setSelectedChapter(nextChapter);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      if (event.key === "Escape") {
+        handleBackToChapters();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedChapter, previousChapter, nextChapter]);
+
+  /* ══════════════════════════════════════════════════════════════════════
+     VIEW 1 — COMIC READER (vertical, manga-style, one image = one chapter)
+     ══════════════════════════════════════════════════════════════════════ */
+
+  if (selectedChapter) {
+    return (
+      <div className="comics-page comic-reader-page">
+        <div className="comics-topbar">
+          <button className="books-button" onClick={handleBackToChapters}>
+            <ArrowLeft size={16} />
+            <span>Back to {selectedBook.name}</span>
+          </button>
+        </div>
+
+        <main className="comic-reader">
+          <header className="comic-reader-header">
+            <div className="comic-reader-book">
+              {selectedBook.name} · Chapter {selectedChapter.number}
+            </div>
+            <h1>{selectedChapter.title}</h1>
+            {selectedChapter.description && <p>{selectedChapter.description}</p>}
+          </header>
+
+          <section className="vertical-comic-reader">
+            {currentComicImage ? (
+              <div className="comic-full-page">
+                <img
+                  src={currentComicImage}
+                  alt={`${selectedBook.name} Chapter ${selectedChapter.number}`}
+                  className="comic-page-image"
+                />
+              </div>
+            ) : (
+              <div className="comic-image-missing">
+                <ImageIcon size={55} />
+                <h2>Chapter {selectedChapter.number}</h2>
+                <p>The comic image for this chapter is not available yet.</p>
+                {selectedBook.name === "Genesis" && (
+                  <small>
+                    Add: <br />
+                    <strong>
+                      src/assets/comics/genesis/ge{selectedChapter.number}.png
+                    </strong>
+                  </small>
+                )}
+              </div>
+            )}
+          </section>
+
+          <div className="comic-end">
+            <div className="comic-end-line" />
+            <span>End of Chapter {selectedChapter.number}</span>
+            <div className="comic-end-line" />
+          </div>
+
+          <div className="comic-navigation">
+            <button
+              className="comic-nav-button"
+              disabled={!previousChapter}
+              onClick={() => previousChapter && handleOpenChapter(previousChapter)}
+            >
+              <ArrowLeft size={20} />
+              <span>
+                {previousChapter ? `Chapter ${previousChapter.number}` : "Previous"}
+              </span>
+            </button>
+
+            <div className="comic-page-counter">
+              <strong>{selectedChapter.number}</strong>
+              <span>/ {chapters.length}</span>
+            </div>
+
+            <button
+              className="comic-nav-button"
+              disabled={!nextChapter}
+              onClick={() => nextChapter && handleOpenChapter(nextChapter)}
+            >
+              <span>{nextChapter ? `Chapter ${nextChapter.number}` : "Next"}</span>
+              <ArrowRight size={20} />
+            </button>
+          </div>
+
+          <div className="comic-keyboard-help">
+            <span>← Previous</span>
+            <span>→ Next</span>
+            <span>Esc Back</span>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     VIEW 2 — CHAPTER GRID FOR A SELECTED BOOK
+     ══════════════════════════════════════════════════════════════════════ */
+
+  if (selectedBook) {
     return (
       <div className="comics-page">
-        {/* TOP BAR */}
         <div className="comics-topbar">
-          <button className="books-button" onClick={() => navigate("/comics")}>
+          <button className="books-button" onClick={handleBackToBooks}>
             <ArrowLeft size={16} />
             <span>Books of the Bible</span>
           </button>
         </div>
 
-        {/* HERO */}
         <section className="genesis-hero">
-          <div className="genesis-info" style={{ maxWidth: "600px" }}>
+          <div className="genesis-info">
             <div className="genesis-title">
-              <h1>The Holy Bible</h1>
-              <span>66 Books · One Story</span>
+              <h1>{selectedBook.name}</h1>
+              <span>{selectedBook.category}</span>
             </div>
-            <p className="genesis-description">
-              Explore every book of the Bible from Genesis to Revelation.
-              Tap any book to read its chapters in comics style.
-            </p>
+
+            <p className="genesis-description">{selectedBook.longDesc}</p>
 
             <div className="genesis-stats">
               <div className="stat-card">
                 <BookOpen size={25} />
                 <div>
-                  <small>Old Testament</small>
-                  <strong>39 Books</strong>
+                  <small>Chapters</small>
+                  <strong>{selectedBook.chapters}</strong>
                 </div>
               </div>
               <div className="stat-card">
-                <BookOpen size={25} />
+                <CalendarDays size={25} />
                 <div>
-                  <small>New Testament</small>
-                  <strong>27 Books</strong>
+                  <small>Testament</small>
+                  <strong>{selectedBook.testament === "OT" ? "Old" : "New"}</strong>
                 </div>
               </div>
               <div className="stat-card">
                 <Clock3 size={25} />
                 <div>
-                  <small>Total Chapters</small>
-                  <strong>1,189</strong>
+                  <small>Category</small>
+                  <strong>{selectedBook.category}</strong>
                 </div>
               </div>
             </div>
           </div>
 
-               {/* COVER PHOTO */}
-       {/* COVER PHOTO */}
-      <div className="genesis-cover">
-        <img 
-          src={bbleCover} 
-          alt="Bible Collection Cover" 
-          className="cover-image"
-        />
-        
-        {/* Aesthetic label overlaid on the bottom of the image */}
-        <div className="comic-label">
-          <span>BIBLE</span>
-          <small>Comics style</small>
-        </div>
-      </div>
+          <div className="genesis-cover">
+            {selectedBook.name === "Genesis" ? (
+              <img src={bbleCover} alt="Bible Collection Cover" className="cover-image" />
+            ) : (
+              <>
+                <ImageIcon size={55} />
+                <span>{selectedBook.name}</span>
+                <small>Comics style</small>
+              </>
+            )}
+          </div>
         </section>
 
-        {/* FILTER TABS */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-          {[
-            { key: "ALL", label: "All Books" },
-            { key: "OT", label: "Old Testament" },
-            { key: "NT", label: "New Testament" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setTestamentFilter(tab.key)}
-              style={{
-                padding: "6px 14px",
-                borderRadius: "20px",
-                border: "1px solid",
-                borderColor: testamentFilter === tab.key ? "#c9a45c" : "#e5e7eb",
-                background: testamentFilter === tab.key ? "#fdf6e8" : "#fff",
-                color: testamentFilter === tab.key ? "#92400e" : "#6b7280",
-                fontSize: "12px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* BOOKS GRID */}
         <section className="chapters-section">
           <div className="chapters-heading">
             <h2>
-              {testamentFilter === "ALL" ? "All Books" : testamentFilter === "OT" ? "Old Testament" : "New Testament"}
-              <span style={{ color: "#9ca3af", fontWeight: 500, marginLeft: "6px" }}>
-                ({filteredBooks.length})
-              </span>
+              All Chapters <span> ({chapters.length})</span>
             </h2>
           </div>
 
-          <div
-            className="chapters-grid"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
-          >
-            {filteredBooks.map((book) => (
-              <article
-                className="chapter-card"
-                key={book.name}
-                onClick={() => handleSelectBook(book)}
-                style={{ cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-3px)";
-                  e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              >
-                <div className="chapter-image" style={{ position: "relative" }}>
-                  <span
-                    className="chapter-number"
-                    style={{
-                      position: "absolute",
-                      top: "8px",
-                      left: "8px",
-                      background: categoryColor(book.category),
-                      color: categoryTextColor(book.category),
-                      borderRadius: "6px",
-                      padding: "2px 8px",
-                      fontSize: "10px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {book.testament}
-                  </span>
-                  <div className="image-placeholder" style={{ height: "100px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <ImageIcon size={30} />
+          <div className="chapters-grid">
+            {chapters.map((chapter) => {
+              const chapterImage =
+                selectedBook.name === "Genesis" ? genesisImages[chapter.number] : null;
+
+              return (
+                <article
+                  className="chapter-card"
+                  key={chapter.number}
+                  onClick={() => handleOpenChapter(chapter)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <div className="chapter-image" style={{ position: "relative" }}>
+                    <span className="chapter-number">Chapter {chapter.number}</span>
+
+                    {chapterImage ? (
+                      <img
+                        src={chapterImage}
+                        alt={`Genesis Chapter ${chapter.number}`}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    ) : (
+                      <div className="image-placeholder">
+                        <ImageIcon size={35} />
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="chapter-content" style={{ padding: "10px 12px" }}>
-                  <h3 style={{ fontSize: "14px", margin: "0 0 4px 0" }}>{book.name}</h3>
-                  <p style={{ fontSize: "11px", color: "#9ca3af", margin: "0 0 6px 0" }}>{book.desc}</p>
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#6b7280" }}>
-                    {book.chapters} Chapters
-                  </span>
-                </div>
-              </article>
-            ))}
+
+                  <div className="chapter-content">
+                    <h3>{chapter.title}</h3>
+                    {chapter.description && <p>{chapter.description}</p>}
+
+                    {selectedBook.name === "Genesis" && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: chapterImage ? "#4d7c0f" : "#999",
+                        }}
+                      >
+                        {chapterImage ? "Comic available" : "Comic coming soon"}
+                      </span>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       </div>
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SINGLE BOOK DETAIL VIEW (your original layout, now dynamic)
-  // ═══════════════════════════════════════════════════════════════════════════
-  const chapters = getChaptersForBook(selectedBook.name, selectedBook.chapters);
+  /* ══════════════════════════════════════════════════════════════════════
+     VIEW 3 — BOOK LIST (default landing view)
+     ══════════════════════════════════════════════════════════════════════ */
+
+  const filteredBooks =
+    testamentFilter === "ALL"
+      ? bibleBooks
+      : bibleBooks.filter((book) => book.testament === testamentFilter);
 
   return (
     <div className="comics-page">
-
-      {/* TOP BAR */}
       <div className="comics-topbar">
-        <button className="books-button" onClick={handleBackToBooks}>
+        <button className="books-button" onClick={() => navigate("/comics")}>
           <ArrowLeft size={16} />
           <span>Books of the Bible</span>
         </button>
       </div>
 
-      {/* BOOK HERO */}
       <section className="genesis-hero">
-
         <div className="genesis-info">
-
           <div className="genesis-title">
-            <h1>{selectedBook.name}</h1>
-            <span>{selectedBook.category}</span>
+            <h1>The Holy Bible</h1>
+            <span>66 Books · One Story</span>
           </div>
 
           <p className="genesis-description">
-            {selectedBook.longDesc}
+            Explore the Bible from Genesis to Revelation. Choose a book, select a
+            chapter, and read its comic illustration.
           </p>
 
           <div className="genesis-stats">
-
             <div className="stat-card">
               <BookOpen size={25} />
               <div>
-                <small>Chapters</small>
-                <strong>{selectedBook.chapters}</strong>
+                <small>Old Testament</small>
+                <strong>39 Books</strong>
               </div>
             </div>
-
             <div className="stat-card">
-              <CalendarDays size={25} />
+              <BookOpen size={25} />
               <div>
-                <small>Testament</small>
-                <strong>{selectedBook.testament === "OT" ? "Old" : "New"}</strong>
+                <small>New Testament</small>
+                <strong>27 Books</strong>
               </div>
             </div>
-
             <div className="stat-card">
               <Clock3 size={25} />
               <div>
-                <small>Category</small>
-                <strong>{selectedBook.category}</strong>
+                <small>Total Chapters</small>
+                <strong>1,189</strong>
               </div>
             </div>
-
           </div>
-
         </div>
 
-        {/* COVER PLACEHOLDER */}
         <div className="genesis-cover">
-          <ImageIcon size={55} />
-          <span>{selectedBook.name} Cover Illustration</span>
-          <small>Comics style</small>
+          <img src={bbleCover} alt="Bible Collection Cover" className="cover-image" />
+          <div className="comic-label">
+            <span>BIBLE</span>
+            <small>Comics style</small>
+          </div>
         </div>
-
       </section>
 
-      {/* CHAPTERS */}
-      <section className="chapters-section">
+      <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+        {[
+          { key: "ALL", label: "All Books" },
+          { key: "OT", label: "Old Testament" },
+          { key: "NT", label: "New Testament" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setTestamentFilter(tab.key)}
+            style={{
+              padding: "6px 14px",
+              borderRadius: "20px",
+              border: "1px solid",
+              borderColor: testamentFilter === tab.key ? "#c9a45c" : "#e5e7eb",
+              background: testamentFilter === tab.key ? "#fdf6e8" : "#fff",
+              color: testamentFilter === tab.key ? "#92400e" : "#6b7280",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
+      <section className="chapters-section">
         <div className="chapters-heading">
           <h2>
-            All Chapters <span>({chapters.length})</span>
+            {testamentFilter === "ALL"
+              ? "All Books"
+              : testamentFilter === "OT"
+              ? "Old Testament"
+              : "New Testament"}
+            <span style={{ color: "#9ca3af", fontWeight: 500, marginLeft: "6px" }}>
+              ({filteredBooks.length})
+            </span>
           </h2>
         </div>
 
-        <div className="chapters-grid">
-
-          {chapters.map((chapter) => (
-
+        <div
+          className="chapters-grid"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))" }}
+        >
+          {filteredBooks.map((book) => (
             <article
               className="chapter-card"
-              key={chapter.number}
+              key={book.name}
+              onClick={() => handleSelectBook(book)}
+              style={{ cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" }}
+              onMouseEnter={(event) => {
+                event.currentTarget.style.transform = "translateY(-3px)";
+                event.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08)";
+              }}
+              onMouseLeave={(event) => {
+                event.currentTarget.style.transform = "translateY(0)";
+                event.currentTarget.style.boxShadow = "none";
+              }}
             >
-
-              <div className="chapter-image">
-
-                <span className="chapter-number">
-                  Chapter {chapter.number}
+              <div className="chapter-image" style={{ position: "relative" }}>
+                <span
+                  className="chapter-number"
+                  style={{
+                    position: "absolute",
+                    top: "8px",
+                    left: "8px",
+                    zIndex: 2,
+                    padding: "2px 8px",
+                    borderRadius: "6px",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                    background: categoryColor(book.category),
+                    color: categoryTextColor(book.category),
+                  }}
+                >
+                  {book.testament}
                 </span>
 
-                <div className="image-placeholder">
-                  <ImageIcon size={35} />
-                </div>
-
+                {book.name === "Genesis" ? (
+                  <img
+                    src={bbleCover}
+                    alt="Genesis"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div
+                    className="image-placeholder"
+                    style={{
+                      height: "100px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <ImageIcon size={30} />
+                  </div>
+                )}
               </div>
 
-              <div className="chapter-content">
-
-                <h3>{chapter.title}</h3>
-
-                {chapter.description && <p>{chapter.description}</p>}
-
+              <div className="chapter-content" style={{ padding: "10px 12px" }}>
+                <h3 style={{ fontSize: "14px", margin: "0 0 4px 0" }}>{book.name}</h3>
+                <p style={{ fontSize: "11px", color: "#9ca3af", margin: "0 0 6px 0" }}>
+                  {book.desc}
+                </p>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "#6b7280" }}>
+                  {book.chapters} Chapters
+                </span>
               </div>
-
             </article>
-
           ))}
-
         </div>
-
       </section>
-
     </div>
   );
 }
