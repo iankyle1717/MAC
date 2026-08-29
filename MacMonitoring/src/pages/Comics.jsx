@@ -42,6 +42,22 @@ Object.entries(genesisImageFiles).forEach(([path, imageUrl]) => {
   }
 });
 
+const exodusImageFiles = import.meta.glob("../assets/comics/exodus/ex*.png", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+
+const exodusImages = {};
+
+Object.entries(exodusImageFiles).forEach(([path, imageUrl]) => {
+  const match = path.match(/ex(\d+)\.png$/i);
+
+  if (match) {
+    exodusImages[Number(match[1])] = imageUrl;
+  }
+});
+
 /* ════════════════════════════════════════════════════════════════════════
    66 BOOKS OF THE BIBLE
    ════════════════════════════════════════════════════════════════════════ */
@@ -1017,11 +1033,20 @@ function Comics() {
       : null;
 
   // Resolves the ge{N}.png image for the currently open Genesis chapter
-  const currentComicImage = useMemo(() => {
-    if (!selectedBook || !selectedChapter) return null;
-    if (selectedBook.name !== "Genesis") return null;
+// Resolves the comic image for the currently open chapter
+const currentComicImage = useMemo(() => {
+  if (!selectedBook || !selectedChapter) return null;
+
+  if (selectedBook.name === "Genesis") {
     return genesisImages[selectedChapter.number] || null;
-  }, [selectedBook, selectedChapter]);
+  }
+
+  if (selectedBook.name === "Exodus") {
+    return exodusImages[selectedChapter.number] || null;
+  }
+
+  return null;
+}, [selectedBook, selectedChapter]);
 
   // Keyboard navigation: ← previous, → next, Esc back to chapter grid
   useEffect(() => {
@@ -1102,14 +1127,15 @@ function Comics() {
 
           <div className="comic-navigation">
             <button
-              className="comic-nav-button"
+              className="comic-nav-button comic-nav-prev"
               disabled={!previousChapter}
               onClick={() => previousChapter && handleOpenChapter(previousChapter)}
             >
-              <ArrowLeft size={20} />
-              <span>
+              <ArrowLeft size={18} />
+              <span className="comic-nav-label-full">
                 {previousChapter ? `Chapter ${previousChapter.number}` : "Previous"}
               </span>
+              <span className="comic-nav-label-short">Previous</span>
             </button>
 
             <div className="comic-page-counter">
@@ -1118,12 +1144,15 @@ function Comics() {
             </div>
 
             <button
-              className="comic-nav-button"
+              className="comic-nav-button comic-nav-next"
               disabled={!nextChapter}
               onClick={() => nextChapter && handleOpenChapter(nextChapter)}
             >
-              <span>{nextChapter ? `Chapter ${nextChapter.number}` : "Next"}</span>
-              <ArrowRight size={20} />
+              <span className="comic-nav-label-full">
+                {nextChapter ? `Chapter ${nextChapter.number}` : "Next"}
+              </span>
+              <span className="comic-nav-label-short">Next</span>
+              <ArrowRight size={18} />
             </button>
           </div>
 
