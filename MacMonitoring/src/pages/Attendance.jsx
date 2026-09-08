@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import LeaderForm from "../components/LeaderForm";
 import { supabase } from "../lib/supabase";
 import {
     tribes as allTribes,
     getStageCategory,
     consoStages,
 } from "../constants/options";
+import { canAddMember } from "../utils/auth";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx-js-style";
 
@@ -16,6 +18,17 @@ const tribes = allTribes && allTribes.length ? allTribes : [
 ];
 
 const SERVICE_PRESETS = ["PRAYER WORKS", "YOUTH GIG", "SUNDAY SERVICE"];
+
+// ── localStorage draft key for in-progress attendance sessions ────────────
+// This is what lets a recording session survive route changes (e.g. hopping
+// to Tithes and back) and Chrome discarding a background tab (which silently
+// reloads the page — wiping plain React state — when you switch back to it).
+const DRAFT_KEY = "ems_attendance_draft_v1";
+const DRAFT_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (_) { /* ignore */ }
+};
 
 // ── Excel-style table tokens (copied from Assimilation, for visual parity) ─
 const ETH = (extra = {}) => ({
@@ -442,90 +455,189 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList, leaders }) {
     );
 }
 
+// ── Add Leader Modal ────────────────────────────────────────────────────────
+// Wraps the same LeaderForm used on the Leaders page so ushers can add an
+// official leader mid-service without leaving Attendance. On success the
+// new leader is added to the roster and auto-marked Present, since the whole
+// point is they walked in and are standing right there.
+function AddLeaderModal({ show, onClose, refreshLeaders }) {
+    if (!show) return null;
+
+    return (
+        <div
+            style={{
+                position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center",
+                justifyContent: "center", zIndex: 1100, padding: "20px"
+            }}
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div style={{
+                background: "#fff", borderRadius: "14px", width: "100%", maxWidth: "500px",
+                padding: "22px", boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+                maxHeight: "90vh", overflowY: "auto"
+            }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 700 }}>Add Leader</h2>
+                    <button onClick={onClose} style={{
+                        background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#6b7280",
+                        padding: "4px", lineHeight: 1
+                    }}>✕</button>
+                </div>
+                <p style={{ margin: "0 0 16px 0", fontSize: "12px", color: "#9ca3af" }}>
+                    Walked in during this service — will be added to the roster and
+                    marked Present automatically.
+                </p>
+                <LeaderForm refreshLeaders={refreshLeaders} />
+            </div>
+        </div>
+    );
+}
+
 // ── Live Tribe Leaderboard (right-side panel while recording) ─────────────
-function TribeLeaderboard({ tribesList, leaders, attendanceMap, newcomers, newcomerAttendanceMap }) {
+function TribeLeaderboard({ tribesList, leaders, attendanceMap, newcomers, newcomerAttendanceMap, tribeTargets }) {
     const counts = {};
     tribesList.forEach(t => { counts[t] = 0; });
+
+    let leadersPresent = 0;
+    let newcomersPresent = 0;
 
     leaders.forEach(l => {
         if (attendanceMap[l.id] === "Present" && counts[l.tribe] !== undefined) {
             counts[l.tribe]++;
+            leadersPresent++;
         }
     });
     newcomers.forEach(n => {
         if (newcomerAttendanceMap[n.id] === "Present" && counts[n.tribe] !== undefined) {
             counts[n.tribe]++;
+            newcomersPresent++;
         }
     });
 
     const ranked = tribesList
-        .map(t => ({ tribe: t, count: counts[t] }))
+        .map(t => ({ tribe: t, count: counts[t], goal: Number(tribeTargets?.[t]) || 0 }))
         .sort((a, b) => b.count - a.count);
 
     const totalPresent = ranked.reduce((s, r) => s + r.count, 0);
+    const totalGoal = ranked.reduce((s, r) => s + r.goal, 0);
     const topCount = ranked[0]?.count || 0;
 
     return (
         <div style={{
-            background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px",
-            padding: "16px", height: "fit-content", position: "sticky", top: "16px"
+            background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px",
+            padding: "22px", height: "fit-content", position: "sticky", top: "16px"
         }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: "#1a202c" }}> Tribe Leaderboard</h3>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: 700, color: "#1a202c" }}>Tribe Leaderboard</h3>
+                {totalGoal > 0 && (
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#9ca3af" }}>
+                        {totalPresent} / {totalGoal} goal
+                    </span>
+                )}
             </div>
-         
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {/* Overall present breakdown — leaders vs newcomers, fills the
+                extra width instead of leaving it as dead space */}
+            <div style={{
+                display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px",
+                margin: "14px 0 18px 0"
+            }}>
+                <div style={{
+                    padding: "12px", borderRadius: "10px", background: "#f0fdf4",
+                    border: "1px solid #bbf7d0", textAlign: "center"
+                }}>
+                    <div style={{ fontSize: "22px", fontWeight: 800, color: "#16a34a" }}>{leadersPresent}</div>
+                    <div style={{ fontSize: "11px", color: "#166534", fontWeight: 600 }}>Leaders Present</div>
+                </div>
+                <div style={{
+                    padding: "12px", borderRadius: "10px", background: "#eff6ff",
+                    border: "1px solid #bfdbfe", textAlign: "center"
+                }}>
+                    <div style={{ fontSize: "22px", fontWeight: 800, color: "#2563eb" }}>{newcomersPresent}</div>
+                    <div style={{ fontSize: "11px", color: "#1e40af", fontWeight: 600 }}>Newcomers Present</div>
+                </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {ranked.map((row, i) => {
                     const isLeading = i === 0 && row.count > 0;
-                    const pct = topCount > 0 ? Math.round((row.count / topCount) * 100) : 0;
+                    // Progress bar is relative to THIS tribe's own goal when one is
+                    // set (so it reads as "how close are we"), falling back to the
+                    // leaderboard's top count when no goal exists for this service.
+                    const barBase = row.goal > 0 ? row.goal : topCount;
+                    const pct = barBase > 0 ? Math.min(100, Math.round((row.count / barBase) * 100)) : 0;
+                    const metGoal = row.goal > 0 && row.count >= row.goal;
                     return (
                         <div key={row.tribe} style={{
-                            display: "flex", alignItems: "center", gap: "10px",
-                            padding: isLeading ? "10px 12px" : "8px 12px",
+                            display: "flex", alignItems: "center", gap: "12px",
+                            padding: isLeading ? "12px 14px" : "10px 14px",
                             borderRadius: "10px",
                             background: isLeading ? "linear-gradient(135deg, #fdf6e8, #fcefd4)" : "#f9fafb",
                             border: isLeading ? "1.5px solid #c9a45c" : "1px solid #f1f5f9",
                             transition: "all 0.25s ease"
                         }}>
                             <div style={{
-                                width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0,
+                                width: "26px", height: "26px", borderRadius: "50%", flexShrink: 0,
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                fontSize: "11px", fontWeight: 800,
+                                fontSize: "12px", fontWeight: 800,
                                 background: isLeading ? "#c9a45c" : "#e2e8f0",
                                 color: isLeading ? "#fff" : "#64748b"
                             }}>
                                 {i + 1}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "5px" }}>
                                     <span style={{
-                                        fontSize: "12px", fontWeight: isLeading ? 800 : 600,
+                                        fontSize: "13px", fontWeight: isLeading ? 800 : 600,
                                         color: isLeading ? "#92400e" : "#374151",
                                         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
                                     }}>
-                                        {row.tribe} {isLeading ? "" : ""}
+                                        {row.tribe}
                                     </span>
-                                    <span style={{ fontSize: "13px", fontWeight: 800, color: isLeading ? "#b8934a" : "#374151" }}>
-                                        {row.count}
+                                    <span style={{ display: "flex", alignItems: "baseline", gap: "4px" }}>
+                                        <span style={{ fontSize: "15px", fontWeight: 800, color: isLeading ? "#b8934a" : "#374151" }}>
+                                            {row.count}
+                                        </span>
+                                        {row.goal > 0 && (
+                                            <span style={{ fontSize: "11px", fontWeight: 600, color: metGoal ? "#16a34a" : "#9ca3af" }}>
+                                                / {row.goal}
+                                            </span>
+                                        )}
                                     </span>
                                 </div>
-                                <div style={{ height: "5px", borderRadius: "3px", background: "#e9edf1", overflow: "hidden" }}>
+                                <div style={{ height: "6px", borderRadius: "3px", background: "#e9edf1", overflow: "hidden" }}>
                                     <div style={{
                                         width: `${pct}%`, height: "100%", borderRadius: "3px",
-                                        background: isLeading ? "linear-gradient(90deg, #c9a45c, #e0bc78)" : "#94a3b8",
+                                        background: metGoal
+                                            ? "linear-gradient(90deg, #16a34a, #4ade80)"
+                                            : isLeading ? "linear-gradient(90deg, #c9a45c, #e0bc78)" : "#94a3b8",
                                         transition: "width 0.3s ease"
                                     }} />
                                 </div>
                             </div>
+                            {row.goal > 0 && (
+                                <span style={{
+                                    flexShrink: 0, fontSize: "10px", fontWeight: 700, padding: "3px 8px",
+                                    borderRadius: "8px",
+                                    background: metGoal ? "#dcfce7" : "#fef3c7",
+                                    color: metGoal ? "#166534" : "#92400e",
+                                    whiteSpace: "nowrap"
+                                }}>
+                                    {metGoal ? "Goal met" : `Need ${row.goal - row.count}`}
+                                </span>
+                            )}
                         </div>
                     );
                 })}
             </div>
 
-            <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px dashed #e5e7eb", textAlign: "center" }}>
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>Total present: </span>
-                <span style={{ fontSize: "13px", fontWeight: 800, color: "#374151" }}>{totalPresent}</span>
+            <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: "1px dashed #e5e7eb", textAlign: "center" }}>
+                <span style={{ fontSize: "12px", color: "#9ca3af" }}>Total present: </span>
+                <span style={{ fontSize: "15px", fontWeight: 800, color: "#374151" }}>{totalPresent}</span>
+                {totalGoal > 0 && (
+                    <span style={{ fontSize: "12px", color: "#9ca3af" }}> of {totalGoal} goal</span>
+                )}
             </div>
         </div>
     );
@@ -601,6 +713,7 @@ function Attendance() {
     const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
     const [selectedTribe, setSelectedTribe] = useState("");
     const [sortOrder, setSortOrder] = useState("asc");
+    const [leaderSearch, setLeaderSearch] = useState("");
     const [loading, setLoading] = useState(false);
     const [exportMonth, setExportMonth] = useState("");
     const [exportDate, setExportDate] = useState("");
@@ -617,11 +730,15 @@ function Attendance() {
     const [newcomersLoading, setNewcomersLoading] = useState(false);
     const [newcomerSearch, setNewcomerSearch] = useState("");
     const [showAddNewcomer, setShowAddNewcomer] = useState(false);
+    const [showAddLeader, setShowAddLeader] = useState(false);
 
     // ── Pagination state (shared page size, per-tab page position) ────────
     const [pageSize, setPageSize] = useState(10);
     const [leaderPage, setLeaderPage] = useState(1);
     const [newcomerPage, setNewcomerPage] = useState(1);
+
+    // Permission flag for showing the "+ Add Leader" button
+    const canAdd = canAddMember();
 
     // The detected category (PRAYER WORKS / YOUTH GIG / SUNDAY SERVICE / null)
     // for the currently typed serviceType.
@@ -630,9 +747,61 @@ function Attendance() {
     useEffect(() => { fetchLeaders(); }, []);
 
     // ════════════════════════════════════════════════════════════════════════
+    // Restore an in-progress attendance session from localStorage on mount.
+    // This is what makes the recording survive route changes (e.g. going to
+    // Tithes and back) and Chrome discarding a background tab, both of which
+    // wipe plain React state. Drafts older than 12 hours are treated as stale
+    // and discarded rather than resumed.
+    // ════════════════════════════════════════════════════════════════════════
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(DRAFT_KEY);
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+            if (!draft.savedAt || Date.now() - draft.savedAt > DRAFT_MAX_AGE_MS) {
+                clearDraft();
+                return;
+            }
+            if (draft.date) setDate(draft.date);
+            if (draft.serviceType !== undefined) setServiceType(draft.serviceType);
+            if (draft.tribeTargets) setTribeTargets(draft.tribeTargets);
+            if (draft.recordTab) setRecordTab(draft.recordTab);
+            if (draft.attendanceMap) setAttendanceMap(draft.attendanceMap);
+            if (draft.newcomerAttendanceMap) setNewcomerAttendanceMap(draft.newcomerAttendanceMap);
+            if (draft.isRecording) {
+                setIsRecording(true);
+                setShowModal(false);
+            }
+        } catch (_) {
+            clearDraft();
+        }
+        // run once on mount only
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Persist the session on every relevant change while recording is active.
+    useEffect(() => {
+        if (!isRecording) return;
+        try {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify({
+                savedAt: Date.now(),
+                isRecording,
+                date,
+                serviceType,
+                tribeTargets,
+                recordTab,
+                attendanceMap,
+                newcomerAttendanceMap,
+            }));
+        } catch (_) { /* storage full/unavailable — fail silently */ }
+    }, [isRecording, date, serviceType, tribeTargets, recordTab, attendanceMap, newcomerAttendanceMap]);
+
+    // ════════════════════════════════════════════════════════════════════════
     // Whenever the detected service category CHANGES, load that category's
     // saved default goals and replace the current tribeTargets with them.
     // Custom events (activeCategory === null) clear to blank instead.
+    // Skipped while a draft is being restored / while already recording, so
+    // it doesn't clobber a restored in-progress session's targets.
     // ════════════════════════════════════════════════════════════════════════
     useEffect(() => {
         if (isRecording) return; // only matters in the pre-recording modal
@@ -677,13 +846,13 @@ function Attendance() {
             setStats({ total, present, absent: total - present });
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [attendanceMap, newcomerAttendanceMap, selectedTribe, sortOrder, newcomerSearch, recordTab, newcomers]);
+    }, [attendanceMap, newcomerAttendanceMap, selectedTribe, sortOrder, leaderSearch, newcomerSearch, recordTab, newcomers]);
 
     // Reset pagination back to page 1 whenever the underlying filters/sort/tab
     // change, so users aren't stranded on an empty page.
     useEffect(() => {
         setLeaderPage(1);
-    }, [selectedTribe, sortOrder, pageSize]);
+    }, [selectedTribe, sortOrder, leaderSearch, pageSize]);
 
     useEffect(() => {
         setNewcomerPage(1);
@@ -698,6 +867,7 @@ function Attendance() {
         const { data } = await supabase
             .from("tblMonitoring").select("*").order("firstname", { ascending: true });
         setLeaders(data || []);
+        return data || [];
     };
 
     const fetchAttendance = async (selectedDate) => {
@@ -727,9 +897,22 @@ function Attendance() {
         setNewcomerAttendanceMap(map);
     };
 
-    const toggleNewcomerAttendance = (newcomerId) => {
-        const current = newcomerAttendanceMap[newcomerId];
-        setNewcomerAttendanceMap(prev => ({ ...prev, [newcomerId]: current === "Present" ? "Absent" : "Present" }));
+    const toggleNewcomerAttendance = (member) => {
+        const current = newcomerAttendanceMap[member.id];
+        const nextStatus = current === "Present" ? "Absent" : "Present";
+        Swal.fire({
+            icon: "question",
+            title: `Mark ${member.firstname} ${member.lastname} as ${nextStatus}?`,
+            showCancelButton: true,
+            confirmButtonText: `Yes, mark ${nextStatus}`,
+            cancelButtonText: "Cancel",
+            confirmButtonColor: nextStatus === "Present" ? "#16a34a" : "#dc2626",
+            cancelButtonColor: "#6b7280",
+            focusConfirm: true,
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            setNewcomerAttendanceMap(prev => ({ ...prev, [member.id]: nextStatus }));
+        });
     };
 
     const handleAddWalkInNewcomer = async ({ firstname, lastname, tribe, invitedBy, remarks }) => {
@@ -758,6 +941,32 @@ function Attendance() {
             text: `${firstname} ${lastname} marked Present.`,
             timer: 1500, showConfirmButton: false,
         });
+    };
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Called by LeaderForm after it successfully inserts a new leader. We
+    // don't get the new row directly from LeaderForm, so we diff the roster
+    // before/after refetching to find whichever row(s) are new, then mark
+    // them Present automatically (they walked in — that's the whole point of
+    // adding them here instead of on the Leaders page) and close the modal.
+    // ════════════════════════════════════════════════════════════════════════
+    const handleLeaderFormRefresh = async () => {
+        const previousIds = new Set(leaders.map(l => l.id));
+        const newData = await fetchLeaders();
+        const newlyAdded = newData.filter(l => !previousIds.has(l.id));
+        if (newlyAdded.length) {
+            setAttendanceMap(prev => {
+                const next = { ...prev };
+                newlyAdded.forEach(l => { next[l.id] = "Present"; });
+                return next;
+            });
+            Swal.fire({
+                icon: "success", title: "Leader Added",
+                text: `${newlyAdded.map(l => `${l.firstname} ${l.lastname}`).join(", ")} marked Present.`,
+                timer: 1800, showConfirmButton: false,
+            });
+        }
+        setShowAddLeader(false);
     };
 
     const getAutoServiceType = (d) => {
@@ -812,9 +1021,24 @@ function Attendance() {
         setRecordTab("leaders");
     };
 
-    const toggleAttendance = (leaderId) => {
-        const current = attendanceMap[leaderId];
-        setAttendanceMap(prev => ({ ...prev, [leaderId]: current === "Present" ? "Absent" : "Present" }));
+    const toggleAttendance = (leader) => {
+        const current = attendanceMap[leader.id];
+        const nextStatus = current === "Present" ? "Absent" : "Present";
+        // Confirm before applying — the table is dense and rows sit close
+        // together, so a stray tap should never silently flip someone's status.
+        Swal.fire({
+            icon: "question",
+            title: `Mark ${leader.firstname} ${leader.lastname} as ${nextStatus}?`,
+            showCancelButton: true,
+            confirmButtonText: `Yes, mark ${nextStatus}`,
+            cancelButtonText: "Cancel",
+            confirmButtonColor: nextStatus === "Present" ? "#16a34a" : "#dc2626",
+            cancelButtonColor: "#6b7280",
+            focusConfirm: true,
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+            setAttendanceMap(prev => ({ ...prev, [leader.id]: nextStatus }));
+        });
     };
 
     const handleSave = async () => {
@@ -1193,15 +1417,58 @@ function Attendance() {
                 setShowModal(true); setIsRecording(false);
                 setExportMonth(""); setExportDate("");
                 setAttendanceMap({}); setNewcomerAttendanceMap({});
+                clearDraft();
             });
     };
 
     const handleCloseModal = () => navigate("/dashboard");
+
+    // "Change Service" — keeps the current date/serviceType/targets and just
+    // pops back to the landing modal so they can be tweaked, then resumed.
     const handleBackToModal = () => {
         setIsRecording(false); setAttendanceMap({}); setNewcomerAttendanceMap({}); setShowModal(true);
+        clearDraft();
     };
 
-    const filtered = leaders.filter(l => selectedTribe ? l.tribe === selectedTribe : true);
+    // "Cancel Attendance" — a full reset. Discards everything about the
+    // current session (marks, date, service type, targets) and drops the
+    // user back on a blank landing modal, as if they'd never started.
+    const handleCancelAttendance = () => {
+        Swal.fire({
+            icon: "warning",
+            title: "Cancel Attendance?",
+            text: "This will discard everything recorded in this session and start over from a blank form.",
+            showCancelButton: true,
+            confirmButtonText: "Yes, cancel it",
+            cancelButtonText: "Keep recording",
+            confirmButtonColor: "#dc2626",
+            cancelButtonColor: "#6b7280",
+        }).then((result) => {
+            if (!result.isConfirmed) return;
+
+            clearDraft();
+            setIsRecording(false);
+            setShowModal(true);
+            setModalTab("record");
+            setAttendanceMap({});
+            setNewcomerAttendanceMap({});
+            setRecordTab("leaders");
+            setLeaderSearch("");
+            setNewcomerSearch("");
+            setSelectedTribe("");
+            setDate(new Date().toISOString().split("T")[0]);
+            setServiceType("");
+            setTribeTargets({});
+        });
+    };
+
+    const filtered = leaders.filter(l => {
+        const matchesTribe = selectedTribe ? l.tribe === selectedTribe : true;
+        if (!matchesTribe) return false;
+        if (!leaderSearch) return true;
+        const fullName = `${l.firstname} ${l.lastname}`.toLowerCase();
+        return fullName.includes(leaderSearch.toLowerCase());
+    });
     const sorted = [...filtered].sort((a, b) =>
         sortOrder === "asc" ? a.firstname.localeCompare(b.firstname) : b.firstname.localeCompare(a.firstname)
     );
@@ -1255,7 +1522,7 @@ function Attendance() {
     return (
         <div className="attendance-layout">
             <Sidebar />
-            <div className="attendance-content" style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
+            <div className="attendance-content" style={{ display: "flex", gap: "20px", alignItems: "flex-start", width: "100%", maxWidth: "100%", boxSizing: "border-box" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="attendance-topbar">
                     <div>
@@ -1290,7 +1557,26 @@ function Attendance() {
                 {recordTab === "leaders" && (
                     <>
                         <div className="attendance-toolbar">
-                            <div className="toolbar-group">
+                            <div className="toolbar-group" style={{ flex: 1 }}>
+                                <input
+                                    type="text"
+                                    className="input-sm"
+                                    placeholder="Search leader... (Enter marks Present)"
+                                    value={leaderSearch}
+                                    onChange={e => setLeaderSearch(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key !== "Enter") return;
+                                        // Only auto-mark when the search has narrowed to exactly
+                                        // one person — avoids accidentally marking the wrong one.
+                                        if (sorted.length === 1) {
+                                            const match = sorted[0];
+                                            setAttendanceMap(prev => ({ ...prev, [match.id]: "Present" }));
+                                            setLeaderSearch("");
+                                        }
+                                    }}
+                                    style={{ minWidth: "220px" }}
+                                    autoFocus
+                                />
                                 <select className="input-sm" value={selectedTribe} onChange={e => setSelectedTribe(e.target.value)}>
                                     <option value="">All Tribes</option>
                                     {tribes.map(t => <option key={t} value={t}>{t}</option>)}
@@ -1298,8 +1584,20 @@ function Attendance() {
                                 <button className="btn-sm btn-outline" onClick={() => setSortOrder(o => o === "asc" ? "desc" : "asc")}>
                                     {sortOrder === "asc" ? "A–Z" : "Z–A"}
                                 </button>
+                                {canAdd && (
+                                    <button className="btn-sm btn-primary" onClick={() => setShowAddLeader(true)}>
+                                        + Add Leader
+                                    </button>
+                                )}
                             </div>
                             <div className="toolbar-group">
+                                <button
+                                    className="btn-sm btn-outline"
+                                    onClick={handleCancelAttendance}
+                                    style={{ color: "#dc2626", borderColor: "#fca5a5" }}
+                                >
+                                    Cancel
+                                </button>
                                 <button className="btn-sm btn-outline" onClick={handleBackToModal}>Change Service</button>
                                 <button className="btn-sm btn-primary" onClick={handleSave} disabled={loading}>
                                     {loading ? "Saving..." : "Save Attendance"}
@@ -1364,7 +1662,7 @@ function Attendance() {
                                                     </td>
                                                     <td style={ETD()}>
                                                         <button
-                                                            onClick={() => toggleAttendance(leader.id)}
+                                                            onClick={() => toggleAttendance(leader)}
                                                             style={{
                                                                 padding: "4px 10px",
                                                                 borderRadius: "6px",
@@ -1412,6 +1710,13 @@ function Attendance() {
                                 </button>
                             </div>
                             <div className="toolbar-group">
+                                <button
+                                    className="btn-sm btn-outline"
+                                    onClick={handleCancelAttendance}
+                                    style={{ color: "#dc2626", borderColor: "#fca5a5" }}
+                                >
+                                    Cancel
+                                </button>
                                 <button className="btn-sm btn-outline" onClick={handleBackToModal}>Change Service</button>
                                 <button className="btn-sm btn-primary" onClick={handleSave} disabled={loading}>
                                     {loading ? "Saving..." : "Save Attendance"}
@@ -1515,7 +1820,7 @@ function Attendance() {
                                                     </td>
                                                     <td style={ETD()}>
                                                         <button
-                                                            onClick={() => toggleNewcomerAttendance(member.id)}
+                                                            onClick={() => toggleNewcomerAttendance(member)}
                                                             style={{
                                                                 padding: "4px 10px",
                                                                 borderRadius: "6px",
@@ -1552,13 +1857,14 @@ function Attendance() {
                 )}
                 </div>
 
-                <div style={{ width: "260px", flexShrink: 0 }}>
+                <div style={{ width: "380px", maxWidth: "34%", flexShrink: 0 }}>
                     <TribeLeaderboard
                         tribesList={tribes}
                         leaders={leaders}
                         attendanceMap={attendanceMap}
                         newcomers={newcomers}
                         newcomerAttendanceMap={newcomerAttendanceMap}
+                        tribeTargets={tribeTargets}
                     />
                 </div>
             </div>
@@ -1570,6 +1876,24 @@ function Attendance() {
                 tribesList={tribes}
                 leaders={leaders}
             />
+
+            <AddLeaderModal
+                show={showAddLeader}
+                onClose={() => setShowAddLeader(false)}
+                refreshLeaders={handleLeaderFormRefresh}
+            />
+
+            {/* Defensive override: if global.css sets a max-width on
+                .attendance-content (leftover from a narrower layout), this
+                ensures the page still uses the full space beside the sidebar
+                rather than leaving a dead gap on the right. */}
+            <style>{`
+                .attendance-content {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box;
+                }
+            `}</style>
         </div>
     );
 }
