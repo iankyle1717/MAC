@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import LeaderForm from "../components/LeaderForm";
@@ -388,8 +388,8 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList, leaders }) {
     const filteredLeaders = (leaders || []).filter(l => l.tribe === tribe);
 
     const handleSave = async () => {
-        if (!firstname || !lastname || !tribe) {
-            Swal.fire({ icon: "warning", title: "Missing Info", text: "First name, last name, and tribe are required.", confirmButtonColor: "#c9a45c" });
+        if (!firstname || !lastname) {
+            Swal.fire({ icon: "warning", title: "Missing Info", text: "First name and last name are required.", confirmButtonColor: "#c9a45c" });
             return;
         }
         setSaving(true);
@@ -413,6 +413,9 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList, leaders }) {
                     Walk-in during this service — will be marked Present automatically.
                     Only Conso stages are tracked here; once a newcomer becomes a
                     Regular Attendee, the Discipleship Journey team takes it from there.
+                    <strong style={{ color: "#b8934a" }}> Tribe and inviter are optional</strong> —
+                    it's normal for a fresh walk-in not to have either yet. Leave them as
+                    N/A and fill them in later from Assimilation once known.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     <input type="text" placeholder="First Name" value={firstname} onChange={e => setFirstname(e.target.value)} style={modalInputStyle} />
@@ -422,11 +425,16 @@ function AddNewcomerModal({ show, onClose, onAdd, tribesList, leaders }) {
                         onChange={e => { setTribe(e.target.value); setInvitedBy(""); }}
                         style={modalInputStyle}
                     >
-                        <option value="">Select Tribe *</option>
+                        <option value="">N/A — Not yet assigned</option>
                         {tribesList.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <select value={invitedBy} onChange={e => setInvitedBy(e.target.value)} style={modalInputStyle}>
-                        <option value="">Select Inviter (optional)</option>
+                    <select
+                        value={invitedBy}
+                        onChange={e => setInvitedBy(e.target.value)}
+                        disabled={!tribe}
+                        style={{ ...modalInputStyle, opacity: tribe ? 1 : 0.6 }}
+                    >
+                        <option value="">{tribe ? "N/A — Select Inviter (optional)" : "N/A — select a tribe first"}</option>
                         {filteredLeaders.map(l => (
                             <option key={l.id} value={`${l.firstname} ${l.lastname}`}>
                                 {l.firstname} {l.lastname}
@@ -744,6 +752,14 @@ function Attendance() {
     // for the currently typed serviceType.
     const activeCategory = detectServiceCategory(serviceType);
 
+    // Guards against the two "fetch fresh data" effects below stomping on a
+    // just-restored draft. Both effects normally run once more right after
+    // isRecording flips from false -> true (which also happens on restore),
+    // and they fetch from Supabase / recompute defaults as if this were a
+    // brand-new session — wiping out whatever unsaved marks we just restored.
+    // Each one consumes this flag exactly once, immediately after restore.
+    const suppressFetchOnRestoreRef = useRef(false);
+
     useEffect(() => { fetchLeaders(); }, []);
 
     // ════════════════════════════════════════════════════════════════════════
@@ -771,6 +787,11 @@ function Attendance() {
             if (draft.isRecording) {
                 setIsRecording(true);
                 setShowModal(false);
+                // Both fetch-on-isRecording-change effects below are about to
+                // fire once (isRecording just flipped false -> true). Tell
+                // them to skip that one run so they don't overwrite what we
+                // just restored.
+                suppressFetchOnRestoreRef.current = true;
             }
         } catch (_) {
             clearDraft();
@@ -805,6 +826,13 @@ function Attendance() {
     // ════════════════════════════════════════════════════════════════════════
     useEffect(() => {
         if (isRecording) return; // only matters in the pre-recording modal
+        // During the very first effects pass after a draft restore, isRecording
+        // still reads as its pre-restore value (false) here even though the
+        // restore effect just called setIsRecording(true) — React applies that
+        // update after this pass finishes. Without this guard, this effect
+        // would see "not recording" and blank out the tribeTargets we just
+        // restored, moments before the isRecording flip actually lands.
+        if (suppressFetchOnRestoreRef.current) return;
         let cancelled = false;
 
         (async () => {
@@ -823,8 +851,18 @@ function Attendance() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeCategory, isRecording]);
 
+    // ════════════════════════════════════════════════════════════════════════
+    // Load previously-saved attendance for `date` whenever we (re)enter the
+    // recording screen. Skipped exactly once right after a draft restore —
+    // otherwise this immediately re-fetches from Supabase (which has no
+    // record of the not-yet-saved marks) and wipes the restored session.
+    // ════════════════════════════════════════════════════════════════════════
     useEffect(() => {
         if (isRecording && date) {
+            if (suppressFetchOnRestoreRef.current) {
+                suppressFetchOnRestoreRef.current = false;
+                return;
+            }
             fetchAttendance(date);
             fetchNewcomerAttendance(date);
         }
@@ -919,7 +957,9 @@ function Attendance() {
         const { data, error } = await supabase
             .from("tblNewMembers")
             .insert([{
-                firstname, lastname, tribe, remarks,
+                firstname, lastname,
+                tribe: tribe || null,
+                remarks,
                 invited_by: invitedBy || null,
                 attendance_count: 0,
                 visit_number: 0,
@@ -1771,7 +1811,11 @@ function Attendance() {
                                                             <span style={{ fontWeight: 600, color: "#111827" }}>{member.firstname} {member.lastname}</span>
                                                         </div>
                                                     </td>
-                                                    <td style={ETD()}>{member.tribe}</td>
+                                                    <td style={ETD()}>
+                                                        {member.tribe
+                                                            ? member.tribe
+                                                            : <span style={{ color: "#c9a45c", fontWeight: 600 }}>N/A</span>}
+                                                    </td>
                                                     <td style={ETD({ padding: "4px 4px" })}>
                                                         <span style={{
                                                             padding: "2px 8px",

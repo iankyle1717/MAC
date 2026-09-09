@@ -338,12 +338,35 @@ function Assimilation() {
 
     const canDeleteNewcomer = () => admin || ushering;
 
+    // ════════════════════════════════════════════════════════════════════════
+    // Deleting a newcomer was failing with a generic "Failed to delete
+    // newcomer" error. The real cause: tblNewcomerAttendance rows have a
+    // foreign key pointing at tblNewMembers.id, and Postgres refuses to
+    // delete a parent row while child rows still reference it. Any newcomer
+    // who has ever had attendance recorded (basically everyone) hit this.
+    //
+    // Fix: delete their attendance history first, then the member record.
+    // We also surface the actual Postgres/Supabase error message in the
+    // alert now, instead of a generic string, so future issues are easier
+    // to diagnose without digging through the console.
+    // ════════════════════════════════════════════════════════════════════════
     const handleDeleteMember = async (member) => {
         if (!canDeleteNewcomer()) return;
         const confirmed = window.confirm(
-            `Delete ${member.firstname} ${member.lastname}? This permanently removes their record and cannot be undone.`
+            `Delete ${member.firstname} ${member.lastname}? This will also permanently remove their attendance history and cannot be undone.`
         );
         if (!confirmed) return;
+
+        const { error: attendanceError } = await supabase
+            .from("tblNewcomerAttendance")
+            .delete()
+            .eq("newcomer_id", member.id);
+
+        if (attendanceError) {
+            console.log(attendanceError);
+            alert(`Failed to delete newcomer's attendance history: ${attendanceError.message}`);
+            return;
+        }
 
         const { error } = await supabase
             .from("tblNewMembers")
@@ -352,7 +375,7 @@ function Assimilation() {
 
         if (error) {
             console.log(error);
-            alert("Failed to delete newcomer. Please try again.");
+            alert(`Failed to delete newcomer: ${error.message}`);
             return;
         }
 
@@ -729,9 +752,11 @@ function Assimilation() {
                                         <td style={ETD()}>
                                             {member.tribe
                                                 ? member.tribe
-                                                : <span style={{ color: "#c9a45c", fontWeight: 600 }}>Unassigned</span>}
+                                                : <span style={{ color: "#c9a45c", fontWeight: 600 }}>N/A</span>}
                                         </td>
-                                        <td style={ETD({ textAlign: "left", padding: "4px 6px", color: "#6b7280", fontSize: "11px" })}>{member.invited_by || "—"}</td>
+                                        <td style={ETD({ textAlign: "left", padding: "4px 6px", color: "#6b7280", fontSize: "11px" })}>
+                                            {member.invited_by || <span style={{ color: "#c9a45c", fontWeight: 600 }}>N/A</span>}
+                                        </td>
                                         <td style={ETD()}>
                                             <span style={{
                                                 padding: "2px 8px",
@@ -915,7 +940,8 @@ function Assimilation() {
                                 Discipleship Journey team.
                                 <strong style={{ color: "#b8934a" }}> Tribe and mentor are optional</strong> —
                                 it's normal for a fresh walk-in not to have either yet. Leave them
-                                blank and fill them in later from the ✏️ Edit button once known.
+                                blank (shown as N/A) and fill them in later from the ✏️ Edit button
+                                once known.
                             </p>
                             <form className="leader-form" onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                                 <input
@@ -941,7 +967,7 @@ function Assimilation() {
                                     }}
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                                 >
-                                    <option value="">Not yet assigned</option>
+                                    <option value="">N/A — Not yet assigned</option>
                                     {tribes.map((tribe) => (
                                         <option key={tribe} value={tribe}>{tribe}</option>
                                     ))}
@@ -953,7 +979,7 @@ function Assimilation() {
                                     disabled={!tribe}
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db", opacity: tribe ? 1 : 0.6 }}
                                 >
-                                    <option value="">{tribe ? "Select Inviter (optional)" : "Select a tribe first"}</option>
+                                    <option value="">{tribe ? "N/A — Select Inviter (optional)" : "N/A — select a tribe first"}</option>
                                     {filteredLeaders.map((leader) => (
                                         <option key={leader.id} value={`${leader.firstname} ${leader.lastname}`}>
                                             {leader.firstname} {leader.lastname}
@@ -1065,7 +1091,7 @@ function Assimilation() {
                                     }}
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db" }}
                                 >
-                                    <option value="">Not yet assigned</option>
+                                    <option value="">N/A — Not yet assigned</option>
                                     {tribes.map((t) => (
                                         <option key={t} value={t}>{t}</option>
                                     ))}
@@ -1077,7 +1103,7 @@ function Assimilation() {
                                     disabled={!editTribe}
                                     style={{ padding: "8px 10px", fontSize: "13px", borderRadius: "6px", border: "1px solid #d1d5db", opacity: editTribe ? 1 : 0.6 }}
                                 >
-                                    <option value="">{editTribe ? "Select Mentor (optional)" : "Select a tribe first"}</option>
+                                    <option value="">{editTribe ? "N/A — Select Mentor (optional)" : "N/A — select a tribe first"}</option>
                                     {editFilteredLeaders.map((leader) => (
                                         <option key={leader.id} value={`${leader.firstname} ${leader.lastname}`}>
                                             {leader.firstname} {leader.lastname}
@@ -1143,8 +1169,8 @@ function Assimilation() {
                                         {checklistMember.firstname} {checklistMember.lastname}
                                     </h2>
                                     <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
-                                        Tribe: <strong>{checklistMember.tribe || "Not yet assigned"}</strong>
-                                        {checklistMember.invited_by ? <> · Mentor: <strong>{checklistMember.invited_by}</strong></> : null}
+                                        Tribe: <strong>{checklistMember.tribe || "N/A"}</strong>
+                                        {checklistMember.invited_by ? <> · Mentor: <strong>{checklistMember.invited_by}</strong></> : <> · Mentor: <strong>N/A</strong></>}
                                     </p>
                                     <p style={{ margin: "3px 0 0 0", fontSize: "11px", color: "#6b7280" }}>
                                         Current stage: <strong style={{ color: getStageTextColor(getEffectiveStage(checklistMember)) }}>{getEffectiveStage(checklistMember)}</strong>
